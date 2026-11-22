@@ -7,6 +7,10 @@ PY=${PY:-}
 if [ -z "$PY" ]; then
     if [ -x ../.venv/bin/python ]; then PY=../.venv/bin/python; else PY=python3; fi
 fi
+"$PY" -c "import mido, pytest, hypothesis, rtmidi, PIL" 2>/dev/null || {
+    echo "check.sh: $PY lacks the Python packages; from app/: python3 -m venv ../.venv && ../.venv/bin/pip install -r tools/requirements.txt" >&2
+    exit 2
+}
 for t in tests/*_test.c; do
     [ -f "$t" ] || continue
     n=$(basename "$t" .c)

@@ -37,3 +37,12 @@ def test_1_4_unknown_script_is_refused_cleanly():
     assert after == before
     r = subprocess.run(["sh", str(APP / "tests/host_e2e.sh")], capture_output=True, text=True)
     assert r.returncode == 2 and "unknown script" in r.stderr
+
+
+def test_1_4_gate_without_python_packages_says_what_to_install(tmp_path):
+    fake = tmp_path / "python"
+    fake.write_text("#!/bin/sh\nexit 1\n")
+    fake.chmod(0o755)
+    import os
+    r = subprocess.run(["sh", str(APP / "check.sh")], env={**os.environ, "PY": str(fake)}, capture_output=True, text=True)
+    assert r.returncode == 2 and "pip install -r tools/requirements.txt" in r.stderr, r.stderr
