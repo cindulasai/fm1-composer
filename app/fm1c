@@ -1,0 +1,6 @@
+#!/bin/sh
+# fm1c: compose, convert and push pieces for COMPOSER on the M-VAVE FM-1. See README.md.
+APP=$(cd "$(dirname "$0")" && pwd)
+PY=${PY:-$APP/../.venv/bin/python}
+[ -x "$PY" ] || PY=python3
+PYTHONPATH="$APP/tools${PYTHONPATH:+:$PYTHONPATH}" exec "$PY" -m fm1c "$@"

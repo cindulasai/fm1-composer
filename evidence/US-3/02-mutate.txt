@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-3
+/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py:1990: FileNotFoundError
+=========================== short test summary info ============================
+FAILED tools/tests/test_cli.py::test_3_1_convert_writes_a_piece_and_reports
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.14s
+MUTANTS: the gate is red before any mutation — fix that first
+EXIT_CODE: 2

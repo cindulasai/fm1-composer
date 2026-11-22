@@ -1,0 +1,7 @@
+COMMAND: sh prove mutants US-3
+SURVIVED app/tools/fm1c/fit.py:160  " or " -> " and "  | rep.add(f"part '{p.name or p.role}' ({p.role}, {len(p.notes)} notes) dropped: the FM-1 plays {MAX_CH} channels")
+SURVIVED app/tools/fm1c/fit.py:173  " > " -> " >= "  | while pitch > HIGH:
+SURVIVED app/tools/fm1c/fit.py:188  " >= " -> " > "  | late = [n for n in c.notes if n.tick >= length]
+SURVIVED app/tools/fm1c/cli.py:100  "true" -> "false"  | k.add_argument("--force", action="store_true")
+MUTANTS: 12 tried, 8 killed, 4 survived (of 59 candidates in US-3)
+EXIT_CODE: 1
