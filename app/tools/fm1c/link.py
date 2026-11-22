@@ -192,7 +192,7 @@ class Link:
         self._ask(0x03, struct.pack("<I", len(data)), retry=False)
         try:
             for off in range(0, len(data), CHUNK):
-                self._ask(0x04, struct.pack("<I", off) + data[off:off + CHUNK], retry=False)
+                self._ask(0x04, struct.pack("<I", off) + data[off:off + CHUNK])   # (a repeat is answered again)
             rc, d = self._ask(0x05, answers={0x45, 0x4F}, retry=False)
         except LinkError:
             try:

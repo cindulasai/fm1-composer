@@ -32,7 +32,7 @@ enum { XF_EFRAME = 1, XF_ESEQ, XF_ESIZE, XF_ENOPUT, XF_ESHORT, XF_EPIECE, XF_EFU
 enum { XS_IDLE, XS_RECV, XS_STAGED };
 
 static uint8_t xf_buf[LIB_MAX] XF_POOL;         /* the piece on its way in */
-static uint32_t xf_len, xf_got, xf_last_ms;
+static uint32_t xf_len, xf_got, xf_prev, xf_last_ms;   /* xf_prev: where the last chunk began */
 static uint8_t xf_state, xf_expired;
 static volatile uint8_t xf_changed;             /* the library changed: the UI re-reads it (and clears this) */
 
@@ -144,7 +144,7 @@ static int xfer_frame(const uint8_t *f, uint32_t n, uint32_t now_ms, int playing
         if (want < PIECE_HDR || want > LIB_MAX) { xf_nak(cmd, XF_ESIZE); break; }
         xf_state = XS_RECV;
         xf_len = want;
-        xf_got = 0;
+        xf_got = xf_prev = 0;
         xf_last_ms = now_ms;
         xf_expired = 0;
         xf_reply(0x43, d, 4);
@@ -154,9 +154,14 @@ static int xfer_frame(const uint8_t *f, uint32_t n, uint32_t now_ms, int playing
         uint32_t off = len >= 5u ? xf_rd32(d) : 0, k, cnt = len - 4u;
         if (xf_state != XS_RECV) { xf_nak(cmd, xf_expired ? XF_ETIMEOUT : XF_ENOPUT); break; }
         if (len < 5u) { xf_nak(cmd, XF_EFRAME); break; }
+        if (xf_got && off == xf_prev && cnt == xf_got - off) {    /* the last chunk again (its answer was lost)? */
+            for (k = 0; k < cnt && xf_buf[off + k] == d[4 + k]; k++) {}
+            if (k == cnt) { xf_last_ms = now_ms; xf_wr32(r, xf_got); xf_reply(0x44, r, 4); break; }
+        }
         if (off != xf_got) { xf_nak(cmd, XF_ESEQ); break; }
         if (cnt > xf_len - xf_got) { xf_nak(cmd, XF_ESIZE); break; }
         for (k = 0; k < cnt; k++) xf_buf[off + k] = d[4 + k];
+        xf_prev = off;
         xf_got += cnt;
         xf_last_ms = now_ms;
         xf_wr32(r, xf_got);

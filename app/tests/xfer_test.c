@@ -172,7 +172,7 @@ static void test_7_4_hostile(void)
     send32(0x03, n); CHECK(rcmd == 0x43, "begin");
     xf_wr32(p, 256); memcpy(p + 4, pc + 256, 256); send(0x04, p, 260); CHECK(nak(XF_ESEQ), "missing chunk");
     xf_wr32(p, 0); memcpy(p + 4, pc, 256); send(0x04, p, 260); CHECK(rcmd == 0x44, "first chunk");
-    send(0x04, p, 260); CHECK(nak(XF_ESEQ), "same chunk twice");
+    send(0x04, p, 260); CHECK(rcmd == 0x44 && xf_rd32(rp) == 256, "same chunk twice: answered again (an answer lost)");
     send(0x04, p, 4); CHECK(nak(XF_EFRAME), "a chunk of nothing");
     send(0x05, 0, 0); CHECK(nak(XF_ESHORT), "end before all data");
     xf_wr32(p, 256); memset(p + 4, 0, 256); send(0x04, p, 260); xf_wr32(p, 512); send(0x04, p, 260);
@@ -216,8 +216,34 @@ static void test_7_4_pack7_round_trip(void)
     CHECK(xf_unpack7(w, xf_pack7(in, 20, w), out, 19) == -1, "longer than max");
 }
 
+static void test_7_4_a_repeated_chunk_is_answered_again(void)
+{
+    uint8_t p[4 + 256];
+    static uint8_t got[PIECE_MAX_BYTES];
+    uint32_t n = make_piece(602, 9);
+    fresh();
+    send32(0x03, n); CHECK(rcmd == 0x43, "begin");
+    xf_wr32(p, 0); memcpy(p + 4, pc, 256);
+    send(0x04, p, 260); CHECK(rcmd == 0x44 && xf_rd32(rp) == 256, "chunk 0");
+    send(0x04, p, 260); CHECK(rcmd == 0x44 && xf_rd32(rp) == 256, "chunk 0 again: the same answer");
+    p[10] ^= 1;
+    send(0x04, p, 260); CHECK(nak(XF_ESEQ), "chunk 0 again, different bytes: refused");
+    p[10] ^= 1;
+    xf_wr32(p, 256); memcpy(p + 4, pc + 256, 256);
+    send(0x04, p, 260); CHECK(rcmd == 0x44 && xf_rd32(rp) == 512, "chunk 1");
+    xf_wr32(p, 0); memcpy(p + 4, pc, 256);
+    send(0x04, p, 260); CHECK(nak(XF_ESEQ), "an older chunk: refused");
+    xf_wr32(p, 256); memcpy(p + 4, pc + 256, 200);
+    send(0x04, p, 204); CHECK(nak(XF_ESEQ), "part of the last chunk: refused");
+    xf_wr32(p, 512); memcpy(p + 4, pc + 512, n - 512);
+    send(0x04, p, 4 + n - 512); CHECK(rcmd == 0x44, "the rest");
+    send(0x05, 0, 0); CHECK(rcmd == 0x45 && lib_count() == 1, "saved, whole");
+    CHECK(lib_read(0, got, sizeof got) == (int)n && !memcmp(got, pc, n), "the bytes as sent");
+}
+
 int main(void)
 {
+    test_7_4_a_repeated_chunk_is_answered_again();
     setvbuf(stdout, 0, _IONBF, 0);
     test_7_1_put_32k_then_get();
     test_7_2_staged_while_playing();

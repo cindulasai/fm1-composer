@@ -216,3 +216,10 @@ def test_7_2_push_during_playback_no_wait(port, tmp_path, monkeypatch):
     assert r.returncode == 0 and "staged" in r.stdout, r.stdout + r.stderr
     r = fm1c("push", f, "--wait", "0.5", "--port", port)
     assert r.returncode == 1 and "still waiting" in r.stderr, r.stdout + r.stderr
+
+
+def test_7_4_a_lost_data_answer_is_retried():
+    saved = link.frame(0x45, struct.pack("<I", 9))
+    p = Fake(lambda c, k: None if (c, k) == (4, 1) else saved if c == 5 else ACK(c))
+    assert link.Link(p, timeout=0.05).put(b"x" * 600) == ("saved", 9)
+    assert p.sent == [3, 4, 4, 4, 4, 5]                     # 3 chunks, the first asked twice
