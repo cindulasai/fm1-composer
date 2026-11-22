@@ -1,0 +1,22 @@
+[package]
+name = "t2m-session"
+description = "text2midi v2 session: the state and commands behind the app window, free of any UI toolkit"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+include_dir = "0.7.4"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+t2m-audio = { path = "../t2m-audio" }
+t2m-compose = { path = "../t2m-compose" }
+t2m-core = { path = "../t2m-core" }
+t2m-midi = { path = "../t2m-midi" }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+proptest = "1.12.0"

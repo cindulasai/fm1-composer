@@ -31,8 +31,8 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, I type "slow melancholic lo-fi 
 | F12 | Pieces over the MIDI-in jack: SysEx on the TRS input reaches the same transfer as USB | v3 | shipped |
 | F13 | Studio engine (WASM): text2midi's composer (copied, pinned) + fit + .f1p encode in Rust, byte-identical to `fm1c compose` | v3 | shipped |
 | F14 | Studio page: an idea in plain English → AI (from the browser, user's key) → brief → piece; key in a git-ignored local file or the page's settings | v3 | shipped |
-| F16 | Studio left = text2midi's own interface (Svelte UI copied unchanged @ pinned commit; its Tauri commands served in the browser by t2m-session → WASM + browser AI): gallery, prompt, takes, lock, undo, piano roll, preview audio | v4 | planned |
-| F17 | Studio right = fm1-emu's own page (unchanged, pinned) booting COMPOSER via its ?package= link; Studio is a virtual MIDI input there ("COMPOSER Studio"); Send to FM-1 = text2midi's MIDI → fit → .f1p → SysEx over that input → LIBRARY, plays | v4 | planned |
+| F16 | Studio left = text2midi's own interface (Svelte UI copied unchanged @ pinned commit; its Tauri commands served in the browser by t2m-session → WASM + browser AI): gallery, prompt, takes, lock, undo, piano roll, preview audio | v4 | shipped |
+| F17 | Studio right = fm1-emu's own page (unchanged, pinned) booting COMPOSER via its ?package= link; Studio is a virtual MIDI input there ("COMPOSER Studio"); Send to FM-1 = text2midi's MIDI → fit → .f1p → SysEx over that input → LIBRARY, plays | v4 | shipped |
 | F15 | Side by side: fm1-emu's browser build (MIT, pinned) runs COMPOSER on the same page; the piece is pushed over the emulated MIDI jack, appears in LIBRARY, plays | v3 | shipped |
 | F11 | EDIT screen: piano roll per channel; keys toggle notes at the cursor; grid, length, velocity, octave; play from the cursor's bar; SAVE replaces the piece | v2 | shipped |
 
@@ -47,7 +47,8 @@ synth (`app/firmware/src/synth.c`) — interface: `synth_sound(ch,id)`, `synth_o
 player (`app/firmware/src/player.c`) — interface: `player_load(view)`, `player_play/stop()`, `player_tempo(x10)`, `player_mute/solo(ch,on)`, `player_tick(nframes)` (audio ISR, per 32 frames), `player_pos()` — hides: event cursors, note-off queue, loop wrap, stuck-note safety.
 edit (`app/firmware/src/edit.c`) — interface: `edit_insert(b,ch,tick,pitch,dur,vel)`, `edit_delete(b,ch,tick,pitch)`, `edit_set(b,ch,tick,pitch,dur,vel)` → ED_OK|ED_ARG|ED_FULL|ED_EXISTS|ED_NONE; `edit_undo(b)` — hides: event shifting, delta/rest re-encoding, channel offsets, length, CRC, undo log (64 ops).
 studio engine (`app/studio/engine`, Rust → WASM) — interface: `prompt() -> system text`, `brief_from_reply(text) -> brief JSON | error`, `make(brief_json, seed) -> {midi, f1p, report[], channels, notes}` — hides: text2midi's crates (copied from text2midi_v2 @9540490, see PROVENANCE.md), SMF read, fit, encode.
-studio page (`app/studio/web`, static: index.html, studio.js) — AI call (MiniMax / Anthropic / OpenAI-compatible) from the browser; emulator worklet driven by messages (boot, key, enc, midi; frame); push = paced SysEx frames on the MIDI jack (≤ 3 bytes/ms), confirmed by reading the library from the emulator's flash.
+studio page (`app/studio/web`) — interface: index.html = two frames (t2m/ = text2midi's window, emu/ = fm1-emu's page) + Send to FM-1; cable.js = Web MIDI input "COMPOSER Studio" in fm1-emu's page; fm1link.js = transfer SysEx + library reader — hides: pacing (2.5 B/ms), read-back from fm1-emu's IndexedDB
+studio desk (`studio/src/desk.rs` + `t2m-ui/studio/*.js`) — interface: text2midi's Tauri commands (invoke name + args JSON → result JSON) — hides: t2m-session + t2m-audio state, browser AI (text2midi's providers), projects in localStorage
 ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRARY, PLAYER, EDIT, drawn where dirty; prefs in blob 0 keyed by piece id (200, least recently saved replaced).
 
 ## Test plan

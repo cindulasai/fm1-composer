@@ -1,0 +1,16 @@
+[package]
+name = "t2m-audio"
+description = "text2midi v2 sound: a small built-in synthesiser that plays a score, exact to the cent"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+t2m-core = { path = "../t2m-core" }
+
+[dev-dependencies]
+proptest = "1.12.0"
+t2m-compose = { path = "../t2m-compose" }
