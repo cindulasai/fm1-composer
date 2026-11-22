@@ -38,3 +38,13 @@ def wav_frames(path):
 @pytest.fixture
 def host():
     return run_host
+
+
+@pytest.fixture(scope="session")
+def pw_browser():
+    """one headless Chromium for every browser test (Playwright's sync API allows one per process)"""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        yield b
+        b.close()

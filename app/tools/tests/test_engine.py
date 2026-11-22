@@ -241,16 +241,6 @@ def web_root():
 
 
 @pytest.fixture(scope="session")
-def pw_browser():
-    """one headless Chromium for every browser test (Playwright's sync API allows one per process)"""
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as p:
-        b = p.chromium.launch()
-        yield b
-        b.close()
-
-
-@pytest.fixture(scope="session")
 def page(web_root, pw_browser):
     pg = pw_browser.new_page()
     pg.goto(web_root + "/engine/")
