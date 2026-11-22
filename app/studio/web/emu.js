@@ -1,7 +1,6 @@
 // The FM-1 on the page: fm1-emu's browser build (Joakim Eriksson, MIT; tools/get_web_emu.sh) running COMPOSER.
 // A piece goes in over the emulated MIDI-in jack as COMPOSER's transfer SysEx, paced to the jack's 31250 baud by the
 // emulator's own clock, then is confirmed by reading the library back from the emulated flash.
-import { changedSectors, packSectors, packageHash } from './emu/persistence.js';
 
 const MHZ = 160;
 const BYTES_PER_MS = 3;                     // the jack: 31250 baud = 3.125 bytes a millisecond
@@ -138,12 +137,13 @@ export class Fm1 {
     this.power.disabled = true;
     this.say('Starting the FM-1…');
     try {
+      this.P = await import('./emu/persistence.js').catch(() => { throw new Error('the emulator is not built'); });
       const [wasm, fwsc] = await Promise.all(['emu/fm1_web.wasm', 'firmware/composer.fwsc'].map(async (u) => {
         const r = await fetch(u, { cache: 'no-store' });
         if (!r.ok) throw new Error(`${u} is missing (${r.status})`);
         return r.arrayBuffer();
       }));
-      this.hash = await packageHash(new Uint8Array(fwsc));
+      this.hash = await this.P.packageHash(new Uint8Array(fwsc));
       this.ctx = new AudioContext({ sampleRate: 44100, latencyHint: 'playback' });
       await this.ctx.audioWorklet.addModule('emu/worklet.js');
       this.node = new AudioWorkletNode(this.ctx, 'fm1', { numberOfInputs: 0, outputChannelCount: [2] });
@@ -172,7 +172,7 @@ export class Fm1 {
 
   keep(flash) {                               // the library survives a reload (in this browser)
     try {
-      localStorage.setItem(STORE, JSON.stringify({ hash: this.hash, sectors: b64(packSectors(changedSectors(this.base, flash))) }));
+      localStorage.setItem(STORE, JSON.stringify({ hash: this.hash, sectors: b64(this.P.packSectors(this.P.changedSectors(this.base, flash))) }));
     } catch { /* full or private: the library lasts this visit only */ }
   }
 

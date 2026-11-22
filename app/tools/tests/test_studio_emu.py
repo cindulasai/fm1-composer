@@ -210,3 +210,13 @@ def test_15_5_fm1c_studio_opens_a_browser_unless_no_open(tmp_path, no_open):
     finally:
         p.terminate()
         p.wait(10)
+
+
+def test_15_4_without_the_emulator_built_the_page_still_works(studio):
+    page, calls, todo = studio(routes={"**/emu/**": lambda r: r.fulfill(status=404, body="no")})
+    todo.append(("reply", brief_text()))
+    generate(page)
+    page.wait_for_selector("#piece:not([hidden])")               # the left side works
+    page.click("#emu-start")
+    page.wait_for_function("() => document.querySelector('#emu-status').textContent.includes('get_web_emu.sh')")
+    assert page.is_enabled("#emu-start")

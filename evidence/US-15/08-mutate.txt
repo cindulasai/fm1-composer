@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-15
+SURVIVED app/studio/web/studio.js:168  " || " -> " && "  | say(e.message || String(e), 'error');
+MUTANTS: 12 tried, 11 killed, 1 survived (of 164 candidates in US-15)
+EXIT_CODE: 1
