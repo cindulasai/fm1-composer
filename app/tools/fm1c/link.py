@@ -75,10 +75,19 @@ class MidiPort:
             import rtmidi
         except ImportError as e:                                  # pragma: no cover (pinned dependency)
             raise PortError(f"python-rtmidi is missing ({e})") from e
-        self.i, self.o = rtmidi.MidiIn(), rtmidi.MidiOut()
-        names = self.o.get_ports()
+        saved = os.dup(2)                                         # (the MIDI system's own complaints: not ours to print)
+        try:
+            with open(os.devnull, "w") as null:
+                os.dup2(null.fileno(), 2)
+                self.i, self.o = rtmidi.MidiIn(), rtmidi.MidiOut()
+                names, in_names = self.o.get_ports(), self.i.get_ports()
+        except Exception as e:                                    # no MIDI system here (e.g. no ALSA sequencer)
+            raise PortError(f"no MIDI port matching '{want}' (MIDI is not available here: {e or type(e).__name__})") from e
+        finally:
+            os.dup2(saved, 2)
+            os.close(saved)
         hits = [k for k, n in enumerate(names) if want.lower() in n.lower()]
-        ins = [k for k, n in enumerate(self.i.get_ports()) if want.lower() in n.lower()]
+        ins = [k for k, n in enumerate(in_names) if want.lower() in n.lower()]
         if not hits or not ins:
             raise PortError(f"no MIDI port matching '{want}' (ports: {', '.join(names) or 'none'}); "
                             "connect the FM-1 (the emulator: fm1c emu)")
