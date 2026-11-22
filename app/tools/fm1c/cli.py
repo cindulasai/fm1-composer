@@ -2,17 +2,21 @@
 from __future__ import annotations
 
 import argparse
+import functools
+import http.server
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import webbrowser
 
 from . import emu as emumod
 from . import fit as fitmod
 from . import link as linkmod
 from .piece import PieceError, decode, encode
 
+STUDIO = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "studio")
 DEFAULT_T2M = os.path.expanduser("~/Claude/Projects/text2midi_v2/target/release/t2m-cli")
 
 
@@ -90,6 +94,43 @@ def cmd_compose(a) -> int:
         if not os.path.isfile(mid):
             raise UsageError(f"text2midi wrote no piece.mid for {a.brief}")
         return _convert(mid, out, a.name or stem, a.force, a.poly)
+
+
+class _StudioHandler(http.server.SimpleHTTPRequestHandler):
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".wasm": "application/wasm",
+                      ".js": "text/javascript", ".mjs": "text/javascript"}
+
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+    def log_message(self, *args):
+        pass
+
+
+def cmd_studio(a) -> int:
+    if not 0 <= a.port <= 65535:
+        raise UsageError(f"--port must be 0 to 65535, not {a.port}")
+    web = os.path.join(STUDIO, "web")
+    if not os.path.isfile(os.path.join(web, "engine", "studio.js")):
+        print("building COMPOSER Studio's engine (once; needs Rust) ...", flush=True)
+        if subprocess.run(["sh", os.path.join(STUDIO, "build.sh")]).returncode != 0:
+            raise UsageError("COMPOSER Studio's engine could not be built (see above)")
+    try:
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", a.port), functools.partial(_StudioHandler, directory=web))
+    except OSError as e:
+        raise UsageError(f"cannot serve COMPOSER Studio on 127.0.0.1:{a.port}: {e.strerror}") from None
+    url = f"http://127.0.0.1:{srv.server_address[1]}/"
+    print(f"COMPOSER Studio: {url}  (only this computer can open it; Ctrl-C stops it)", flush=True)
+    if not a.no_open:
+        webbrowser.open(url)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.server_close()
+    return 0
 
 
 def _link(a):
@@ -233,6 +274,10 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--fwsc", help="the firmware (default app/build/composer.fwsc, or $FM1C_FWSC)")
     e.add_argument("--flash", help=f"the emulated flash, the library in it (default {emumod.FLASH})")
     e.set_defaults(fn=cmd_emu)
+    s = sub.add_parser("studio", help="COMPOSER Studio in your browser: an idea in plain English -> a piece")
+    s.add_argument("--port", type=int, default=8714, help="the port on 127.0.0.1 (default 8714; 0 = any free one)")
+    s.add_argument("--no-open", action="store_true", help="print the address; do not open a browser")
+    s.set_defaults(fn=cmd_studio)
     return p
 
 
@@ -240,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         a = build_parser().parse_args(argv)
         if not getattr(a, "fn", None):
-            raise UsageError("a command is needed: convert, compose, push, list, delete, pull, emu (fm1c --help)")
+            raise UsageError("a command is needed: convert, compose, push, list, delete, pull, emu, studio (fm1c --help)")
         return a.fn(a)
     except UsageError as e:
         print(f"fm1c: {e}", file=sys.stderr)

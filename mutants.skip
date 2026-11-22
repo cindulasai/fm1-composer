@@ -53,3 +53,9 @@ app/firmware/src/composer.c | ed_tick = (uint32_t)(t < 0 ? 0 : t > last ? last :
 app/firmware/src/composer.c | ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len); | at len == 1 both give 1
 app/firmware/src/composer.c | ed_gi = (uint32_t)(i < 0 ? 0 : i > 3 ? 3 : i); | at i == 0 both give 0
 app/studio/engine/studio/src/f1p.rs | let mut out = Vec::with_capacity(notes.len() * 6); | a capacity hint only: the bytes are the same
+app/studio/web/index.html | <textarea id="idea" rows="4" maxlength="4000" placeholder="slow melancholic lo-fi in D minor, 70 bpm, dusty piano and soft drums"></textarea> | placeholder text only
+app/studio/web/index.html | <label>API key <input id="ai-key" type="password" autocomplete="off" spellcheck="false"></label> | spellcheck: no behaviour a test can see
+app/tools/studio_key.sh | [ -n "$key" ] || { echo "studio_key.sh: no key: set MINIMAX_API_KEY, or put MINIMAX_API_KEY=... in $envf" >&2; exit 2; } | the mutated "or" is inside the message text
+app/studio/web/index.html | <label>Model <input id="ai-model" type="text" spellcheck="false"></label> | spellcheck: no behaviour a test can see
+app/studio/web/studio.js | : `Could not reach the AI (${p.label}). Check the connection and try again.`); | the mutated "and" is inside the message text
+app/studio/web/index.html | <label>Base URL <input id="ai-base" type="url" spellcheck="false"></label> | spellcheck: no behaviour a test can see

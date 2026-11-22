@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-14
+SURVIVED app/studio/web/index.html:74  "false" -> "true"  | <label>Base URL <input id="ai-base" type="url" spellcheck="false"></label>
+MUTANTS: 12 tried, 11 killed, 1 survived (of 84 candidates in US-14)
+EXIT_CODE: 1

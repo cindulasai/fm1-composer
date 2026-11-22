@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-14
+SURVIVED app/studio/web/studio.js:197  " || " -> " && "  | $('#ai-model').value = cfg.model || '';
+MUTANTS: 12 tried, 11 killed, 1 survived (of 83 candidates in US-14)
+EXIT_CODE: 1

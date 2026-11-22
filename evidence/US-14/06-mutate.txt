@@ -1,0 +1,6 @@
+COMMAND: sh prove mutants US-14
+SURVIVED app/studio/web/index.html:19  " and " -> " or "  | <textarea id="idea" rows="4" maxlength="4000" placeholder="slow melancholic lo-fi in D minor, 70 bpm, dusty piano and soft drums"></textarea>
+SURVIVED app/studio/web/studio.js:60  " === " -> " !== "  | if ((cfg.provider || 'minimax') === 'minimax') Object.assign(body, { max_completion_tokens: 8000, reasoning_split: true });
+SURVIVED app/tools/studio_key.sh:10  " && " -> " || "  | if [ -z "$key" ] && [ -f "$envf" ]; then
+MUTANTS: 12 tried, 9 killed, 3 survived (of 89 candidates in US-14)
+EXIT_CODE: 1

@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-14
+/private/var/folders/9k/ry2jpry5791d4vht2ctjslj40000gp/T/tmp.UGGZf6oJz8/app/tools/tests/test_studio.py:41
+=========================== short test summary info ============================
+ERROR tools/tests/test_studio_emu.py::test_15_1_page_boots_composer_screen_is_host_modes
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+172 passed, 5 skipped, 1 error in 69.05s (0:01:09)
+MUTANTS: the gate is red before any mutation — fix that first
+EXIT_CODE: 2

@@ -14,7 +14,7 @@
 | US-11 | EDIT screen | 1 | done | 1 |
 | US-12 | Pieces over the MIDI-in jack | 1 | proven | 0 |
 | US-13 | Studio engine (WASM) | 1 | proven | 0 |
-| US-14 | Studio page: idea → AI → piece | 1 | todo | 0 |
+| US-14 | Studio page: idea → AI → piece | 1 | proven | 0 |
 | US-15 | Side by side: the emulator on the page | 1 | todo | 0 |
 
 ## Impediments

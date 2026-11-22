@@ -1,0 +1,7 @@
+COMMAND: sh prove mutants US-14
+SURVIVED app/studio/web/index.html:73  "false" -> "true"  | <label>Model <input id="ai-model" type="text" spellcheck="false"></label>
+SURVIVED app/studio/web/studio.js:72  " and " -> " or "  | : `Could not reach the AI (${p.label}). Check the connection and try again.`);
+SURVIVED app/studio/web/studio.js:106  " || " -> " && "  | $('#brief-key').textContent = [ton.tonic, (ton.system || '').replace(/^mode\./, '')].filter(Boolean).join(' ');
+SURVIVED app/studio/web/studio.js:206  " || " -> " && "  | $('#ai-model').placeholder = p.model || 'model name';
+MUTANTS: 11 tried, 7 killed, 4 survived (of 86 candidates in US-14)
+EXIT_CODE: 1

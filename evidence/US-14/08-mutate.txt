@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-14
+SURVIVED app/studio/web/index.html:72  "false" -> "true"  | <label>API key <input id="ai-key" type="password" autocomplete="off" spellcheck="false"></label>
+SURVIVED app/studio/web/studio.js:61  " === " -> " !== "  | else if (cfg.provider === 'deepseek') body.max_tokens = 8000;
+SURVIVED app/studio/web/studio.js:179  " > " -> " >= "  | if (file.size > 8 * 1024 * 1024) return say('That file is larger than the 8 MB Studio reads.', 'error');
+SURVIVED app/studio/web/studio.js:200  " && " -> " || "  | $('#settings-source').textContent = state.local && !cfg.key ? 'Using the key in local/ai.json (git-ignored). A key saved here takes its place.' : '';
+SURVIVED app/tools/studio_key.sh:13  " or " -> " and "  | [ -n "$key" ] || { echo "studio_key.sh: no key: set MINIMAX_API_KEY, or put MINIMAX_API_KEY=... in $envf" >&2; exit 2; }
+MUTANTS: 11 tried, 6 killed, 5 survived (of 88 candidates in US-14)
+EXIT_CODE: 1

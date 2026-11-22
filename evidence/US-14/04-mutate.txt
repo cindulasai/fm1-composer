@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-14
+fatal: not a git repository (or any of the parent directories): .git
+=========================== short test summary info ============================
+FAILED tools/tests/test_studio.py::test_14_4_the_key_is_in_no_tracked_file - ...
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 163 passed, 4 skipped in 71.06s (0:01:11)
+MUTANTS: the gate is red before any mutation — fix that first
+EXIT_CODE: 2

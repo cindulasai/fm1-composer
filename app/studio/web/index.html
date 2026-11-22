@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COMPOSER Studio</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>COMPOSER <span>Studio</span></h1>
+  <p class="tag">An idea in plain English → a piece for the FM-1</p>
+  <span id="engine" class="pill">Loading the engine…</span>
+  <button id="settings-open" class="ghost" type="button">Settings</button>
+</header>
+<main>
+  <section class="pane" id="compose">
+    <label for="idea">Your idea</label>
+    <textarea id="idea" rows="4" maxlength="4000" placeholder="slow melancholic lo-fi in D minor, 70 bpm, dusty piano and soft drums"></textarea>
+    <div class="row">
+      <button id="generate" type="button" disabled>Generate</button>
+      <label class="seed">seed <input id="seed" type="text" inputmode="numeric" placeholder="any" size="9"></label>
+      <button id="again" class="ghost" type="button" disabled title="the same brief, a new seed">Another take</button>
+      <label class="ghost file">Open a MIDI file <input id="midi-file" type="file" accept=".mid,.midi,audio/midi"></label>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+
+    <article id="brief" class="card" hidden>
+      <h2 id="brief-title"></h2>
+      <dl>
+        <dt>Style</dt><dd id="brief-style"></dd>
+        <dt>Tempo</dt><dd id="brief-tempo"></dd>
+        <dt>Key</dt><dd id="brief-key"></dd>
+        <dt>Length</dt><dd id="brief-length"></dd>
+        <dt>Parts</dt><dd id="brief-tracks"></dd>
+      </dl>
+      <h3>What the AI assumed</h3>
+      <ul id="brief-assumptions"></ul>
+    </article>
+
+    <article id="piece" class="card" hidden>
+      <h2 id="piece-name"></h2>
+      <p id="piece-stats" class="stats"></p>
+      <h3>Fitted to the FM-1</h3>
+      <ul id="piece-report"></ul>
+      <div class="row">
+        <button id="push" type="button" disabled>Push to the FM-1</button>
+        <button id="dl-f1p" class="ghost" type="button">Download .f1p</button>
+        <button id="dl-mid" class="ghost" type="button">Download .mid</button>
+      </div>
+      <progress id="push-progress" max="100" value="0" hidden></progress>
+    </article>
+  </section>
+
+  <section class="pane" id="device">
+    <div id="emu-box"><p class="hint">The FM-1 emulator, running COMPOSER, appears here.</p></div>
+  </section>
+</main>
+
+<dialog id="settings">
+  <form method="dialog">
+    <h2>AI settings</h2>
+    <p id="settings-source" class="hint"></p>
+    <label>Provider
+      <select id="ai-provider">
+        <option value="minimax">MiniMax</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="openai">OpenAI-compatible</option>
+      </select>
+    </label>
+    <label>API key <input id="ai-key" type="password" autocomplete="off" spellcheck="false"></label>
+    <label>Model <input id="ai-model" type="text" spellcheck="false"></label>
+    <label>Base URL <input id="ai-base" type="url" spellcheck="false"></label>
+    <p class="hint">The key stays in this browser (and goes only to the provider you pick).</p>
+    <div class="row">
+      <button id="settings-save" value="save">Save</button>
+      <button class="ghost" value="cancel" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+<script type="module" src="studio.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+COMMAND: cd app && FM1_LIVE=/nonexistent sh check.sh
+..........................................ssss.......................... [ 38%]
+........................................................................ [ 77%]
+........E
+==================================== ERRORS ====================================
+_______ ERROR at setup of test_14_1_idea_to_brief_to_piece_and_downloads _______
+
+    @pytest.fixture(scope="module")
+    def browser():
+        from playwright.sync_api import sync_playwright
+>       with sync_playwright() as pw:
+             ^^^^^^^^^^^^^^^^^
+
+tools/tests/test_studio.py:38: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <playwright.sync_api._context_manager.PlaywrightContextManager object at 0x108689f90>
+
+        def __enter__(self) -> SyncPlaywright:
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                self._loop = asyncio.new_event_loop()
+                self._own_loop = True
+            if self._loop.is_running():
+>               raise Error(
+                    """It looks like you are using Playwright Sync API inside the asyncio loop.
+    Please use the Async API instead."""
+                )
+E               playwright._impl._errors.Error: It looks like you are using Playwright Sync API inside the asyncio loop.
+E               Please use the Async API instead.
+
+../.venv/lib/python3.14/site-packages/playwright/sync_api/_context_manager.py:46: Error
+=========================== short test summary info ============================
+ERROR tools/tests/test_studio.py::test_14_1_idea_to_brief_to_piece_and_downloads
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+148 passed, 4 skipped, 1 error in 44.16s
+EXIT_CODE: 1
