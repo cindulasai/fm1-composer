@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 1fc6efa49141f50e73c1984eb7fcd072a26841b339b4d6f98115fe061e28551c # shrinks to brief = Brief { version: 1, identity: Identity { title: "", summary: "", style: "pop.generic", fusion: None, references: [] }, time: TimeSpec { tempo_bpm: 20, meter: Meter { numerator: 0, denominator: 0, grouping: None }, feel: "groove.straight_8", length: Bars(0) }, tonality: Tonality { tonic: Name("C"), system: "mode.major", tuning: "12tet", harmonic_language: Functional }, form: [], tracks: [TrackSpec { id: "a", role: Lead, instrument: "keys.piano", register: Mid, pattern: "", busy: 0.11594888626017001, articulation: Normal }], motif: None, assumptions: [] }

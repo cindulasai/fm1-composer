@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "identity": {
+    "title": "Rain on Shibuya",
+    "summary": "wistful lo-fi with a Rhodes hook",
+    "style": "hiphop.lofi",
+    "fusion": null,
+    "references": [
+      { "said": "early Nujabes", "interpreted_as": ["jazz chords", "swung 16ths", "soft kit"] }
+    ]
+  },
+  "time": {
+    "tempo_bpm": 82,
+    "meter": { "kind": "meter", "numerator": 4, "denominator": 4, "grouping": null },
+    "feel": "groove.lofi_swing",
+    "length": { "bars": 32 }
+  },
+  "tonality": {
+    "tonic": "D",
+    "system": "mode.dorian",
+    "tuning": "12tet",
+    "harmonic_language": "functional"
+  },
+  "form": [
+    {
+      "id": "intro", "kind": "intro", "bars": 4, "energy": 0.25, "density": 0.3,
+      "harmony": { "kind": "progression", "roman": ["i7", "IV7"], "bars_per_chord": 2 },
+      "tracks": ["chords", "drums"], "transition": "fill_light"
+    },
+    {
+      "id": "a", "kind": "verse", "bars": 16, "energy": 0.5, "density": 0.5,
+      "harmony": { "kind": "progression", "roman": ["i7", "IV7", "bVIImaj7", "v7"], "bars_per_chord": 1 },
+      "tracks": ["lead", "chords", "bass", "drums"], "transition": "none"
+    },
+    {
+      "id": "outro", "kind": "outro", "bars": 12, "energy": 0.3, "density": 0.25,
+      "harmony": { "kind": "named", "id": "prog.axis" },
+      "tracks": ["lead", "chords"], "transition": "none"
+    }
+  ],
+  "tracks": [
+    { "id": "lead", "role": "lead", "instrument": "keys.rhodes", "register": "mid_high",
+      "pattern": "melody.lyrical", "busy": 0.4, "articulation": "legato" },
+    { "id": "chords", "role": "chords", "instrument": "keys.rhodes", "register": "mid",
+      "pattern": "chords.comping", "busy": 0.5, "articulation": "normal" },
+    { "id": "bass", "role": "bass", "instrument": "bass.electric", "register": "low",
+      "pattern": "bass.kick_lock", "busy": 0.4, "articulation": "normal" },
+    { "id": "drums", "role": "drums", "instrument": "kit.standard", "register": "mid",
+      "pattern": "drums.groove", "busy": 0.5, "articulation": "normal" }
+  ],
+  "motif": { "degrees": [5, 3, 2, 1, 0], "durations": [1, 0.5, 0.5, 1, 1], "development": "sequence_then_answer" },
+  "assumptions": [
+    { "field": "/time/tempo_bpm", "because": "'rainy' and 'lo-fi' suggest 75–90 bpm", "confidence": 0.7 }
+  ]
+}

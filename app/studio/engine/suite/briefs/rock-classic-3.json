@@ -1,0 +1,170 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "rock.classic suite 3",
+  "summary": "rock.classic, variant 3",
+  "style": "rock.classic"
+ },
+ "time": {
+  "tempo_bpm": 126,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.rock_8",
+  "length": {
+   "bars": 20
+  }
+ },
+ "tonality": {
+  "tonic": "G",
+  "system": "mode.major",
+  "tuning": "12tet",
+  "harmonic_language": "functional"
+ },
+ "form": [
+  {
+   "id": "intro",
+   "kind": "intro",
+   "bars": 2,
+   "energy": 0.3,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "chords",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "verse1",
+   "kind": "verse",
+   "bars": 4,
+   "energy": 0.5,
+   "density": 0.6,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "chorus1",
+   "kind": "chorus",
+   "bars": 4,
+   "energy": 0.85,
+   "density": 0.85,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "verse2",
+   "kind": "verse",
+   "bars": 4,
+   "energy": 0.55,
+   "density": 0.65,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "chorus2",
+   "kind": "chorus",
+   "bars": 4,
+   "energy": 0.95,
+   "density": 0.95,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 2,
+   "energy": 0.3,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "guitar.overdrive",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "guitar.clean",
+   "register": "mid",
+   "pattern": "strum",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.electric",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  }
+ ]
+}

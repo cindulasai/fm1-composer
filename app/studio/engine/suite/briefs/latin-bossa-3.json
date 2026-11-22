@@ -1,0 +1,136 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "latin.bossa suite 3",
+  "summary": "latin.bossa, variant 3",
+  "style": "latin.bossa"
+ },
+ "time": {
+  "tempo_bpm": 136,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.bossa",
+  "length": {
+   "bars": 18
+  }
+ },
+ "tonality": {
+  "tonic": "G",
+  "system": "mode.major",
+  "tuning": "12tet",
+  "harmonic_language": "functional"
+ },
+ "form": [
+  {
+   "id": "head1",
+   "kind": "head",
+   "bars": 4,
+   "energy": 0.5,
+   "density": 0.6,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "solo1",
+   "kind": "solo",
+   "bars": 8,
+   "energy": 0.7,
+   "density": 0.7999999999999999,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "head2",
+   "kind": "head",
+   "bars": 4,
+   "energy": 0.55,
+   "density": 0.65,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 2,
+   "energy": 0.3,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "vibes.vibraphone",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "guitar.nylon",
+   "register": "mid",
+   "pattern": "comping",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.upright",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  }
+ ]
+}

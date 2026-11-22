@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "identity": {
+    "title": "Four Chords, One Hook",
+    "summary": "bright mid-tempo pop with a piano hook",
+    "style": "pop.generic"
+  },
+  "time": {
+    "tempo_bpm": 116,
+    "meter": { "kind": "meter", "numerator": 4, "denominator": 4 },
+    "feel": "groove.straight_8",
+    "length": { "bars": 24 }
+  },
+  "tonality": {
+    "tonic": "C",
+    "system": "mode.major",
+    "tuning": "12tet",
+    "harmonic_language": "functional"
+  },
+  "form": [
+    { "id": "intro", "kind": "intro", "bars": 4, "energy": 0.3, "density": 0.3,
+      "harmony": { "kind": "named", "id": "prog.axis" },
+      "tracks": ["chords", "drums"], "transition": "fill_light" },
+    { "id": "verse", "kind": "verse", "bars": 8, "energy": 0.5, "density": 0.5,
+      "harmony": { "kind": "named", "id": "prog.axis" },
+      "tracks": ["lead", "chords", "bass", "drums"], "transition": "fill_light" },
+    { "id": "chorus", "kind": "chorus", "bars": 8, "energy": 0.9, "density": 0.8,
+      "harmony": { "kind": "progression", "roman": ["IV", "I", "V", "vi"], "bars_per_chord": 1 },
+      "tracks": ["lead", "chords", "bass", "drums"], "transition": "none" },
+    { "id": "outro", "kind": "outro", "bars": 4, "energy": 0.3, "density": 0.3,
+      "harmony": { "kind": "named", "id": "prog.axis" },
+      "tracks": ["lead", "chords"], "transition": "none" }
+  ],
+  "tracks": [
+    { "id": "lead", "role": "lead", "instrument": "keys.piano", "register": "mid_high", "busy": 0.5 },
+    { "id": "chords", "role": "chords", "instrument": "keys.piano", "register": "mid", "busy": 0.5 },
+    { "id": "bass", "role": "bass", "instrument": "bass.electric", "register": "low", "busy": 0.4 },
+    { "id": "drums", "role": "drums", "instrument": "kit.standard", "busy": 0.5 }
+  ]
+}

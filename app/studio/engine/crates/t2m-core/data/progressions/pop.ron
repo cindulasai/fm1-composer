@@ -1,0 +1,11 @@
+[
+    (
+        id: "prog.axis",
+        name: "Axis progression",
+        aliases: ["axis", "four chords", "I V vi IV"],
+        roman: ["I", "V", "vi", "IV"],
+        bars_per_chord: 1,
+        source: "Wikipedia, 'I-V-vi-IV progression' (https://en.wikipedia.org/wiki/I%E2%80%93V%E2%80%93vi%E2%80%93IV_progression): uses the I, V, vi, and IV chords; in C major C-G-Am-F; also called the 'Axis progression'. Checked 2026-11-16.",
+        verified: true,
+    ),
+]

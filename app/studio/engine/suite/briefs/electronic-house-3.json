@@ -1,0 +1,189 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "electronic.house suite 3",
+  "summary": "electronic.house, variant 3",
+  "style": "electronic.house"
+ },
+ "time": {
+  "tempo_bpm": 126,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.house",
+  "length": {
+   "bars": 32
+  }
+ },
+ "tonality": {
+  "tonic": "D",
+  "system": "mode.minor",
+  "tuning": "12tet",
+  "harmonic_language": "functional"
+ },
+ "form": [
+  {
+   "id": "intro",
+   "kind": "intro",
+   "bars": 4,
+   "energy": 0.25,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_axis"
+   },
+   "tracks": [
+    "bass",
+    "drums"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "build",
+   "kind": "build",
+   "bars": 4,
+   "energy": 0.5,
+   "density": 0.6,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_axis"
+   },
+   "tracks": [
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "drop1",
+   "kind": "drop",
+   "bars": 8,
+   "energy": 0.95,
+   "density": 0.95,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_axis"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "pad",
+    "bass",
+    "drums",
+    "fx"
+   ],
+   "transition": "impact"
+  },
+  {
+   "id": "break",
+   "kind": "breakdown",
+   "bars": 4,
+   "energy": 0.3,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_axis"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "drop2",
+   "kind": "drop",
+   "bars": 8,
+   "energy": 1.0,
+   "density": 1.0,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_axis"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "pad",
+    "bass",
+    "drums",
+    "fx"
+   ],
+   "transition": "crash"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 4,
+   "energy": 0.25,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_axis"
+   },
+   "tracks": [
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "synth.lead",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "keys.rhodes",
+   "register": "mid",
+   "pattern": "stabs",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "pad",
+   "role": "pad",
+   "instrument": "pad.warm",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.synth",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "fx",
+   "role": "fx",
+   "instrument": "fx.riser",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  }
+ ]
+}

@@ -1,0 +1,32 @@
+[
+    (
+        id: "pop.generic",
+        name: "Pop",
+        aliases: ["pop music", "mainstream pop", "chart pop", "radio pop"],
+        tags: ["catchy", "radio", "song"],
+        tempo: (min: 90, max: 130, default: 116),
+        meter: (4, 4),
+        feel: "groove.straight_8",
+        system: "mode.major",
+        harmonic_language: functional,
+        form: [
+            (id: "intro", kind: "intro", bars: 4, energy: 0.3, density: 0.3, roles: [chords, drums]),
+            (id: "verse1", kind: "verse", bars: 8, energy: 0.5, density: 0.5),
+            (id: "chorus1", kind: "chorus", bars: 8, energy: 0.85, density: 0.75, transition: fill_light),
+            (id: "verse2", kind: "verse", bars: 8, energy: 0.55, density: 0.55),
+            (id: "chorus2", kind: "chorus", bars: 8, energy: 0.9, density: 0.8, transition: fill_light),
+            (id: "bridge", kind: "bridge", bars: 4, energy: 0.6, density: 0.45, transition: fill_heavy),
+            (id: "chorus3", kind: "chorus", bars: 8, energy: 1.0, density: 0.85),
+            (id: "outro", kind: "outro", bars: 4, energy: 0.3, density: 0.3, roles: [chords, lead]),
+        ],
+        progressions: ["prog.axis"],
+        palette: [
+            (role: lead, instrument: "keys.piano", register: mid_high),
+            (role: chords, instrument: "keys.piano"),
+            (role: bass, instrument: "bass.electric", register: low),
+            (role: drums, instrument: "kit.standard"),
+        ],
+        source: "Form: Wikipedia, 'Song structure' (https://en.wikipedia.org/wiki/Song_structure): 'The most common format in modern popular music is introduction (intro), verse, pre-chorus, chorus', then bridge, final chorus, optional outro; 'Pop and rock songs nearly always have both a verse and a chorus'; the chorus is more intense than the verse. Tempo: Rolling Stone, 'Pop Hits Were Really Slow (Again) in 2018' (https://www.rollingstone.com/music/music-news/pop-hits-2018-slow-tempo-788045/): most-streamed tracks averaged 90.5 bpm in 2017; Mixgraph, 'What BPM is Pop?' (https://www.mixgraph.io/bpm-for/pop): median 120 bpm, half of tracks between 104 and 129. Progression: see prog.axis. Section lengths, energy values, instruments chosen are design defaults, not sourced facts. Checked 2026-11-16.",
+        verified: true,
+    ),
+]

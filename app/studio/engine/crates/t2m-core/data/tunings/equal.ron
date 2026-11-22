@@ -1,0 +1,10 @@
+// Tuning tables: cents above the tonic for each pitch in one period.
+[
+    (
+        id: "12tet",
+        cents: [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100],
+        period: 1200,
+        source: "Wikipedia, '12 equal temperament' (https://en.wikipedia.org/wiki/12_equal_temperament): the octave as 12 exactly equal semitones; its comparison table gives 100 cents for one semitone, 1200 for the octave. Checked 2026-11-16.",
+        verified: true,
+    ),
+]

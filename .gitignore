@@ -9,3 +9,6 @@ adversary/
 vendor/fm1-emu/
 .pytest_cache/
 .hypothesis/
+app/studio/engine/target/
+app/studio/web/engine/
+app/studio/web/local/

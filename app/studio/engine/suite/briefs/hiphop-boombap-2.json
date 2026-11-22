@@ -1,0 +1,120 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "hiphop.boombap suite 2",
+  "summary": "hiphop.boombap, variant 2",
+  "style": "hiphop.boombap"
+ },
+ "time": {
+  "tempo_bpm": 86,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.boom_bap",
+  "length": {
+   "bars": 24
+  }
+ },
+ "tonality": {
+  "tonic": "E",
+  "system": "mode.minor",
+  "tuning": "12tet",
+  "harmonic_language": "modal"
+ },
+ "form": [
+  {
+   "id": "loop1",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.5,
+   "density": 0.5,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.boom_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "loop2",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.65,
+   "density": 0.6,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.boom_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "loop3",
+   "kind": "chorus",
+   "bars": 8,
+   "energy": 0.8,
+   "density": 0.7,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.boom_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "keys.rhodes",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.7,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "keys.rhodes",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.7,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.electric",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.7,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.7,
+   "articulation": "normal"
+  }
+ ]
+}

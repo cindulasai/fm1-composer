@@ -1,0 +1,152 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "hiphop.lofi suite 1",
+  "summary": "hiphop.lofi, variant 1",
+  "style": "hiphop.lofi"
+ },
+ "time": {
+  "tempo_bpm": 75,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.lofi_swing",
+  "length": {
+   "bars": 32
+  }
+ },
+ "tonality": {
+  "tonic": "A",
+  "system": "mode.dorian",
+  "tuning": "12tet",
+  "harmonic_language": "modal"
+ },
+ "form": [
+  {
+   "id": "intro",
+   "kind": "intro",
+   "bars": 4,
+   "energy": 0.25,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.dorian_vamp"
+   },
+   "tracks": [
+    "chords",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "loop1",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.5,
+   "density": 0.5,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.dorian_vamp"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "loop2",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.65,
+   "density": 0.6,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.dorian_vamp"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "loop3",
+   "kind": "chorus",
+   "bars": 8,
+   "energy": 0.8,
+   "density": 0.7,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.dorian_vamp"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 4,
+   "energy": 0.25,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.dorian_vamp"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "keys.piano",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "keys.rhodes",
+   "register": "mid",
+   "pattern": "broken",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.electric",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  }
+ ]
+}

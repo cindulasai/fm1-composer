@@ -1,0 +1,6 @@
+// A groove that plays the rhythmic timelines: the drum part follows the timeline's strokes.
+[
+    (id: "groove.timeline", name: "Timeline", aliases: ["clave", "bell pattern"],
+     cycles: ["timeline.son_3_2", "timeline.son_2_3", "timeline.rumba_3_2", "timeline.rumba_2_3", "timeline.bell_12_8"],
+     source: "Project design: the drum generator plays the cycle's own x strokes (see timeline.ron)", verified: true),
+]

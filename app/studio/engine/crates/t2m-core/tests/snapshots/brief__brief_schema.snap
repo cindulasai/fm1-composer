@@ -1,0 +1,645 @@
+---
+source: crates/t2m-core/tests/brief.rs
+expression: schema
+---
+{
+  "$defs": {
+    "Articulation": {
+      "description": "How long notes are held relative to their written length.",
+      "enum": [
+        "legato",
+        "normal",
+        "staccato"
+      ],
+      "type": "string"
+    },
+    "Assumption": {
+      "description": "One thing that was guessed rather than stated.",
+      "properties": {
+        "because": {
+          "type": "string"
+        },
+        "confidence": {
+          "default": 0.0,
+          "description": "0 to 1.",
+          "format": "double",
+          "type": "number"
+        },
+        "field": {
+          "description": "JSON pointer to the guessed field, for example `/time/tempo_bpm`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "because"
+      ],
+      "type": "object"
+    },
+    "HarmonicLanguage": {
+      "description": "How chords relate to the melody.",
+      "oneOf": [
+        {
+          "const": "functional",
+          "description": "Chord progressions with tension and resolution.",
+          "type": "string"
+        },
+        {
+          "const": "modal",
+          "description": "Chords drawn from one mode, without strong resolution.",
+          "type": "string"
+        },
+        {
+          "const": "drone",
+          "description": "A sustained drone under the melody; no chord changes.",
+          "type": "string"
+        },
+        {
+          "const": "none",
+          "description": "No harmony at all.",
+          "type": "string"
+        }
+      ]
+    },
+    "Identity": {
+      "description": "What the piece is.",
+      "properties": {
+        "fusion": {
+          "default": null,
+          "description": "An optional second style id to blend in.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "references": {
+          "default": [],
+          "description": "Artists or works the user named, and what was taken from each.",
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "type": "array"
+        },
+        "style": {
+          "description": "A style id from the knowledge base, for example `hiphop.lofi`.",
+          "type": "string"
+        },
+        "summary": {
+          "default": "",
+          "description": "One line describing the piece.",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "style"
+      ],
+      "type": "object"
+    },
+    "Length": {
+      "description": "How long the piece is. Total length is 1 to 512 bars or cycles.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bars": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bars"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "cycles": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "cycles"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "seconds": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "seconds"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "MeterSpec": {
+      "description": "A bar-based meter, or a named cycle from a tradition.",
+      "oneOf": [
+        {
+          "properties": {
+            "denominator": {
+              "description": "1, 2, 4, 8, 16 or 32.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "grouping": {
+              "default": null,
+              "description": "For additive meters, how the bar divides, for example `[2, 2, 3]` for 7/8.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "meter",
+              "type": "string"
+            },
+            "numerator": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "numerator",
+            "denominator"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "description": "A cycle id from the knowledge base, for example `tala.rupak`.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "cycle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Motif": {
+      "description": "A short melodic idea: at most a bar or two, never a full melody.",
+      "properties": {
+        "degrees": {
+          "description": "Scale steps above the tonic, 0 for the tonic itself; may be negative.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "development": {
+          "default": "",
+          "description": "How the idea is developed, for example `sequence_then_answer`.",
+          "type": "string"
+        },
+        "durations": {
+          "description": "The length of each note in beats; same count as `degrees`.",
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "degrees",
+        "durations"
+      ],
+      "type": "object"
+    },
+    "Reference": {
+      "description": "A reference the user made and how it was understood.",
+      "properties": {
+        "interpreted_as": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "said"
+      ],
+      "type": "object"
+    },
+    "Register": {
+      "description": "Where a part sits in pitch.",
+      "enum": [
+        "low",
+        "mid_low",
+        "mid",
+        "mid_high",
+        "high"
+      ],
+      "type": "string"
+    },
+    "Role": {
+      "description": "What a part does in the arrangement.",
+      "enum": [
+        "lead",
+        "counter",
+        "chords",
+        "pad",
+        "bass",
+        "drums",
+        "percussion",
+        "arp",
+        "drone",
+        "fx"
+      ],
+      "type": "string"
+    },
+    "Section": {
+      "description": "One section of the form.",
+      "properties": {
+        "bars": {
+          "description": "Length in bars, or in cycles when the meter is a cycle.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "density": {
+          "description": "0 (sparse) to 1 (dense).",
+          "format": "double",
+          "type": "number"
+        },
+        "energy": {
+          "description": "0 (calm) to 1 (full intensity).",
+          "format": "double",
+          "type": "number"
+        },
+        "harmony": {
+          "$ref": "#/$defs/SectionHarmony"
+        },
+        "id": {
+          "description": "Unique within the brief.",
+          "type": "string"
+        },
+        "kind": {
+          "default": "",
+          "description": "What the section is, for example `intro`, `verse`, `chorus`, `bridge`, `outro`.",
+          "type": "string"
+        },
+        "tracks": {
+          "description": "Ids of the tracks that play in this section.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "transition": {
+          "$ref": "#/$defs/Transition",
+          "default": "none",
+          "description": "What happens at the end of the section, leading into the next."
+        }
+      },
+      "required": [
+        "id",
+        "bars",
+        "energy",
+        "density",
+        "harmony",
+        "tracks"
+      ],
+      "type": "object"
+    },
+    "SectionHarmony": {
+      "description": "The harmony of a section.",
+      "oneOf": [
+        {
+          "description": "Roman numerals that repeat through the section, for example `[\"i7\", \"IV7\"]`.",
+          "properties": {
+            "bars_per_chord": {
+              "description": "How many bars each chord lasts, at least 1.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "progression",
+              "type": "string"
+            },
+            "roman": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "roman",
+            "bars_per_chord"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Sustained scale degrees, counted from 1 for the tonic, for example `[1, 5]`.",
+          "properties": {
+            "degrees": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "drone",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "degrees"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A named progression from the knowledge base, for example `prog.andalusian`.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "named",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "none",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TimeSpec": {
+      "description": "Tempo, meter, feel and length.",
+      "properties": {
+        "feel": {
+          "description": "A groove id from the knowledge base, for example `groove.lofi_swing`.",
+          "type": "string"
+        },
+        "length": {
+          "$ref": "#/$defs/Length"
+        },
+        "meter": {
+          "$ref": "#/$defs/MeterSpec"
+        },
+        "tempo_bpm": {
+          "description": "Beats per minute, 30 to 300.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tempo_bpm",
+        "meter",
+        "feel",
+        "length"
+      ],
+      "type": "object"
+    },
+    "Tonality": {
+      "description": "Tonic, scale system, tuning and how harmony behaves.",
+      "properties": {
+        "harmonic_language": {
+          "$ref": "#/$defs/HarmonicLanguage"
+        },
+        "system": {
+          "description": "A tonal system id, for example `mode.dorian`, `raga.yaman`, `maqam.bayati`.",
+          "type": "string"
+        },
+        "tonic": {
+          "$ref": "#/$defs/TonicSpec"
+        },
+        "tuning": {
+          "description": "A tuning id valid for the system, for example `12tet`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tonic",
+        "system",
+        "tuning",
+        "harmonic_language"
+      ],
+      "type": "object"
+    },
+    "TonicSpec": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "properties": {
+            "hz": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "hz"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "The tonic as a note name (`\"D\"`, `\"Eb\"`, `\"F#\"`) or an exact frequency."
+    },
+    "TrackSpec": {
+      "description": "One part of the arrangement.",
+      "properties": {
+        "articulation": {
+          "$ref": "#/$defs/Articulation",
+          "default": "normal"
+        },
+        "busy": {
+          "description": "0 (few notes) to 1 (many notes).",
+          "format": "double",
+          "type": "number"
+        },
+        "id": {
+          "description": "Unique within the brief.",
+          "type": "string"
+        },
+        "instrument": {
+          "description": "An instrument id from the knowledge base, for example `keys.rhodes`.",
+          "type": "string"
+        },
+        "pattern": {
+          "default": "",
+          "description": "A pattern family for the role, for example `melody.lyrical`. Empty means the style's default.",
+          "type": "string"
+        },
+        "register": {
+          "$ref": "#/$defs/Register",
+          "default": "mid"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "instrument",
+        "busy"
+      ],
+      "type": "object"
+    },
+    "Transition": {
+      "description": "How a section hands over to the next one.",
+      "oneOf": [
+        {
+          "enum": [
+            "none",
+            "fill_light",
+            "fill_heavy"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "crash",
+          "description": "A crash cymbal on the first beat of the next section.",
+          "type": "string"
+        },
+        {
+          "const": "riser",
+          "description": "A rising effect through the last bar.",
+          "type": "string"
+        },
+        {
+          "const": "impact",
+          "description": "A hit on the first beat of the next section.",
+          "type": "string"
+        },
+        {
+          "const": "break",
+          "description": "Everything stops for the last beat.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A plan for one piece of music.",
+  "properties": {
+    "assumptions": {
+      "default": [],
+      "description": "What was guessed rather than stated, and why.",
+      "items": {
+        "$ref": "#/$defs/Assumption"
+      },
+      "type": "array"
+    },
+    "form": {
+      "description": "The sections of the piece in playing order (1 to 24).",
+      "items": {
+        "$ref": "#/$defs/Section"
+      },
+      "type": "array"
+    },
+    "identity": {
+      "$ref": "#/$defs/Identity"
+    },
+    "motif": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Motif"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "An optional short melodic idea for the piece to develop."
+    },
+    "time": {
+      "$ref": "#/$defs/TimeSpec"
+    },
+    "tonality": {
+      "$ref": "#/$defs/Tonality"
+    },
+    "tracks": {
+      "description": "The parts of the arrangement (1 to 16).",
+      "items": {
+        "$ref": "#/$defs/TrackSpec"
+      },
+      "type": "array"
+    },
+    "version": {
+      "description": "Format version; always 1.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "version",
+    "identity",
+    "time",
+    "tonality",
+    "form",
+    "tracks"
+  ],
+  "title": "Brief",
+  "type": "object"
+}

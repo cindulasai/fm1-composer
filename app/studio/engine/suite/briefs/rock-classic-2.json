@@ -1,0 +1,138 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "rock.classic suite 2",
+  "summary": "rock.classic, variant 2",
+  "style": "rock.classic"
+ },
+ "time": {
+  "tempo_bpm": 113,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.rock_8",
+  "length": {
+   "bars": 32
+  }
+ },
+ "tonality": {
+  "tonic": "D",
+  "system": "mode.major",
+  "tuning": "12tet",
+  "harmonic_language": "functional"
+ },
+ "form": [
+  {
+   "id": "verse1",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.5,
+   "density": 0.5,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "chorus1",
+   "kind": "chorus",
+   "bars": 8,
+   "energy": 0.85,
+   "density": 0.75,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "verse2",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.55,
+   "density": 0.55,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "chorus2",
+   "kind": "chorus",
+   "bars": 8,
+   "energy": 0.95,
+   "density": 0.85,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.rock_145"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "guitar.overdrive",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.7,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "guitar.clean",
+   "register": "mid",
+   "pattern": "strum",
+   "busy": 0.7,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.electric",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.7,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.7,
+   "articulation": "normal"
+  }
+ ]
+}

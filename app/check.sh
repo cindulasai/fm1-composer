@@ -11,6 +11,15 @@ fi
     echo "check.sh: $PY lacks the Python packages; from app/: python3 -m venv ../.venv && ../.venv/bin/pip install -r tools/requirements.txt" >&2
     exit 2
 }
+"$PY" -c "import playwright" 2>/dev/null || {
+    echo "check.sh: $PY lacks playwright (Studio's browser tests); from app/: ../.venv/bin/pip install -r tools/requirements.txt && ../.venv/bin/python -m playwright install chromium-headless-shell" >&2
+    exit 2
+}
+[ -d "$HOME/.cargo/bin" ] && PATH="$HOME/.cargo/bin:$PATH" && export PATH
+command -v cargo >/dev/null 2>&1 || {
+    echo "check.sh: cargo not found; COMPOSER Studio's engine is Rust: https://rustup.rs, then rustup target add wasm32-unknown-unknown && cargo install wasm-bindgen-cli --version 0.2.130" >&2
+    exit 2
+}
 for t in tests/*_test.c; do
     [ -f "$t" ] || continue
     n=$(basename "$t" .c)

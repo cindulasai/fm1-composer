@@ -1,0 +1,177 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "electronic.techno suite 1",
+  "summary": "electronic.techno, variant 1",
+  "style": "electronic.techno"
+ },
+ "time": {
+  "tempo_bpm": 130,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.techno",
+  "length": {
+   "bars": 64
+  }
+ },
+ "tonality": {
+  "tonic": "A",
+  "system": "mode.minor",
+  "tuning": "12tet",
+  "harmonic_language": "modal"
+ },
+ "form": [
+  {
+   "id": "intro",
+   "kind": "intro",
+   "bars": 8,
+   "energy": 0.25,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_vamp"
+   },
+   "tracks": [
+    "bass",
+    "drums"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "build",
+   "kind": "build",
+   "bars": 8,
+   "energy": 0.5,
+   "density": 0.5,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_vamp"
+   },
+   "tracks": [
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "drop1",
+   "kind": "drop",
+   "bars": 16,
+   "energy": 0.95,
+   "density": 0.85,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_vamp"
+   },
+   "tracks": [
+    "arp",
+    "chords",
+    "bass",
+    "drums",
+    "fx"
+   ],
+   "transition": "impact"
+  },
+  {
+   "id": "break",
+   "kind": "breakdown",
+   "bars": 8,
+   "energy": 0.3,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_vamp"
+   },
+   "tracks": [
+    "chords"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "drop2",
+   "kind": "drop",
+   "bars": 16,
+   "energy": 1.0,
+   "density": 0.9,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_vamp"
+   },
+   "tracks": [
+    "arp",
+    "chords",
+    "bass",
+    "drums",
+    "fx"
+   ],
+   "transition": "crash"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 8,
+   "energy": 0.25,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.minor_vamp"
+   },
+   "tracks": [
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "arp",
+   "role": "arp",
+   "instrument": "synth.lead",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "pad.warm",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.synth",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "fx",
+   "role": "fx",
+   "instrument": "fx.riser",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  }
+ ]
+}

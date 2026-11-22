@@ -1,0 +1,16 @@
+[package]
+name = "t2m-compose"
+description = "text2midi v2 composer: a deterministic, seeded function from a brief to a score"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rand_chacha = "0.10.0"
+t2m-core = { path = "../t2m-core" }
+
+[dev-dependencies]
+proptest = "1.12.0"

@@ -1,0 +1,167 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "cinematic.orchestral suite 1",
+  "summary": "cinematic.orchestral, variant 1",
+  "style": "cinematic.orchestral"
+ },
+ "time": {
+  "tempo_bpm": 80,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.pop_four",
+  "length": {
+   "bars": 32
+  }
+ },
+ "tonality": {
+  "tonic": "A",
+  "system": "mode.minor",
+  "tuning": "12tet",
+  "harmonic_language": "functional"
+ },
+ "form": [
+  {
+   "id": "intro",
+   "kind": "intro",
+   "bars": 8,
+   "energy": 0.2,
+   "density": 0.25,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.cinema_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "rise",
+   "kind": "development",
+   "bars": 8,
+   "energy": 0.5,
+   "density": 0.5,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.cinema_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "pad",
+    "bass",
+    "arp",
+    "drums",
+    "fx"
+   ],
+   "transition": "riser"
+  },
+  {
+   "id": "climax",
+   "kind": "climax",
+   "bars": 8,
+   "energy": 1.0,
+   "density": 0.9,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.cinema_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "pad",
+    "bass",
+    "arp",
+    "drums",
+    "fx"
+   ],
+   "transition": "impact"
+  },
+  {
+   "id": "fade",
+   "kind": "outro",
+   "bars": 8,
+   "energy": 0.25,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.cinema_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "strings.ensemble",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "strings.ensemble",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "pad",
+   "role": "pad",
+   "instrument": "pad.warm",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.upright",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "arp",
+   "role": "arp",
+   "instrument": "harp.orchestral",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "fx",
+   "role": "fx",
+   "instrument": "fx.riser",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  }
+ ]
+}

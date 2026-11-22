@@ -1,0 +1,33 @@
+// Western modes. `steps` are indices into the tuning table (semitones in 12tet).
+[
+    (
+        id: "mode.major",
+        family: Mode,
+        steps: [0, 2, 4, 5, 7, 9, 11],
+        default_tuning: "12tet",
+        aliases: ["major", "ionian", "major scale"],
+        chordable: true,
+        source: "Wikipedia, 'Mode (music)' (https://en.wikipedia.org/wiki/Mode_(music)): Ionian is W-W-H-W-W-W-H; 'The Ionian mode corresponds to the major scale.' Checked 2026-11-16.",
+        verified: true,
+    ),
+    (
+        id: "mode.minor",
+        family: Mode,
+        steps: [0, 2, 3, 5, 7, 8, 10],
+        default_tuning: "12tet",
+        aliases: ["minor", "aeolian", "natural minor"],
+        chordable: true,
+        source: "Wikipedia, 'Mode (music)' (https://en.wikipedia.org/wiki/Mode_(music)): Aeolian is W-H-W-W-H-W-W; 'The Aeolian mode is identical to the natural minor scale.' Checked 2026-11-16.",
+        verified: true,
+    ),
+    (
+        id: "mode.dorian",
+        family: Mode,
+        steps: [0, 2, 3, 5, 7, 9, 10],
+        default_tuning: "12tet",
+        aliases: ["dorian"],
+        chordable: true,
+        source: "Wikipedia, 'Mode (music)' (https://en.wikipedia.org/wiki/Mode_(music)): Dorian is W-H-W-W-W-H-W. Checked 2026-11-16.",
+        verified: true,
+    ),
+]

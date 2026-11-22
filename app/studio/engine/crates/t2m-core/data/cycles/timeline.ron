@@ -1,0 +1,13 @@
+// Rhythmic timelines, one stroke per pulse: x = onset, . = rest. Bossa clave is not here: the page gives no onset grid.
+[
+    (id: "timeline.son_3_2", beats: 16, beat_unit: 16, grouping: [3, 3, 4, 2, 4], strokes: [(name: "x"), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "x"), (name: "."), (name: "."), (name: ".")],
+     source: "https://en.wikipedia.org/wiki/Clave_(rhythm) (checked 2026-11-20). Son clave 4/4, page pattern X..X..X...X.X..., three-side first.", verified: true),
+    (id: "timeline.son_2_3", beats: 16, beat_unit: 16, grouping: [2, 2, 4, 3, 3, 2], strokes: [(name: "."), (name: "."), (name: "x"), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "x"), (name: ".")],
+     source: "https://en.wikipedia.org/wiki/Clave_(rhythm) (checked 2026-11-20). Son clave 2-3: the page says 2-3 reverses the order of the two sides; onsets derived by swapping the halves of the 3-2 grid.", verified: true),
+    (id: "timeline.rumba_3_2", beats: 16, beat_unit: 16, grouping: [3, 4, 3, 2, 4], strokes: [(name: "x"), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "x"), (name: "."), (name: "."), (name: ".")],
+     source: "https://en.wikipedia.org/wiki/Clave_(rhythm) (checked 2026-11-20). Rumba clave 4/4, page pattern X..X...X..X.X..., three-side first.", verified: true),
+    (id: "timeline.rumba_2_3", beats: 16, beat_unit: 16, grouping: [2, 2, 4, 3, 4, 1], strokes: [(name: "."), (name: "."), (name: "x"), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "x"), (name: "."), (name: "."), (name: "."), (name: "x")],
+     source: "https://en.wikipedia.org/wiki/Clave_(rhythm) (checked 2026-11-20). Rumba clave 2-3: derived by swapping the halves of the 3-2 grid, as the page describes for 2-3.", verified: true),
+    (id: "timeline.bell_12_8", beats: 12, beat_unit: 8, grouping: [2, 2, 1, 2, 2, 2, 1], strokes: [(name: "x"), (name: "."), (name: "x"), (name: "."), (name: "x"), (name: "x"), (name: "."), (name: "x"), (name: "."), (name: "x"), (name: "."), (name: "x")],
+     source: "https://en.wikipedia.org/wiki/Clave_(rhythm) (checked 2026-11-20). Standard bell pattern in 12/8, page pattern X.X.XX.X.X.X.", verified: true),
+]

@@ -1,0 +1,152 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "hiphop.trap suite 3",
+  "summary": "hiphop.trap, variant 3",
+  "style": "hiphop.trap"
+ },
+ "time": {
+  "tempo_bpm": 156,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.trap",
+  "length": {
+   "bars": 16
+  }
+ },
+ "tonality": {
+  "tonic": "D",
+  "system": "mode.minor",
+  "tuning": "12tet",
+  "harmonic_language": "modal"
+ },
+ "form": [
+  {
+   "id": "intro",
+   "kind": "intro",
+   "bars": 2,
+   "energy": 0.25,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.trap_minor"
+   },
+   "tracks": [
+    "chords",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "loop1",
+   "kind": "verse",
+   "bars": 4,
+   "energy": 0.5,
+   "density": 0.6,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.trap_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "loop2",
+   "kind": "verse",
+   "bars": 4,
+   "energy": 0.65,
+   "density": 0.7,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.trap_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "loop3",
+   "kind": "chorus",
+   "bars": 4,
+   "energy": 0.8,
+   "density": 0.7999999999999999,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.trap_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 2,
+   "energy": 0.25,
+   "density": 0.4,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.trap_minor"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "synth.lead",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "pad.warm",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.synth",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.35,
+   "articulation": "normal"
+  }
+ ]
+}

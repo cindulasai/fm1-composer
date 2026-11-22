@@ -1,0 +1,17 @@
+// Hindustani talas. No theka strokes yet: the page checked gives no stroke names.
+[
+    (id: "tala.tintal", beats: 16, beat_unit: 4, grouping: [4, 4, 4, 4], accents: [(beat: 0, weight: 3), (beat: 4, weight: 2), (beat: 8, weight: 1), (beat: 12, weight: 2)],
+     source: "https://en.wikipedia.org/wiki/Tala_(music) (table of talas: beats, division, vibhaga; checked 2026-11-20). Accent weights: sam 3, tali 2, khali 1 are this project encoding of the X / number / 0 marks on the page; vibhaga X 2 0 3", verified: true),
+    (id: "tala.jhaptal", beats: 10, beat_unit: 4, grouping: [2, 3, 2, 3], accents: [(beat: 0, weight: 3), (beat: 2, weight: 2), (beat: 5, weight: 1), (beat: 7, weight: 2)],
+     source: "https://en.wikipedia.org/wiki/Tala_(music) (table of talas: beats, division, vibhaga; checked 2026-11-20). Accent weights: sam 3, tali 2, khali 1 are this project encoding of the X / number / 0 marks on the page; vibhaga X 2 0 3", verified: true),
+    (id: "tala.rupak", beats: 7, beat_unit: 4, grouping: [3, 2, 2], accents: [(beat: 0, weight: 3), (beat: 3, weight: 2), (beat: 5, weight: 2)],
+     source: "https://en.wikipedia.org/wiki/Tala_(music) (table of talas: beats, division, vibhaga; checked 2026-11-20). Accent weights: sam 3, tali 2, khali 1 are this project encoding of the X / number / 0 marks on the page; vibhaga X 2 3", verified: true),
+    (id: "tala.ektal", beats: 12, beat_unit: 4, grouping: [2, 2, 2, 2, 2, 2], accents: [(beat: 0, weight: 3), (beat: 2, weight: 1), (beat: 4, weight: 2), (beat: 6, weight: 1), (beat: 8, weight: 2), (beat: 10, weight: 2)],
+     source: "https://en.wikipedia.org/wiki/Tala_(music) (table of talas: beats, division, vibhaga; checked 2026-11-20). Accent weights: sam 3, tali 2, khali 1 are this project encoding of the X / number / 0 marks on the page; vibhaga X 0 2 0 3 4", verified: true),
+    (id: "tala.dadra", beats: 6, beat_unit: 4, grouping: [3, 3], accents: [(beat: 0, weight: 3), (beat: 3, weight: 1)],
+     source: "https://en.wikipedia.org/wiki/Tala_(music) (table of talas: beats, division, vibhaga; checked 2026-11-20). Accent weights: sam 3, tali 2, khali 1 are this project encoding of the X / number / 0 marks on the page; vibhaga X 0", verified: true),
+    (id: "tala.keherwa", beats: 8, beat_unit: 4, grouping: [4, 4], accents: [(beat: 0, weight: 3), (beat: 4, weight: 1)],
+     source: "https://en.wikipedia.org/wiki/Tala_(music) (table of talas: beats, division, vibhaga; checked 2026-11-20). Accent weights: sam 3, tali 2, khali 1 are this project encoding of the X / number / 0 marks on the page; vibhaga X 0", verified: true),
+    (id: "tala.dhamar", beats: 14, beat_unit: 4, grouping: [5, 2, 3, 4], accents: [(beat: 0, weight: 3), (beat: 5, weight: 2), (beat: 7, weight: 1), (beat: 10, weight: 2)],
+     source: "https://en.wikipedia.org/wiki/Tala_(music) (table of talas: beats, division, vibhaga; checked 2026-11-20). Accent weights: sam 3, tali 2, khali 1 are this project encoding of the X / number / 0 marks on the page; vibhaga X 2 0 3", verified: true),
+]

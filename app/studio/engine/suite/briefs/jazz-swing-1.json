@@ -1,0 +1,136 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "jazz.swing suite 1",
+  "summary": "jazz.swing, variant 1",
+  "style": "jazz.swing"
+ },
+ "time": {
+  "tempo_bpm": 150,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.jazz_ride",
+  "length": {
+   "bars": 36
+  }
+ },
+ "tonality": {
+  "tonic": "C",
+  "system": "mode.major",
+  "tuning": "12tet",
+  "harmonic_language": "functional"
+ },
+ "form": [
+  {
+   "id": "head1",
+   "kind": "head",
+   "bars": 8,
+   "energy": 0.5,
+   "density": 0.5,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "solo1",
+   "kind": "solo",
+   "bars": 16,
+   "energy": 0.7,
+   "density": 0.7,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "head2",
+   "kind": "head",
+   "bars": 8,
+   "energy": 0.55,
+   "density": 0.55,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 4,
+   "energy": 0.3,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.ii_v_i"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "vibes.vibraphone",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "keys.piano",
+   "register": "mid",
+   "pattern": "comping",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.upright",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  }
+ ]
+}

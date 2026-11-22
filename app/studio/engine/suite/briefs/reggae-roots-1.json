@@ -1,0 +1,170 @@
+{
+ "version": 1,
+ "identity": {
+  "title": "reggae.roots suite 1",
+  "summary": "reggae.roots, variant 1",
+  "style": "reggae.roots"
+ },
+ "time": {
+  "tempo_bpm": 75,
+  "meter": {
+   "kind": "meter",
+   "numerator": 4,
+   "denominator": 4
+  },
+  "feel": "groove.one_drop",
+  "length": {
+   "bars": 40
+  }
+ },
+ "tonality": {
+  "tonic": "C",
+  "system": "mode.major",
+  "tuning": "12tet",
+  "harmonic_language": "functional"
+ },
+ "form": [
+  {
+   "id": "intro",
+   "kind": "intro",
+   "bars": 4,
+   "energy": 0.3,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.reggae_1_4"
+   },
+   "tracks": [
+    "chords",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "verse1",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.5,
+   "density": 0.5,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.reggae_1_4"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "hook1",
+   "kind": "chorus",
+   "bars": 8,
+   "energy": 0.85,
+   "density": 0.75,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.reggae_1_4"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_light"
+  },
+  {
+   "id": "verse2",
+   "kind": "verse",
+   "bars": 8,
+   "energy": 0.55,
+   "density": 0.55,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.reggae_1_4"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "none"
+  },
+  {
+   "id": "hook2",
+   "kind": "chorus",
+   "bars": 8,
+   "energy": 0.9,
+   "density": 0.8,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.reggae_1_4"
+   },
+   "tracks": [
+    "lead",
+    "chords",
+    "bass",
+    "drums"
+   ],
+   "transition": "fill_heavy"
+  },
+  {
+   "id": "outro",
+   "kind": "outro",
+   "bars": 4,
+   "energy": 0.3,
+   "density": 0.3,
+   "harmony": {
+    "kind": "named",
+    "id": "prog.reggae_1_4"
+   },
+   "tracks": [
+    "lead",
+    "chords"
+   ],
+   "transition": "none"
+  }
+ ],
+ "tracks": [
+  {
+   "id": "lead",
+   "role": "lead",
+   "instrument": "keys.rhodes",
+   "register": "mid_high",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "chords",
+   "role": "chords",
+   "instrument": "guitar.clean",
+   "register": "mid",
+   "pattern": "stabs",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "bass",
+   "role": "bass",
+   "instrument": "bass.electric",
+   "register": "low",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  },
+  {
+   "id": "drums",
+   "role": "drums",
+   "instrument": "kit.standard",
+   "register": "mid",
+   "pattern": "",
+   "busy": 0.5,
+   "articulation": "normal"
+  }
+ ]
+}
