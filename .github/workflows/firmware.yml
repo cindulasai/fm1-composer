@@ -42,6 +42,8 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           command -v wasm-bindgen >/dev/null || cargo install wasm-bindgen-cli --version 0.2.130 --locked
+      - name: fm1-emu's browser build (Studio's page runs the new package in it)
+        run: sh app/tools/get_web_emu.sh
       - name: Headless Chromium for Studio's browser tests
         run: python3 -m playwright install --with-deps chromium-headless-shell
       - name: Gate
