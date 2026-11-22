@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-2
+SURVIVED app/tools/fm1c/piece.py:78  " + " -> " - "  | raise PieceError(BAD_TABLE, f"channel {i + 1}: unknown role {c.role!r}")
+MUTANTS: 11 tried, 10 killed, 1 survived (of 88 candidates in US-2)
+EXIT_CODE: 1

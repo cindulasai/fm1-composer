@@ -173,3 +173,28 @@ def test_2_3_errors_name_the_channel():
     with pytest.raises(PieceError) as e:
         decode(bytes(b))
     assert e.value.code == BAD_EVENT and "channel 2" in str(e.value)
+
+
+def test_2_3_c_reader_never_overreads_garbage_with_a_good_crc(tmp_path, cdump):
+    """the garbage gets a correct CRC, so the reader's checks past the CRC are what meet it"""
+    import struct, zlib
+    rng = random.Random(24)
+    good = encode(rand_piece(rng, nch=4, nnotes=20))
+    paths = []
+    for i in range(1000):
+        b = bytearray(good)
+        for _ in range(rng.randint(1, 8)):
+            b[rng.randrange(len(b) - 4)] = rng.randrange(256)
+        if i % 3 == 0:
+            b = b[: rng.randrange(8, len(b))]
+        b[-4:] = struct.pack("<I", zlib.crc32(bytes(b[:-4])) & 0xFFFFFFFF)
+        f = tmp_path / f"c{i}.f1p"; f.write_bytes(bytes(b)); paths.append(f)
+    outs = cdump(*paths)
+    assert len(outs) >= 1000 and len(set(outs)) > 20     # all ran clean, through many different paths
+
+
+def test_2_3_unknown_role_names_its_channel():
+    from fm1c.piece import PieceError
+    p = Piece("x", 1200, 384, [Channel("lead", [Note(0, 60, 10, 90)]), Channel("kazoo", [Note(0, 60, 10, 90)])])
+    with pytest.raises(PieceError, match=r"channel 2: unknown role 'kazoo'"):
+        encode(p)
