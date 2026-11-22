@@ -27,9 +27,14 @@ def body(text):
 @pytest.fixture(scope="module")
 def studio_url():
     p = subprocess.Popen([str(APP / "fm1c"), "studio", "--no-open", "--port", "0"], stdout=subprocess.PIPE, text=True)
-    line = p.stdout.readline()
-    m = re.search(r"http://127\.0\.0\.1:\d+/", line)
-    assert m, line
+    seen = ""
+    for _ in range(50):                                            # (a first run builds Studio before serving it)
+        line = p.stdout.readline()
+        seen += line
+        m = re.search(r"http://127\.0\.0\.1:\d+/", line)
+        if m or not line:
+            break
+    assert m, seen
     yield m.group(0)
     p.terminate()
     p.wait(10)
