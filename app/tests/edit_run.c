@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* edit_run: edit.c on this computer, driven by lines on stdin:
  *   load PATH | i CH TICK PITCH DUR VEL | d CH TICK PITCH | s CH TICK PITCH DUR VEL | u | save PATH
+ * Each edit starts a new undo group (edit_mark) unless its line starts with '+' (joins the last one).
  * Prints "r CODE" for each edit; after each one checks the piece (CHECK <err>) and that an error changed no
  * byte (CHANGED). Exit 2 on an I/O error. */
 #include <stdint.h>
@@ -34,10 +35,13 @@ int main(void)
             fclose(f);
             continue;
         }
-        if (sscanf(line, "i %u %u %u %u %u", &c, &t, &p, &d, &v) == 5) r = edit_insert(buf, c, t, p, d, v);
-        else if (sscanf(line, "s %u %u %u %u %u", &c, &t, &p, &d, &v) == 5) r = edit_set(buf, c, t, p, d, v);
-        else if (sscanf(line, "d %u %u %u", &c, &t, &p) == 3) r = edit_delete(buf, c, t, p);
-        else if (line[0] == 'u') r = edit_undo(buf, &uc, &ut);
+        const char *q = line;
+        if (*q == '+') q++;
+        else edit_mark();
+        if (sscanf(q, "i %u %u %u %u %u", &c, &t, &p, &d, &v) == 5) r = edit_insert(buf, c, t, p, d, v);
+        else if (sscanf(q, "s %u %u %u %u %u", &c, &t, &p, &d, &v) == 5) r = edit_set(buf, c, t, p, d, v);
+        else if (sscanf(q, "d %u %u %u", &c, &t, &p) == 3) r = edit_delete(buf, c, t, p);
+        else if (q[0] == 'u') r = edit_undo(buf, &uc, &ut);
         else continue;
         printf("r %d\n", r);
         if (piece_check(buf, pc_u32(buf + 40))) printf("CHECK %d\n", piece_check(buf, pc_u32(buf + 40)));

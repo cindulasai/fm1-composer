@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-10
+SURVIVED app/firmware/src/edit.c:114  " > " -> " >= "  | for (t = tick - p0; t > ED_GAP; t -= ED_GAP, at += PIECE_EV) ed_ev(b + at, ED_GAP, 1, PIECE_REST, 1);
+MUTANTS: 12 tried, 11 killed, 1 survived (of 58 candidates in US-10)
+EXIT_CODE: 1

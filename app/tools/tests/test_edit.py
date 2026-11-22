@@ -28,9 +28,10 @@ def runner(tmp_path_factory):
 
 
 class Model:
-    """the editor's rules on a Piece; undo = the states before the last 64 changes"""
+    """the editor's rules on a Piece; undo = the states before the last 64 changes, with their group (an op
+    named "+x" joins the last group; undo takes back a whole group)"""
     def __init__(self, p):
-        self.p, self.undo = p, []
+        self.p, self.undo, self.grp = p, [], 0
 
     def _notes(self, ch):
         return self.p.channels[ch].notes
@@ -42,14 +43,21 @@ class Model:
         return None
 
     def _keep(self):
-        self.undo = (self.undo + [[list(c.notes) for c in self.p.channels]])[-64:]
+        self.undo = (self.undo + [([list(c.notes) for c in self.p.channels], self.grp)])[-64:]
 
     def apply(self, op):
         k, a = op[0], op[1:]
+        if k.startswith("+"):
+            k = k[1:]
+        else:
+            self.grp += 1
         if k == "u":
             if not self.undo:
                 return NONE
-            for c, notes in zip(self.p.channels, self.undo.pop()):
+            g = self.undo[-1][1]
+            while self.undo and self.undo[-1][1] == g:
+                state = self.undo.pop()[0]
+            for c, notes in zip(self.p.channels, state):
                 c.notes = notes
             return OK
         ch = a[0]
@@ -105,7 +113,9 @@ def rand_op(rng, m):
         pitch = rng.randint(0, 129)
     dur = rng.choice([rng.randint(1, 400), 0, 65535, 65536, rng.randint(1, 65535)])
     vel = rng.choice([rng.randint(1, 127), 0, 128])
-    return (k, ch, tick, pitch) + ((dur, vel) if k in "is" else ())
+    if rng.random() < 0.3:
+        k = "+" + k                             # joins the last gesture
+    return (k, ch, tick, pitch) + ((dur, vel) if k[-1] in "is" else ())
 
 
 def check_case(runner, tmp_path, i, p, ops):
@@ -211,3 +221,32 @@ def test_10_4_a_note_of_the_next_channel_is_not_this_ones(runner, tmp_path):
     p = Piece("two", 1200, 384, [Channel("lead", [Note(0, 60, 10, 90)]), Channel("bass", [Note(5, 70, 10, 90)])])
     src = _save(tmp_path, "two", p)
     assert runner([f"load {src}", "d 0 5 70", "s 0 5 70 3 3", "i 0 5 70 10 90", "d 1 5 70"]) == [NONE, NONE, OK, OK]
+
+
+def test_10_4_an_insert_that_folds_rests_fits_a_full_piece(runner, tmp_path):
+    """0 .. 100000 needs one rest; a note at 50000 splits it into two gaps that need none: same size, so it fits"""
+    k = (32768 - 68) // 6 - 3                   # events: the 2 gap notes + 1 rest + k fillers = full
+    notes = [Note(0, 60, 10, 90), Note(100000, 61, 10, 90)] + [Note(100001 + i, 60 + i % 12, 10, 90) for i in range(k)]
+    p = Piece("fold", 1200, 384 * 999, [Channel("lead", notes)])
+    assert len(encode(p)) == 32768
+    m = check_case(runner, tmp_path, 7, p, [("i", 0, 50000, 62, 10, 90)])
+    assert len((tmp_path / "o7.f1p").read_bytes()) == 32768 and Note(50000, 62, 10, 90) in m.p.channels[0].notes
+
+
+def test_10_5_undo_in_a_full_piece_and_by_gesture(runner, tmp_path):
+    f = full_piece()
+    src = _save(tmp_path, "uf", f)
+    assert runner([f"load {src}", "d 0 5 65", "u", f"save {tmp_path / 'uf2.f1p'}", "u"]) == [OK, OK, NONE]
+    assert (tmp_path / "uf2.f1p").read_bytes() == encode(f)                    # the delete taken back, byte for byte
+    p = eight()
+    check_case(runner, tmp_path, 8, p, [("i", 0, 1, 70, 5, 5), ("s", 0, 0, 50, 7, 7), ("+s", 0, 96, 50, 7, 7),
+                                        ("+i", 1, 3, 70, 5, 5), ("u",)])       # one gesture of 3: all undone
+    m = Model(decode(encode(p)))
+    for op in [("i", 0, 1, 70, 5, 5), ("s", 0, 0, 50, 7, 7), ("+s", 0, 96, 50, 7, 7), ("+i", 1, 3, 70, 5, 5), ("u",)]:
+        m.apply(op)
+    assert sorted(m.p.channels[0].notes)[0] == Note(0, 50, 48, 90) and Note(1, 70, 5, 5) in m.p.channels[0].notes
+
+
+def test_10_3_a_gap_of_exactly_65535_needs_no_rest(runner, tmp_path):
+    p = Piece("edge", 1200, 384 * 999, [Channel("lead", [Note(0, 60, 10, 90), Note(200000, 62, 10, 90)])])
+    check_case(runner, tmp_path, 9, p, [("i", 0, 65535, 64, 10, 90), ("i", 0, 65535 + 65535 * 2 + 1, 65, 10, 90)])
