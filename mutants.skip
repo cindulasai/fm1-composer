@@ -19,3 +19,5 @@ app/firmware/src/synth.c | for (ch = 0; ch < NPART; ch++) synth_ch_off(ch); | eq
 app/firmware/src/synth.c | int32_t l = out[2 * i] + softclip(mixl[i] >> 1), r = out[2 * i + 1] + softclip(mixr[i] >> 1); | equivalent: out holds only this synth (app_audio zeroes it); the whole mix inverted is the same sound
 app/firmware/src/player.c | if (ch < pl_v.nch) { | equivalent: a cursor on channel nch is never read (pl_events stops at nch); at nch == 8 the loop has ended first
 app/firmware/src/player.c | static void player_tempo(uint32_t x10) { pl_tempo = x10 < 300u ? 300u : x10 > 3000u ? 3000u : x10; } | equivalent: at 300 both arms give 300
+app/firmware/src/lib.c | uint32_t k = n > sizeof b ? (uint32_t)sizeof b : n; | equivalent: at n == 256 both arms give 256
+app/firmware/src/lib.c | for (j = i; j > 0 && lib_ent[j - 1].seq < e.seq; j--) lib_ent[j] = lib_ent[j - 1]; | equivalent: seqs are unique, never equal
