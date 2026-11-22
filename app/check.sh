@@ -10,7 +10,7 @@ for t in tests/*_test.c; do
     [ -f "$t" ] || continue
     n=$(basename "$t" .c)
     mkdir -p build/unit
-    cc -O1 -g -Wall -Werror -Wno-unused-function $(sh tests/sanflags.sh) -Ifirmware/src -Ifirmware/hal -Iengines -o "build/unit/$n" "$t"
+    cc -O1 -g -Wall -Werror -Wno-unused-function $(sh tests/sanflags.sh) -Ifirmware/src -Ifirmware/hal -Iengines -o "build/unit/$n" "$t" -lm
     "build/unit/$n" > "build/unit/$n.log" 2>&1 || { tail -n 20 "build/unit/$n.log"; exit 1; }
 done
 mkdir -p build
