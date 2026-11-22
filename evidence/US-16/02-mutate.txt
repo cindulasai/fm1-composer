@@ -1,0 +1,12 @@
+COMMAND: sh prove mutants US-16
+SURVIVED app/studio/t2m-ui/studio/core.js:81  " < " -> " <= "  | for (let n = 2; n < 10000; n++) if (!all[`${stem}-${n}.t2m.json`]) return `${stem}-${n}.t2m.json`;
+SURVIVED app/studio/t2m-ui/studio/core.js:119  " < " -> " <= "  | for (let i = 0; i < files.count(); i++) {
+SURVIVED app/studio/t2m-ui/studio/ai.js:20  "true" -> "false"  | P('custom', 'Other (OpenAI-compatible)', '', [], '', { needs_url: true }),
+SURVIVED app/studio/t2m-ui/studio/ai.js:38  " || " -> " && "  | if (local) return { provider: local.provider || 'minimax', model: local.model || 'MiniMax-M3.1-Flash', base_url: local.base || null, key: local.key };
+SURVIVED app/studio/t2m-ui/studio/ai.js:55  " or " -> " and "  | if (/[\s\u0000-\u001f]/.test(key.trim())) throw 'the key has spaces or control characters in it';
+SURVIVED app/studio/t2m-ui/studio/ai.js:81  "true" -> "false"  | Object.assign(headers, { 'x-api-key': m.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' });
+SURVIVED app/studio/engine/studio/src/desk.rs:28  "false" -> "true"  | v.get(k).and_then(Value::as_array).map(|a| a.iter().map(|x| x.as_bool().unwrap_or(false)).collect()).unwrap_or_default()
+SURVIVED app/studio/engine/studio/src/desk.rs:111  "false" -> "true"  | self.engine.set_mute(t, muted.get(t).copied().unwrap_or(false));
+SURVIVED app/studio/build.sh:16  " && " -> " || "  | (cd t2m-ui && npx vite build --config vite.studio.config.js)
+MUTANTS: 11 tried, 2 killed, 9 survived (of 61 candidates in US-16)
+EXIT_CODE: 1

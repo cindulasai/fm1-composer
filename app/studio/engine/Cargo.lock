@@ -528,10 +528,14 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 name = "studio"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "t2m-audio",
  "t2m-compose",
  "t2m-core",
  "t2m-intent",
  "t2m-midi",
+ "t2m-session",
  "unicode-normalization",
  "wasm-bindgen",
 ]
@@ -556,6 +560,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "t2m-audio"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "t2m-compose",
+ "t2m-core",
 ]
 
 [[package]]
@@ -598,6 +611,21 @@ dependencies = [
  "proptest",
  "t2m-compose",
  "t2m-core",
+ "thiserror",
+]
+
+[[package]]
+name = "t2m-session"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "proptest",
+ "serde",
+ "serde_json",
+ "t2m-audio",
+ "t2m-compose",
+ "t2m-core",
+ "t2m-midi",
  "thiserror",
 ]
 

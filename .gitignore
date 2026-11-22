@@ -13,3 +13,6 @@ app/studio/engine/target/
 app/studio/web/engine/
 app/studio/web/local/
 app/studio/web/emu/
+app/studio/t2m-ui/node_modules/
+app/studio/web/t2m/
+vendor/fm1-emu-src/

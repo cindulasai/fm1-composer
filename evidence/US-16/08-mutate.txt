@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-16
+SURVIVED app/studio/engine/studio/src/desk.rs:67  "false" -> "true"  | let note = a.get("asked").and_then(Value::as_bool).unwrap_or(false)
+MUTANTS: 11 tried, 10 killed, 1 survived (of 52 candidates in US-16)
+EXIT_CODE: 1

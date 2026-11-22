@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-16
+SURVIVED app/studio/engine/studio/src/desk.rs:49  "true" -> "false"  | self.loaded = true;
+SURVIVED app/studio/engine/studio/src/desk.rs:112  "false" -> "true"  | self.engine.set_solo(t, soloed.get(t).copied().unwrap_or(false));
+MUTANTS: 11 tried, 9 killed, 2 survived (of 55 candidates in US-16)
+EXIT_CODE: 1

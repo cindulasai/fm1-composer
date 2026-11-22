@@ -1,0 +1,9 @@
+COMMAND: sh prove mutants US-16
+SURVIVED app/studio/t2m-ui/studio/core.js:108  " and " -> " or "  | if (!m) throw 'Choose a provider and model, and save a key, first.';
+SURVIVED app/studio/t2m-ui/studio/ai.js:7  "true" -> "false"  | ({ id, label, key_url, needs_key: true, default_url: null, needs_url: false, models, base, kind: 'openai', ...extra });
+SURVIVED app/studio/t2m-ui/studio/ai.js:69  " || " -> " && "  | ry { const j = JSON.parse(body); return String(j.error?.message || j.base_resp?.status_msg || body).slice(0, 200); }
+SURVIVED app/studio/t2m-ui/studio/ai.js:87  " === " -> " !== "  | if (m.provider === 'minimax') Object.assign(body, { max_completion_tokens: 8000, reasoning_split: true });
+SURVIVED app/studio/engine/studio/src/desk.rs:43  "false" -> "true"  | Ok(Desk { session: Session::new().map_err(|e| e.to_string())?, engine: Engine::new(sample_rate), loaded: false })
+SURVIVED app/studio/build.sh:6  " && " -> " || "  | [ -d "$HOME/.cargo/bin" ] && PATH="$HOME/.cargo/bin:$PATH"
+MUTANTS: 12 tried, 6 killed, 6 survived (of 57 candidates in US-16)
+EXIT_CODE: 1

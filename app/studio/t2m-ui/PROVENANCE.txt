@@ -1,0 +1,28 @@
+text2midi's window, copied unchanged from text2midi_v2 (github.com/cindulasai/text2midi_v2) at
+commit 9540490610363cb11a7ebf71a8e66065751470bb
+(its app/ folder: these paths are relative to it). Each file with its git blob id there; test_studio_t2m.py (16.1) checks them.
+Studio's own files beside them: studio/ (the browser stand-ins for its two Tauri imports) and vite.studio.config.js.
+
+af061a4a7497ec4338c70683198abe6a68f1d924 app-icon.png
+1a95e33fd5f2341fda8c9fc9659947f981363074 index.html
+d5f4bc461f92f5aae88e7d495163bacccec360f9 package-lock.json
+4a51e7eac11496bbaccd2efcce28338d7c6d9ec0 package.json
+185f6ce190b947a07351f855bf67272e812edfb8 src/App.svelte
+a3b02a7442f2dd748bb1f2ab6fb57ab6945592a4 src/Arrangement.svelte
+4ebc732f9eed1e9b359634f9a54dfbff3de5df65 src/PianoRoll.svelte
+abc97f034481f4141a2faff7c92bd393bebc3c0c src/Settings.svelte
+694bf4a3a1fac48c7614eb8e384da398704770d3 src/lib/api.ts
+192517eda56f14468abeac3e22522c5e01121a71 src/lib/layout.test.ts
+e9923f792490e7e1fc418dcb41a54eb29b016a98 src/lib/layout.ts
+23f10fc003f785a1a2c08f238b1d6c5a4d811b6a src/lib/pianoroll.test.ts
+753518efe7021c97464f2687fefe346981364437 src/lib/pianoroll.ts
+ce5f1d63674819661c70f531bb16ed5a28cc9243 src/lib/pieces.test.ts
+1878e1f3899499dbf1d4032dcd85c693a672661b src/lib/pieces.ts
+59d90b1800031605b4c9d5ca38bf752722309625 src/lib/progress.test.ts
+8496a88727930f597c1820a48b7cb0fed77693dc src/lib/progress.ts
+af48213f8f7cc74eae3519a4ac78cee2b4175514 src/lib/types.ts
+f1827e1a4ef3efb55d2513bb6807445f3480deac src/main.ts
+9d0ad76bd60effcefe109d4168de17f903ed6fc7 src/tokens.css
+9dae8c3178970fd2cdafd5f03aaa6da852387ede svelte.config.js
+16d3cdf99c1a8777bf9a3b6efd673d532791660b tsconfig.json
+e53776e84ebd0dc02dc9f394726c7dc1207fb3b1 vite.config.ts

@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-16
+SURVIVED app/studio/build.sh:15  " && " -> " || "  | [ -d t2m-ui/node_modules ] || (cd t2m-ui && npm ci --silent --no-audit --no-fund)
+MUTANTS: 11 tried, 10 killed, 1 survived (of 51 candidates in US-16)
+EXIT_CODE: 1

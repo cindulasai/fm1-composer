@@ -17,6 +17,10 @@ t2m-core = { path = "../crates/t2m-core" }
 t2m-compose = { path = "../crates/t2m-compose" }
 t2m-midi = { path = "../crates/t2m-midi" }
 t2m-intent = { path = "../crates/t2m-intent" }
+t2m-session = { path = "../crates/t2m-session" }
+t2m-audio = { path = "../crates/t2m-audio" }
+serde = "1.0.229"
+serde_json = "1.0.154"
 unicode-normalization = "0.1.24"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

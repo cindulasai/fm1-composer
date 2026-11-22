@@ -1,7 +1,7 @@
 # COMPOSER Studio's engine: text2midi's crates (copied unchanged, see PROVENANCE.md) + studio (fit, .f1p, browser API)
 [workspace]
 resolver = "3"
-members = ["crates/t2m-core", "crates/t2m-compose", "crates/t2m-midi", "crates/t2m-intent", "studio"]
+members = ["crates/t2m-core", "crates/t2m-compose", "crates/t2m-midi", "crates/t2m-intent", "crates/t2m-audio", "crates/t2m-session", "studio"]
 
 [workspace.package]
 version = "0.1.0"

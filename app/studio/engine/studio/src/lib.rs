@@ -1,6 +1,7 @@
 //! COMPOSER Studio's engine. A brief (from the AI, or written) becomes a piece the FM-1 plays: text2midi composes it
 //! (its crates, copied unchanged), then it is fitted and encoded exactly as `fm1c compose` does. Also: the AI's system
 //! prompt, and its reply read back into a checked brief. Compiled to WASM for the page; `studio-cli` for tests.
+pub mod desk;
 pub mod f1p;
 pub mod fit;
 pub mod smf;
@@ -98,6 +99,35 @@ mod web {
     pub fn make(brief_json: &str, seed: u32, name: &str) -> Result<Made, JsValue> {
         crate::make(brief_json, seed as u64, name, crate::POLY).map(|(m, f)| made(m, f)).map_err(js)
     }
+    /// text2midi's window commands (desk.rs): one session and its preview audio
+    #[wasm_bindgen]
+    pub struct Desk(crate::desk::Desk);
+
+    #[wasm_bindgen]
+    impl Desk {
+        #[wasm_bindgen(constructor)]
+        pub fn new(sample_rate: u32) -> Result<Desk, JsValue> { crate::desk::Desk::new(sample_rate).map(Desk).map_err(js) }
+        pub fn call(&mut self, cmd: &str, args: &str) -> Result<String, JsValue> { self.0.call(cmd, args).map_err(js) }
+        pub fn render(&mut self, out: &mut [f32]) { self.0.render(out) }
+        /// the open piece's MIDI files: [name, bytes, name, bytes, ...]
+        pub fn export(&self, profile: &str) -> Result<js_sys_array::Files, JsValue> { self.0.export(profile).map(js_sys_array::Files).map_err(js) }
+        /// the open piece, fitted for the FM-1
+        pub fn fitted(&self) -> Result<Made, JsValue> { self.0.fitted(crate::POLY).map(|(m, f)| made(m, f)).map_err(js) }
+    }
+
+    pub mod js_sys_array {
+        use wasm_bindgen::prelude::*;
+        /// exported MIDI files
+        #[wasm_bindgen]
+        pub struct Files(pub(crate) Vec<(String, Vec<u8>)>);
+        #[wasm_bindgen]
+        impl Files {
+            pub fn count(&self) -> usize { self.0.len() }
+            pub fn name(&self, i: usize) -> String { self.0.get(i).map(|f| f.0.clone()).unwrap_or_default() }
+            pub fn bytes(&self, i: usize) -> Vec<u8> { self.0.get(i).map(|f| f.1.clone()).unwrap_or_default() }
+        }
+    }
+
     /// a MIDI file the user brings → a piece
     #[wasm_bindgen]
     pub fn convert(midi: &[u8], name: &str) -> Result<Made, JsValue> {
