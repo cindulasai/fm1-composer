@@ -18,6 +18,11 @@ int main(int argc, char **argv)
     uint32_t secs, frames, fr, i, ch, clipped = 0;
     int32_t peak = 0;
     double sq = 0;
+    if (argc == 2 && !strcmp(argv[1], "--sounds")) {           /* the catalog, in PRESETS order */
+        synth_init();
+        for (i = 0; i < sound_count; i++) printf("%s\n", sound_name(i));
+        return 0;
+    }
     if (argc < 3) { fprintf(stderr, "usage: render_piece IN.f1p OUT.wav [SECONDS]\n"); return 2; }
     if (!(f = fopen(argv[1], "rb"))) { perror(argv[1]); return 2; }
     n = fread(buf, 1, sizeof buf, f);
