@@ -100,6 +100,11 @@ class _StudioHandler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".wasm": "application/wasm",
                       ".js": "text/javascript", ".mjs": "text/javascript"}
 
+    def translate_path(self, path):
+        if path.split("?", 1)[0] == "/firmware/composer.fwsc":   # the firmware CI built (or $FM1C_FWSC)
+            return os.environ.get("FM1C_FWSC") or os.path.join(os.path.dirname(STUDIO), "build", "composer.fwsc")
+        return super().translate_path(path)
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()

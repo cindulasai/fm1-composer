@@ -1,0 +1,7 @@
+COMMAND: sh prove mutants US-15
+SURVIVED app/studio/web/emu.js:197  " !== " -> " === "  | his.power.disabled = this.state !== 'failed' ? this.power.disabled : false;
+SURVIVED app/studio/web/emu.js:256  " > " -> " >= "  | if (n > 0) {
+SURVIVED app/studio/web/studio.js:165  " || " -> " && "  | say(e.message || String(e), 'error');
+SURVIVED app/tools/fm1c/cli.py:284  "true" -> "false"  | s.add_argument("--no-open", action="store_true", help="print the address; do not open a browser")
+MUTANTS: 12 tried, 8 killed, 4 survived (of 164 candidates in US-15)
+EXIT_CODE: 1

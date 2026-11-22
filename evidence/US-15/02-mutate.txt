@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-15
+/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py:771: FileNotFoundError
+=========================== short test summary info ============================
+FAILED tools/tests/test_studio_emu.py::test_15_5_get_web_emu_pins_and_records_and_names_missing_tools
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 178 passed, 5 skipped in 111.69s (0:01:51)
+MUTANTS: the gate is red before any mutation — fix that first
+EXIT_CODE: 2

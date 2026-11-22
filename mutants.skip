@@ -59,3 +59,4 @@ app/tools/studio_key.sh | [ -n "$key" ] || { echo "studio_key.sh: no key: set MI
 app/studio/web/index.html | <label>Model <input id="ai-model" type="text" spellcheck="false"></label> | spellcheck: no behaviour a test can see
 app/studio/web/studio.js | : `Could not reach the AI (${p.label}). Check the connection and try again.`); | the mutated "and" is inside the message text
 app/studio/web/index.html | <label>Base URL <input id="ai-base" type="url" spellcheck="false"></label> | spellcheck: no behaviour a test can see
+app/studio/web/emu.js | if (n > 0) { | n == 0 would send an empty message and add 0: the same

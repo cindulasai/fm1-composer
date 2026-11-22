@@ -38,7 +38,17 @@ dd { margin: 0; overflow-wrap: anywhere; }
 ul { margin: 0; padding-left: 18px; }
 .stats { font-weight: 600; margin: 0; }
 progress { width: 100%; margin-top: 10px; accent-color: var(--accent); }
-#emu-box { background: #0b0b0b; border-radius: 14px; min-height: 320px; display: grid; place-items: center; padding: 12px; }
+#emu-box { background: #161514; color: #ecebe8; border-radius: 14px; padding: 14px; }
+#emu-box .hint { color: #a29d94; }
+#emu-box h3 { margin: 12px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #a29d94; }
+.lcdwrap { display: flex; justify-content: center; margin-bottom: 10px; }
+#emu-lcd { width: min(100%, 480px); aspect-ratio: 1; image-rendering: pixelated; background: #000; border-radius: 6px; border: 6px solid #000; }
+#emu-level { flex: 1; min-width: 80px; height: 12px; }
+.panel { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.panel .key { padding: 6px 10px; font-size: 12px; background: #2a2826; color: #ecebe8; border-color: #3d3a36; }
+.panel .key:active { background: var(--accent); color: var(--accent-ink); }
+.encbox { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #a29d94; }
+.encbox .enc { padding: 2px 9px; font-size: 14px; background: #2a2826; color: #ecebe8; border-color: #3d3a36; }
 .hint { color: var(--muted); font-size: 13px; }
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); width: min(440px, calc(100vw - 32px)); }
 dialog label { margin: 10px 0; }

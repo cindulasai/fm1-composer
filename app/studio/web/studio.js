@@ -1,5 +1,6 @@
 // COMPOSER Studio: an idea → the AI (called from this page) → a brief → text2midi (WASM) → a piece for the FM-1.
 import init, * as E from './engine/studio.js';
+import { Fm1 } from './emu.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -12,7 +13,7 @@ const PROVIDERS = {
   openai: { label: 'OpenAI-compatible', base: 'https://api.openai.com/v1', model: '', kind: 'openai' },
 };
 const STORE = 'composer-studio.ai';
-const state = { brief: null, made: null, busy: false, local: null };
+const state = { brief: null, made: null, busy: false, local: null, pushing: false, fm1: null };
 
 function say(text, kind = '') {
   const s = $('#status');
@@ -117,6 +118,8 @@ function showPiece(m) {
   $('#piece-stats').textContent = `${m.channels} channels, ${m.notes} notes, ${m.bars} bars, ${m.bpm} BPM, ${m.f1p.length} bytes`;
   li($('#piece-report'), m.report ? m.report.split('\n') : [], 'Nothing had to change.');
   $('#piece').hidden = false;
+  $('#push').disabled = state.pushing;
+  $('#push-progress').hidden = true;
   document.dispatchEvent(new CustomEvent('studio:piece', { detail: m }));
 }
 
@@ -189,6 +192,29 @@ async function openMidi(file) {
   }
 }
 
+async function pushPiece() {
+  const m = state.made;
+  if (!m || state.pushing) return;
+  state.pushing = true;
+  $('#push').disabled = true;
+  const bar = $('#push-progress');
+  const show = (p) => bar.setAttribute('value', String(Math.round(p * 100)));
+  bar.hidden = false;
+  show(0);
+  try {
+    say(`Pushing "${m.name}" to the FM-1…`);
+    const hit = await state.fm1.push(m.f1p, m.name, show);
+    show(1);
+    say(`"${hit.name}" is on the FM-1: pick it in LIBRARY with SELECT, then PLAY.`);
+  } catch (e) {
+    bar.hidden = true;
+    say(e.message || String(e), 'error');
+  } finally {
+    state.pushing = false;
+    $('#push').disabled = false;
+  }
+}
+
 function openSettings() {
   const cfg = readStore() || {};
   const p = cfg.provider || state.local?.provider || 'minimax';
@@ -222,6 +248,8 @@ async function main() {
   $('#dl-mid').addEventListener('click', () => state.made && download(state.made.midi, `${state.made.name}.mid`, 'audio/midi'));
   $('#midi-file').addEventListener('change', (e) => { openMidi(e.target.files[0]); e.target.value = ''; });
   $('#settings-open').addEventListener('click', openSettings);
+  $('#push').addEventListener('click', pushPiece);
+  state.fm1 = window.studioFm1 = new Fm1($('#emu-box'));
   $('#ai-provider').addEventListener('change', fillPlaceholders);
   $('#settings').addEventListener('close', () => { if ($('#settings').returnValue === 'save') saveSettings(); });
   await loadLocal();
