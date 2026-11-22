@@ -1,0 +1,1 @@
+app/firmware/src/piece.h | for (i = 0; i < PIECE_NAME; i++) v->name[i] = (char)b[16 + i]; | equivalent: name[24] is set to 0 on the next line, so copying b[40] there first changes nothing

@@ -1,0 +1,6 @@
+COMMAND: sh prove mutants US-2
+SURVIVED app/tools/fm1c/piece.py:141  " > " -> " >= "  | if end + 4 > n:
+SURVIVED app/tools/fm1c/piece.py:155  " + " -> " - "  | raise PieceError(BAD_EVENT, f"channel {i + 1}: event past the end")
+SURVIVED app/firmware/src/piece.h:91  " < " -> " <= "  | for (i = 0; i < PIECE_NAME; i++) v->name[i] = (char)b[16 + i];
+MUTANTS: 12 tried, 9 killed, 3 survived (of 89 candidates in US-2)
+EXIT_CODE: 1
