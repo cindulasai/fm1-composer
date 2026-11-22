@@ -1,0 +1,45 @@
+COMMAND: rm -rf adversary/clone && git clone -q . adversary/clone && cd adversary/clone/app && python3 -m venv ../.venv && ../.venv/bin/pip install -q -r tools/requirements.txt && ../.venv/bin/python -m playwright install chromium-headless-shell && FM1_LIVE=/nonexistent sh check.sh
+
+[notice] A new release of pip is available: 26.1.2 -> 26.3
+[notice] To update, run: /Users/bot/Claude/Projects/fm1-composer/adversary/clone/.venv/bin/python3.14 -m pip install --upgrade pip
+
+tools/tests/test_studio.py:91: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tools/tests/test_studio.py:71: in open_
+    page.wait_for_selector("body[data-ready='1']")
+../../../.venv/lib/python3.14/site-packages/playwright/sync_api/_generated.py:21403: in wait_for_selector
+    self._sync(
+../../../.venv/lib/python3.14/site-packages/playwright/_impl/page.py:464: in wait_for_selector
+    return await self._main_frame.wait_for_selector(
+../../../.venv/lib/python3.14/site-packages/playwright/_impl/frame.py:418: in wait_for_selector
+    result = await self._channel.waitForSelector(
+../../../.venv/lib/python3.14/site-packages/playwright/_impl/channel_owner.py:398: in _mapped
+    return mapper(await awaitable)
+                  ^^^^^^^^^^^^^^^
+../../../.venv/lib/python3.14/site-packages/playwright/_impl/channel_owner.py:387: in finish
+    raise e from None
+../../../.venv/lib/python3.14/site-packages/playwright/_impl/channel_owner.py:352: in finish
+    result = await zone.run_async(lambda: awaitable)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <playwright._impl.utils.zones.Zone object at 0x107de8290>
+func = <function ChannelOwner._wrap_api_call.<locals>.finish.<locals>.<lambda> at 0x107e36f00>
+
+    async def run_async(self, func: Callable[[], Awaitable[R]]) -> R:
+        # Python: run() of an async function. The coroutine runs when it is awaited,
+        # so the zone must be current while it is awaited, not while it is created.
+        token = _async_local_storage.set(self)
+        try:
+>           return await func()
+                   ^^^^^^^^^^^^
+E           playwright._impl._errors.TimeoutError: Page.wait_for_selector: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("body[data-ready='1']") to be visible
+
+../../../.venv/lib/python3.14/site-packages/playwright/_impl/utils/zones.py:58: TimeoutError
+=========================== short test summary info ============================
+FAILED tools/tests/test_studio.py::test_14_1_idea_to_brief_to_piece_and_downloads
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 148 passed, 4 skipped in 88.71s (0:01:28)
+EXIT_CODE: 1
