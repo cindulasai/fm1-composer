@@ -13,7 +13,7 @@ S4. In PLAYER: KNOB1 picks channel, PRESETS turns its sound (heard at once); key
 S5. Push while playing: music keeps playing; piece staged, saved to flash at next stop; `fm1c push` prints "staged — saves when playback stops" then "saved" once stopped.
 S6. Cable pulled / power cut mid-push or mid-save: library afterwards = exactly the pieces committed before; no corrupt entry listed; next push works.
 S7. In PLAYER: EDIT opens the selected channel as a piano roll; SELECT moves the cursor, a key adds that note (or removes it), KNOB2/KNOB3 set length/velocity, FX undoes; PLAY plays from the cursor's bar; SAVE → the edited piece replaces the old one, `fm1c pull` shows the new notes.
-S8. `./fm1c studio` opens COMPOSER Studio: left, I type "slow melancholic lo-fi in D minor, 70 bpm" and press Generate; the brief and its assumptions show, then "6 channels, 812 notes"; I press Push: a progress bar, then the right side (the FM-1 emulator running COMPOSER) lists the piece; PLAY on it plays.
+S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type "slow melancholic lo-fi in D minor, 70 bpm" and press Make it; text2midi opens the piece (parts, piano roll; Play previews it). Right, fm1-emu's page runs COMPOSER; I press Start, then Send to FM-1 →: a progress bar, then "On the FM-1: … (read back from its flash; N channels, M notes …)"; it is at the top of LIBRARY; PLAY (or Space) plays it. Its assumptions are not shown: text2midi's window does not show them (unchanged)
 
 ## Features
 | ID | Feature (one testable line) | Since | State |
