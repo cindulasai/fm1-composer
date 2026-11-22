@@ -11,6 +11,7 @@ S2. `fm1c emu` starts fm1-live with COMPOSER and USB; `fm1c push out/*.f1p` → 
 S3. On FM-1: SELECT turns to a piece, PLAY → PLAYER screen, 8 channel strips with role + sound name, playhead bar:beat moving; music plays at the piece's tempo.
 S4. In PLAYER: KNOB1 picks channel, PRESETS turns its sound (heard at once); key F3..F4 (white keys 1–8) toggle mute; hold SEL + key = solo. SAVE stores sound choices; after power-off and back, piece reopens with those sounds.
 S5. Push while playing: music keeps playing; piece staged, saved to flash at next stop; `fm1c push` prints "staged — saves when playback stops" then "saved" once stopped.
+S7. In PLAYER: EDIT opens the selected channel as a piano roll; SELECT moves the cursor, a key adds that note (or removes it), KNOB2/KNOB3 set length/velocity, FX undoes; PLAY plays from the cursor's bar; SAVE → the edited piece replaces the old one, `fm1c pull` shows the new notes.
 S6. Cable pulled / power cut mid-push or mid-save: library afterwards = exactly the pieces committed before; no corrupt entry listed; next push works.
 
 ## Features
@@ -25,6 +26,8 @@ S6. Cable pulled / power cut mid-push or mid-save: library afterwards = exactly 
 | F7 | Transfer: SysEx protocol (ID 0x7D) INFO/LIST/PUT/DEL/GET with chunk CRC + ack; `fm1c push/list/delete/pull`; staging while playing | v1 | shipped |
 | F8 | UI: LIBRARY, PLAYER (8 strips; sound turned in place with PRESETS); per-piece sounds, mutes, tempo saved | v1 | shipped |
 | F9 | Emulator e2e: real `.fwsc` in fm1-live — push over emulated USB, navigate, play, audio, flash cut, strict CPU | v1 | shipped |
+| F10 | Note edit core: insert / delete / change notes of a piece in RAM; piece valid after every op; undo log | v2 | planned |
+| F11 | EDIT screen: piano roll per channel; keys toggle notes at the cursor; grid, length, velocity, octave; play from the cursor's bar; SAVE replaces the piece | v2 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -35,7 +38,8 @@ xfer (`app/firmware/src/xfer.c`) — interface: `xfer_frame(f,n,now,playing)->ou
 lib (`app/firmware/src/lib.c`) — interface: `lib_mount()`, `lib_count()`, `lib_entry(i)->{id,name,len}`, `lib_read(i,dst,max)->len|err`, `lib_put(name,buf,len)->id|err`, `lib_del(id)`, `lib_find(id)`, `lib_free()`, `lib_room()` — hides: whole-sector entries in 0x97000–0xDFFFF (73 sectors), 64-byte header with CRCs written last, delete = one word programmed, lazy erase of dirty sectors.
 synth (`app/firmware/src/synth.c`) — interface: `synth_sound(ch,id)`, `synth_on(ch,pitch,vel)`, `synth_off(ch,pitch)`, `synth_all_off()`, `synth_render(out,n)`; `sounds[]` catalog — hides: voice pool + stealing, engines, drum kit, mixer, levels.
 player (`app/firmware/src/player.c`) — interface: `player_load(view)`, `player_play/stop()`, `player_tempo(x10)`, `player_mute/solo(ch,on)`, `player_tick(nframes)` (audio ISR, per 32 frames), `player_pos()` — hides: event cursors, note-off queue, loop wrap, stuck-note safety.
-ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRARY, PLAYER, drawn where dirty; prefs in blob 0 keyed by piece id (200, least recently saved replaced).
+edit (`app/firmware/src/edit.c`) — interface: `edit_insert(b,ch,tick,pitch,dur,vel)`, `edit_delete(b,ch,tick,pitch)`, `edit_set(b,ch,tick,pitch,dur,vel)` → ED_OK|ED_ARG|ED_FULL|ED_EXISTS|ED_NONE; `edit_undo(b)` — hides: event shifting, delta/rest re-encoding, channel offsets, length, CRC, undo log (64 ops).
+ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRARY, PLAYER, EDIT, drawn where dirty; prefs in blob 0 keyed by piece id (200, least recently saved replaced).
 
 ## Test plan
 | Layer | Tool + driver | Covers |
@@ -66,6 +70,9 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 13 | Identity FM-1_95N (unused in hub list as of 2026-11-22); verify before public release | council | yes |
 | 14 | fm1c finds the FM-1 by its USB name "Felucca" (shared by Felucca-based firmwares; the updater relies on it, so unchanged), else "FM-1" | council | no |
 | 15 | DATA idempotent: an identical repeat of the last chunk is re-acknowledged; fm1c retries DATA (a lost frame or answer costs one retry) | council | no |
+| 17 | Edit while stopped only (bytes shift under the player); PLAY in EDIT plays from the cursor's bar | council | no |
+| 18 | SAVE of an edited piece = put new entry, then delete old (power cut between: both kept, nothing lost); prefs move to the new id | council | yes |
+| 19 | EDIT controls: SELECT cursor, KNOB1 grid 1/32..1/4, KNOB2 length, KNOB3 velocity, OCT-/+ octave, keys toggle, FX undo | council | no |
 | 16 | platform_poll hands the updater only a frame the app saw and declined (fixes a frame lost between the two, found under FM1_STRICT) | council | no |
 
 ## Claims
@@ -73,7 +80,6 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 "16 voices" → narrowed to the measured number in README.
 
 ## Backlog
-- Note editing on device (piano roll per channel) — Phase 2
 - Describe-in-words on the Mac (text2midi LLM path) from `fm1c`
 - Own 4-op FM engine (FM sounds on an FM synth)
 - Custom FM-1-shaped generator if fit reductions are frequent
@@ -82,3 +88,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 
 ## Versions
 - v1 — Phase 1: library player + fm1c (US-1–US-9)
+- v2 — Phase 2: note editing on the device (US-10–US-11)

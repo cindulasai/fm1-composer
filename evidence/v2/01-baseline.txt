@@ -1,0 +1,5 @@
+COMMAND: sh app/check.sh
+.................................................                        [100%]
+117 passed, 4 skipped in 31.22s
+emu e2e: 7 passed in 52.85s
+EXIT_CODE: 0
