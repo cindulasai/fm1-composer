@@ -9,7 +9,7 @@ Firmware "COMPOSER" for the FM-1: a library of up to 8-channel pieces generated 
 S1. `fm1c compose ~/Claude/Projects/text2midi_v2/suite/briefs/electronic-house-1.json` → `out/electronic-house-1.f1p` + report "8 channels, 412 notes, 0 reductions" (or each reduction listed).
 S2. `fm1c emu` starts fm1-live with COMPOSER and USB; `fm1c push out/*.f1p` → "pushed 3, verified 3"; FM-1 screen LIBRARY lists the 3 names, newest first.
 S3. On FM-1: SELECT turns to a piece, PLAY → PLAYER screen, 8 channel strips with role + sound name, playhead bar:beat moving; music plays at the piece's tempo.
-S4. In PLAYER: KNOB1 picks channel, PRESETS turns its sound (heard at once); key F3..C4 (white keys 1–8) toggle mute; hold SEL + key = solo. SAVE stores sound choices; after power-off and back, piece reopens with those sounds.
+S4. In PLAYER: KNOB1 picks channel, PRESETS turns its sound (heard at once); key F3..F4 (white keys 1–8) toggle mute; hold SEL + key = solo. SAVE stores sound choices; after power-off and back, piece reopens with those sounds.
 S5. Push while playing: music keeps playing; piece staged, saved to flash at next stop; `fm1c push` prints "staged — saves when playback stops" then "saved" once stopped.
 S6. Cable pulled / power cut mid-push or mid-save: library afterwards = exactly the pieces committed before; no corrupt entry listed; next push works.
 
@@ -23,19 +23,19 @@ S6. Cable pulled / power cut mid-push or mid-save: library afterwards = exactly 
 | F5 | Player: sample-accurate-to-0.73 ms sequencing, tempo ±, loop, mute/solo, playhead | v1 | planned |
 | F6 | Library: pieces in flash, atomic commit, delete, survives power cut at any write; capacity shown | v1 | planned |
 | F7 | Transfer: SysEx protocol (ID 0x7D) INFO/LIST/PUT/DEL/GET with chunk CRC + ack; `fm1c push/list/delete/pull`; staging while playing | v1 | planned |
-| F8 | UI: LIBRARY, PLAYER (8 strips), SOUND picker; per-piece sound choices saved | v1 | planned |
+| F8 | UI: LIBRARY, PLAYER (8 strips; sound turned in place with PRESETS); per-piece sounds, mutes, tempo saved | v1 | planned |
 | F9 | Emulator e2e: real `.fwsc` in fm1-live — push over emulated USB, navigate, play, audio, flash cut, strict CPU | v1 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
 fit (`app/tools/fm1c/fit.py`) — interface: `fit(midi_path, limits)->(Piece, Report)` — hides: role detection from track names, channel merge/drop by role priority, polyphony cap, range fold, bend→nearest key, quantize, length cap.
 link (`app/tools/fm1c/link.py`) — interface: `Link(port).info()/list()/put(name,bytes)/delete(id)/get(id)` raising `LinkError(code,msg)` — hides: SysEx framing, 7-bit packing, chunking, CRC, retries, timeouts.
-cli (`app/tools/fm1c/cli.py`) — `fm1c compose|convert|push|list|delete|pull|emu` exit 0 ok / 1 device refused / 2 usage or file.
-xfer (`app/firmware/src/xfer.c`) — interface: `xfer_byte(b)` (from platform SysEx tap), `xfer_poll()` (main loop) — hides: protocol state, staging buffer (pool, 32 KB), replies.
+cli (`app/tools/fm1c/cli.py`, `emu.py`) — `fm1c compose|convert|push|list|delete|pull|emu` exit 0 ok / 1 device refused / 2 usage or file.
+xfer (`app/firmware/src/xfer.c`) — interface: `xfer_frame(f,n,now,playing)->ours` (platform SysEx hook, ahead of the updater), `xfer_poll(now,playing)` (main loop) — hides: protocol state, staging buffer (pool, 32 KB), idempotent DATA, replies.
 lib (`app/firmware/src/lib.c`) — interface: `lib_mount()`, `lib_count()`, `lib_entry(i)->{id,name,len}`, `lib_read(i,dst,max)->len|err`, `lib_put(name,buf,len)->id|err`, `lib_del(id)`, `lib_find(id)`, `lib_free()`, `lib_room()` — hides: whole-sector entries in 0x97000–0xDFFFF (73 sectors), 64-byte header with CRCs written last, delete = one word programmed, lazy erase of dirty sectors.
 synth (`app/firmware/src/synth.c`) — interface: `synth_sound(ch,id)`, `synth_on(ch,pitch,vel)`, `synth_off(ch,pitch)`, `synth_all_off()`, `synth_render(out,n)`; `sounds[]` catalog — hides: voice pool + stealing, engines, drum kit, mixer, levels.
 player (`app/firmware/src/player.c`) — interface: `player_load(view)`, `player_play/stop()`, `player_tempo(x10)`, `player_mute/solo(ch,on)`, `player_tick(nframes)` (audio ISR, per 32 frames), `player_pos()` — hides: event cursors, note-off queue, loop wrap, stuck-note safety.
-ui (`app/firmware/src/composer.c`) — app_main/app_audio; screens LIBRARY, PLAYER, SOUND; prefs in blobs keyed by piece id.
+ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRARY, PLAYER, drawn where dirty; prefs in blob 0 keyed by piece id (200, least recently saved replaced).
 
 ## Test plan
 | Layer | Tool + driver | Covers |
@@ -64,6 +64,9 @@ ui (`app/firmware/src/composer.c`) — app_main/app_audio; screens LIBRARY, PLAY
 | 11 | Piece max 32 KB, 96 PPQ, ≤ 4096 notes/channel; longer → truncated with report | council | no |
 | 12 | Drums: own small synth kit (GM notes 35–59 subset) since Felucca-Engines has none | council | no |
 | 13 | Identity FM-1_95N (unused in hub list as of 2026-11-22); verify before public release | council | yes |
+| 14 | fm1c finds the FM-1 by its USB name "Felucca" (shared by Felucca-based firmwares; the updater relies on it, so unchanged), else "FM-1" | council | no |
+| 15 | DATA idempotent: an identical repeat of the last chunk is re-acknowledged; fm1c retries DATA (a lost frame or answer costs one retry) | council | no |
+| 16 | platform_poll hands the updater only a frame the app saw and declined (fixes a frame lost between the two, found under FM1_STRICT) | council | no |
 
 ## Claims
 "better than SLOOP" → narrowed: not a claim; different product (library player vs live groovebox). README: "inspired by SLOOP".
