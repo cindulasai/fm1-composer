@@ -21,3 +21,19 @@ app/firmware/src/player.c | if (ch < pl_v.nch) { | equivalent: a cursor on chann
 app/firmware/src/player.c | static void player_tempo(uint32_t x10) { pl_tempo = x10 < 300u ? 300u : x10 > 3000u ? 3000u : x10; } | equivalent: at 300 both arms give 300
 app/firmware/src/lib.c | uint32_t k = n > sizeof b ? (uint32_t)sizeof b : n; | equivalent: at n == 256 both arms give 256
 app/firmware/src/lib.c | for (j = i; j > 0 && lib_ent[j - 1].seq < e.seq; j--) lib_ent[j] = lib_ent[j - 1]; | equivalent: seqs are unique, never equal
+app/firmware/src/xfer.c | uint32_t m = n - i < 7u ? n - i : 7u; | at n - i == 7 both arms give 7
+app/firmware/src/xfer.c | uint32_t m = n - i - 1u < 7u ? n - i - 1u : 7u; | at 7 both arms give 7
+app/firmware/src/xfer.c | for (i = 0; i < n; i++) raw[i] = pay[i]; | raw[n] is overwritten by the CRC on the next line; every caller's payload buffer is larger than n
+app/firmware/src/xfer.c | static void xf_commit(uint32_t cmd)             /* the whole piece is in xf_buf and checked: to flash */ | comment
+app/firmware/src/xfer.c | for (k = 0; k < PIECE_NAME; k++) name[k] = (char)xf_buf[16u + k]; | name[PIECE_NAME] is set to 0 on the next line
+app/firmware/src/xfer.c | for (k = 0; k < PIECE_NAME; k++) r[9 + k] = (uint8_t)e->name[k]; | e->name[PIECE_NAME] is always 0 and r[33] is past the reply length
+app/firmware/src/xfer.c | if (cnt > XF_CHUNK) cnt = XF_CHUNK; | at cnt == XF_CHUNK both give XF_CHUNK
+app/firmware/src/lib.c | for (k = (uint32_t)i; k + 1u < lib_n; k++) lib_ent[k] = lib_ent[k + 1u]; | the extra copy lands past the new count (lib_n-- next), never read
+app/tools/fm1c/link.py | A port is a MIDI port (python-rtmidi, matched by part of its name) or "exec:COMMAND" (a program speaking hex frames | docstring
+app/tools/fm1c/link.py | self.i.ignore_types(sysex=False, timing=True, active_sense=True) | the callback keeps only SysEx (F0) anyway; this only saves work
+app/tools/fm1c/link.py | threading.Thread(target=self._read, daemon=True).start() | the reader ends when the child's stdout closes, which close() ensures
+app/tools/fm1c/link.py | while (left := end - time.monotonic()) > 0: | at exactly 0 left, recv(0) returns nothing; same outcome
+app/tools/fm1c/cli.py | os.replace(tmp, out)                          # whole or not at all | comment
+app/tools/fm1c/cli.py | print(f"  - {line}") | literal text
+app/tools/fm1c/cli.py | x.add_argument("--port", help="MIDI port (part of its name; default FM-1, or $FM1C_PORT)") | help text
+app/tools/fm1c/cli.py | p = _Parser(prog="fm1c", description="Compose, convert and push pieces for COMPOSER on the M-VAVE FM-1.") | help text

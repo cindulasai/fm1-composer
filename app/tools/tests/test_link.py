@@ -128,28 +128,91 @@ def test_7_4_parse_rejects_others():
         link.unpack7(b"\x00")
 
 
+def fake_rtmidi(monkeypatch, outs, ins):
+    m = type(sys)("rtmidi")
+    class Out:
+        def get_ports(self): return outs
+    class In:
+        def get_ports(self): return ins
+        def ignore_types(self, **k): pass
+        def set_callback(self, f): m.cb = f
+        def open_port(self, k): pass
+    Out.open_port = lambda self, k: None
+    m.MidiOut, m.MidiIn = Out, In
+    monkeypatch.setitem(sys.modules, "rtmidi", m)
+    return m
+
+
 def test_7_4_no_ports_at_all_says_none(monkeypatch):
-    class Fake:
-        def get_ports(self):
-            return []
-    monkeypatch.setitem(sys.modules, "rtmidi", type(sys)("rtmidi"))
-    sys.modules["rtmidi"].MidiIn = sys.modules["rtmidi"].MidiOut = Fake
+    fake_rtmidi(monkeypatch, [], [])
     with pytest.raises(link.PortError, match=r"\(ports: none\)"):
         link.MidiPort("FM-1")
 
 
+def test_7_4_a_port_that_only_sends_is_not_enough(monkeypatch):
+    fake_rtmidi(monkeypatch, ["FM-1_950 (emu)"], [])
+    with pytest.raises(link.PortError, match="no MIDI port matching"):
+        link.MidiPort("FM-1")
+
+
+def test_7_3_midi_port_keeps_only_sysex(monkeypatch):
+    m = fake_rtmidi(monkeypatch, ["FM-1_950 (emu)"], ["FM-1_950 (emu)"])
+    port = link.MidiPort("fm-1")
+    m.cb(([0x90, 60, 100], 0), None)
+    m.cb(([0xF0, 0x7D, 0xF7], 0), None)
+    assert port.q.get_nowait() == bytes([0xF0, 0x7D, 0xF7]) and port.q.empty()
+
+
+class Fake:
+    """a port answering what `reply(cmd)` returns (a frame or None)"""
+    def __init__(self, reply):
+        self.sent, self.q, self.reply = [], [], reply
+    def send(self, f):
+        self.sent.append(f[4])
+        r = self.reply(f[4], self.sent.count(f[4]))
+        if r:
+            self.q.append(r)
+    def recv(self, t):
+        return self.q.pop(0) if self.q else None
+
+
+ACK = lambda cmd: link.frame(0x40 | cmd, struct.pack("<I", 0))  # noqa: E731
+
+
+def test_7_4_a_lost_info_reply_is_asked_again():
+    info = link.frame(0x41, bytes([1, 0]) + struct.pack("<II", 0, 0) + bytes([0]))
+    p = Fake(lambda c, k: info if k == 2 else None)
+    assert link.Link(p, timeout=0.05).info()["count"] == 0 and p.sent == [1, 1]
+
+
 def test_7_4_end_is_sent_once_when_its_answer_is_lost():
-    class Mute:
-        """answers BEGIN and DATA, never END (a reply lost on the cable)"""
-        def __init__(self):
-            self.sent, self.q = [], []
-        def send(self, f):
-            self.sent.append(f[4])
-            if f[4] in (3, 4):
-                self.q.append(link.frame(0x40 | f[4], struct.pack("<I", 0)))
-        def recv(self, t):
-            return self.q.pop(0) if self.q else None
-    p = Mute()
+    p = Fake(lambda c, k: ACK(c) if c in (3, 4) else None)
     with pytest.raises(link.LinkError, match="no answer"):
         link.Link(p, timeout=0.05).put(b"x" * 10)
-    assert p.sent.count(5) == 1 and p.sent[-1] == 8     # END once (a repeat would meet a NAK), then ABORT
+    assert p.sent.count(5) == 1 and p.sent.count(8) == 1 and p.sent[-1] == 8   # END once, then one ABORT
+
+
+def test_7_4_begin_and_delete_are_sent_once():
+    for call, cmd in ((lambda lk: lk.put(b"x" * 10), 3), (lambda lk: lk.delete(4), 6)):
+        p = Fake(lambda c, k: None)
+        with pytest.raises(link.LinkError, match="no answer"):
+            call(link.Link(p, timeout=0.05))
+        assert p.sent.count(cmd) == 1, cmd     # (a repeated DELETE would meet "no such piece")
+
+
+def test_7_2_refusal_while_waiting_for_the_save():
+    p = Fake(lambda c, k: None)
+    p.q.append(link.frame(0x7F, bytes([5, 7])))
+    with pytest.raises(link.LinkError) as e:
+        link.Link(p).wait_saved(1.0)
+    assert e.value.code == 7
+
+
+def test_7_2_push_during_playback_no_wait(port, tmp_path, monkeypatch):
+    monkeypatch.setenv("XFER_PLAYING", "1")
+    f = tmp_path / "a.f1p"
+    f.write_bytes(encode(Piece("a", 1200, 384, [Channel("lead", [Note(0, 60, 90, 96)])])))
+    r = fm1c("push", f, "--no-wait", "--wait", "0.5", "--port", port)
+    assert r.returncode == 0 and "staged" in r.stdout, r.stdout + r.stderr
+    r = fm1c("push", f, "--wait", "0.5", "--port", port)
+    assert r.returncode == 1 and "still waiting" in r.stderr, r.stdout + r.stderr

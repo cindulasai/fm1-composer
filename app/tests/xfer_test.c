@@ -164,6 +164,8 @@ static void test_7_4_hostile(void)
     send(0x55, 0, 0); CHECK(nak(XF_ECMD), "unknown command");
     send32(0x03, 32769); CHECK(nak(XF_ESIZE), "oversize");
     send32(0x03, 10); CHECK(nak(XF_ESIZE), "undersize");
+    send32(0x03, PIECE_HDR); CHECK(rcmd == 0x43, "a header-sized piece may begin"); send(0x08, 0, 0);
+    send32(0x03, PIECE_HDR - 1u); CHECK(nak(XF_ESIZE), "one byte under a header");
     send(0x03, p, 2); CHECK(nak(XF_ESIZE), "short begin");
     xf_wr32(p, 0); memcpy(p + 4, pc, 8); send(0x04, p, 12); CHECK(nak(XF_ENOPUT), "data with no put");
     send(0x05, 0, 0); CHECK(nak(XF_ENOPUT), "end with no put");

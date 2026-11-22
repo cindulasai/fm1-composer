@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 {
     static char line[4096];
     static uint8_t f[2048];
-    uint32_t now = 1, playing = 0;
+    uint32_t now = 1, playing = getenv("XFER_PLAYING") ? 1u : 0u;   /* (XFER_PLAYING: start playing) */
     FILE *fp;
     if (argc != 2) { fprintf(stderr, "usage: xfer_host FLASHFILE\n"); return 2; }
     memset(fl, 0xFF, sizeof fl);
