@@ -253,8 +253,43 @@ static void test_5_4_hostile_pieces_and_stop(void)
     CHECK(!player_playing(), "nothing loaded: nothing plays");
 }
 
+static void test_11_5_play_from_a_tick(void)
+{
+    static const tn_t ns[4] = {{0, 20, 60, 100}, {96, 20, 62, 100}, {192, 20, 64, 100}, {384, 20, 65, 100}};
+    const tn_t *nl[1] = {ns};
+    const uint32_t cnt[1] = {4};
+    uint32_t i, first = 0, wrapped = 0;
+    reset();
+    build(1200, 768, 1, nl, cnt);
+    player_load(pb);
+    player_play_from(150);
+    play_frames(44100);                         /* 1 s: 192 ticks at 120 BPM, past the end at 768 - 150 */
+    for (i = 0; i < nrec; i++) if (rec[i].on) { if (!first) first = rec[i].pitch; else if (rec[i].pitch == 60) wrapped = 1; }
+    CHECK(first == 64, "first note %u, want 64 (tick 192)", first);
+    CHECK(rec[0].on && rec[0].frame >= 42u * 44100u * 60u / 120u / 96u - CTL && rec[0].frame <= 42u * 44100u * 60u / 120u / 96u + CTL,
+          "tick 192 at frame %u", rec[0].frame);
+    play_frames(44100 * 3);
+    for (i = 0; i < nrec; i++) if (rec[i].on && rec[i].pitch == 60) wrapped = 1;
+    CHECK(wrapped, "the loop comes back to bar 1");
+    player_stop(); play_frames(CTL);
+    player_play_from(192);                      /* exactly on a note: it sounds at once */
+    nrec = 0; play_frames(CTL);
+    CHECK(nrec && rec[0].on && rec[0].pitch == 64, "a note on the start tick plays, got %u", nrec ? rec[0].pitch : 0);
+    player_stop(); play_frames(CTL);
+    player_play_from(99999);                    /* past the end: from the start */
+    nrec = 0; play_frames(CTL);
+    CHECK(nrec && rec[0].pitch == 60, "past the end plays from the start");
+    player_stop(); play_frames(CTL);
+    pb[PIECE_HDR + PIECE_CHREC + 4] = 70;       /* first note's pitch: an edit, as edit.c would make it */
+    player_refresh();
+    player_play();
+    nrec = 0; play_frames(CTL);
+    CHECK(nrec && rec[0].pitch == 70, "player_refresh reads the edited bytes, got %u", nrec ? rec[0].pitch : 0);
+}
+
 int main(void)
 {
+    test_11_5_play_from_a_tick();
     test_5_1_timing_without_drift();
     test_5_2_tempo_change_keeps_position_and_loop_wraps();
     test_5_2_loop_wraps_on_time_8_channels();

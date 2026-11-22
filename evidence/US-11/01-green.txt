@@ -1,0 +1,62 @@
+COMMAND: cd app && FM1_LIVE=/nonexistent sh check.sh
+In file included from tests/ui_test.c:24:
+firmware/src/ui.c:164:9: error: use of undeclared identifier 'piece_view_t'
+  164 |         piece_view_t v;
+      |         ^
+firmware/src/ui.c:165:9: error: use of undeclared identifier 'piece_cur_t'
+  165 |         piece_cur_t c;
+      |         ^
+firmware/src/ui.c:166:9: error: use of undeclared identifier 'piece_note_t'
+  166 |         piece_note_t n;
+      |         ^
+firmware/src/ui.c:179:9: error: call to undeclared function 'piece_view'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  179 |         piece_view(e->piece, &v);
+      |         ^
+firmware/src/ui.c:179:31: error: use of undeclared identifier 'v'
+  179 |         piece_view(e->piece, &v);
+      |                               ^
+firmware/src/ui.c:180:9: error: call to undeclared function 'piece_cursor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  180 |         piece_cursor(&v.ch[e->ch], &c);
+      |         ^
+firmware/src/ui.c:180:23: error: use of undeclared identifier 'v'
+  180 |         piece_cursor(&v.ch[e->ch], &c);
+      |                       ^
+firmware/src/ui.c:180:37: error: use of undeclared identifier 'c'
+  180 |         piece_cursor(&v.ch[e->ch], &c);
+      |                                     ^
+firmware/src/ui.c:181:16: error: call to undeclared function 'piece_next'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  181 |         while (piece_next(&c, &n) && n.tick < end) {
+      |                ^
+firmware/src/ui.c:181:28: error: use of undeclared identifier 'c'
+  181 |         while (piece_next(&c, &n) && n.tick < end) {
+      |                            ^
+firmware/src/ui.c:181:32: error: use of undeclared identifier 'n'
+  181 |         while (piece_next(&c, &n) && n.tick < end) {
+      |                                ^
+firmware/src/ui.c:181:38: error: use of undeclared identifier 'n'
+  181 |         while (piece_next(&c, &n) && n.tick < end) {
+      |                                      ^
+firmware/src/ui.c:183:17: error: use of undeclared identifier 'n'
+  183 |             if (n.tick + n.dur <= page || n.pitch < e->low || n.pitch >= e->low + ROLL_KEYS) continue;
+      |                 ^
+firmware/src/ui.c:183:26: error: use of undeclared identifier 'n'
+  183 |             if (n.tick + n.dur <= page || n.pitch < e->low || n.pitch >= e->low + ROLL_KEYS) continue;
+      |                          ^
+firmware/src/ui.c:183:43: error: use of undeclared identifier 'n'
+  183 |             if (n.tick + n.dur <= page || n.pitch < e->low || n.pitch >= e->low + ROLL_KEYS) continue;
+      |                                           ^
+firmware/src/ui.c:183:63: error: use of undeclared identifier 'n'
+  183 |             if (n.tick + n.dur <= page || n.pitch < e->low || n.pitch >= e->low + ROLL_KEYS) continue;
+      |                                                               ^
+firmware/src/ui.c:184:35: error: use of undeclared identifier 'n'
+  184 |             s0 = n.tick > page ? (n.tick - page) / e->grid : 0u;
+      |                                   ^
+firmware/src/ui.c:184:18: error: use of undeclared identifier 'n'
+  184 |             s0 = n.tick > page ? (n.tick - page) / e->grid : 0u;
+      |                  ^
+firmware/src/ui.c:185:19: error: use of undeclared identifier 'n'
+  185 |             s1 = (n.tick + n.dur - 1u < end ? n.tick + n.dur - 1u - page : end - 1u - page) / e->grid;
+      |                   ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+20 errors generated.
+EXIT_CODE: 1

@@ -10,9 +10,7 @@ static const felucca_font_t FONT_S, FONT_L;
 #define C_BLACK 0
 #define C_WHITE 0xFFFF
 #define APP_NAME "COMPOSER"
-#define PIECE_PPQ 96u
-#define PIECE_MAX_CH 8u
-enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+#include "piece.h"
 typedef struct { uint32_t id, seq, len, first, span; char name[25]; } lib_entry_t;
 static void draw_text_box(uint32_t x, uint32_t y, uint32_t w, const felucca_font_t *f, const char *s, uint16_t c, int a) { (void)x; (void)y; (void)w; (void)f; (void)s; (void)c; (void)a; }
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { (void)x; (void)y; (void)w; (void)h; (void)c; }

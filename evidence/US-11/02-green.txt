@@ -1,0 +1,87 @@
+COMMAND: cd app && FM1_LIVE=/nonexistent sh check.sh
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:8: error: redefinition of enumerator 'ROLE_LEAD'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |        ^
+tests/ui_test.c:15:8: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |        ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:19: error: redefinition of enumerator 'ROLE_COUNTER'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                   ^
+tests/ui_test.c:15:19: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                   ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:33: error: redefinition of enumerator 'ROLE_CHORDS'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                                 ^
+tests/ui_test.c:15:33: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                 ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:46: error: redefinition of enumerator 'ROLE_PAD'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                                              ^
+tests/ui_test.c:15:46: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                              ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:56: error: redefinition of enumerator 'ROLE_BASS'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                                                        ^
+tests/ui_test.c:15:56: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                        ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:67: error: redefinition of enumerator 'ROLE_DRUMS'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                                                                   ^
+tests/ui_test.c:15:67: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                                   ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:79: error: redefinition of enumerator 'ROLE_PERC'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                                                                               ^
+tests/ui_test.c:15:79: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                                               ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:90: error: redefinition of enumerator 'ROLE_ARP'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                                                                                          ^
+tests/ui_test.c:15:90: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                                                          ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:28:100: error: redefinition of enumerator 'ROLE_DRONE'
+   28 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
+      |                                                                                                    ^
+tests/ui_test.c:15:100: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                                                                    ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:29:8: error: redefinition of enumerator 'ROLE_FX'
+   29 |        ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |        ^
+tests/ui_test.c:15:112: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                                                                                ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:29:17: error: redefinition of enumerator 'ROLE_OTHER'
+   29 |        ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                 ^
+tests/ui_test.c:15:121: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                                                                                         ^
+In file included from tests/ui_test.c:24:
+firmware/src/piece.h:29:29: error: redefinition of enumerator 'ROLE_COUNT'
+   29 |        ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                             ^
+tests/ui_test.c:15:133: note: previous definition is here
+   15 | enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE, ROLE_FX, ROLE_OTHER, ROLE_COUNT };
+      |                                                                                                                                     ^
+12 errors generated.
+EXIT_CODE: 1

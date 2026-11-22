@@ -26,9 +26,10 @@ static uint8_t pl_has[PIECE_MAX_CH];
 static pl_off_t pl_offs[PL_MAXOFF];
 static uint32_t pl_noff, pl_tick, pl_acc, pl_dropped;
 static uint8_t pl_loaded, pl_running;
+static const uint8_t *pl_piece;                /* the bytes player_load() was given */
 static uint32_t pl_mute_on, pl_solo_on;         /* what the interrupt last applied */
 /* the main loop writes these; the interrupt reads them */
-static volatile uint32_t pl_want_run, pl_tempo, pl_mute, pl_solo, pl_loop = 1;
+static volatile uint32_t pl_want_run, pl_tempo, pl_mute, pl_solo, pl_loop = 1, pl_start;
 static volatile uint32_t pl_pos;                /* the interrupt writes: the current tick */
 static volatile uint32_t pl_state;              /* the interrupt writes: 1 playing, 0 stopped */
 
@@ -63,6 +64,7 @@ static void pl_release_all(void)
 static int player_load(const uint8_t *piece)
 {
     if (pl_state || pl_want_run) return -1;
+    pl_piece = piece;
     piece_view(piece, &pl_v);
     pl_tempo = pl_v.tempo_x10;
     pl_mute = pl_solo = 0;
@@ -74,7 +76,11 @@ static int player_load(const uint8_t *piece)
     return 0;
 }
 
-static void player_play(void) { if (pl_loaded) pl_want_run = 1; }
+static void player_play(void) { if (pl_loaded) { pl_start = 0; pl_want_run = 1; } }
+/* play from a tick (inside the piece; else from the start); notes begun before it stay silent */
+static void player_play_from(uint32_t tick) { if (pl_loaded) { pl_start = tick < pl_v.len_ticks ? tick : 0u; pl_want_run = 1; } }
+/* the piece's bytes changed (edit.c; stopped only): read them again, keeping tempo, mutes and solos */
+static void player_refresh(void) { if (pl_loaded && !pl_state && !pl_want_run) { piece_view(pl_piece, &pl_v); pl_rewind(); } }
 static void player_stop(void) { pl_want_run = 0; }
 static void player_tempo(uint32_t x10) { pl_tempo = x10 < 300u ? 300u : x10 > 3000u ? 3000u : x10; }
 static void player_mute(uint32_t ch, int on) { if (ch < PIECE_MAX_CH) pl_mute = on ? pl_mute | 1u << ch : pl_mute & ~(1u << ch); }
@@ -83,6 +89,14 @@ static uint32_t player_pos(void) { return pl_pos; }
 static int player_playing(void) { return pl_state != 0; }
 
 /* the notes due at pl_tick: note-offs first, then note-ons of audible channels */
+static void pl_seek(uint32_t t)                 /* (just started, at tick 0) skip to tick t */
+{
+    uint32_t ch;
+    for (ch = 0; ch < pl_v.nch; ch++)
+        while (pl_has[ch] && pl_next[ch].tick < t) pl_has[ch] = (uint8_t)piece_next(&pl_cur[ch], &pl_next[ch]);
+    pl_tick = pl_pos = t;
+}
+
 static void pl_events(void)
 {
     uint32_t i, ch;
@@ -144,7 +158,8 @@ static void player_tick(uint32_t nframes)
     if (!pl_running) {
         pl_running = 1;
         pl_state = 1;
-        pl_events();                            /* tick 0 sounds at once */
+        if (pl_start) pl_seek(pl_start);
+        pl_events();                            /* the first tick sounds at once */
     }
     pl_acc += pl_tempo * PIECE_PPQ * nframes;
     while (pl_acc > PL_TICK_UNITS) {            /* a tick due exactly at the next block's start waits for it */

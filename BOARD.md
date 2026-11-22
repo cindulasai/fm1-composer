@@ -11,6 +11,6 @@
 | US-8 | UI | 1 | done-self | 0 |
 | US-9 | Emulator end to end | 1 | done | 0 |
 | US-10 | Note edit core | 1 | proven | 0 |
-| US-11 | EDIT screen | 1 | todo | 0 |
+| US-11 | EDIT screen | 1 | proven | 0 |
 
 ## Impediments

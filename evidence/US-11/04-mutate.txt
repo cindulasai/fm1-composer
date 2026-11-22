@@ -1,0 +1,7 @@
+COMMAND: sh prove mutants US-11
+SURVIVED app/firmware/src/composer.c:223  " < " -> " <= "  | ed_tick = (uint32_t)(t < 0 ? 0 : t > last ? last : t);
+SURVIVED app/firmware/src/composer.c:251  " < " -> " <= "  | ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len);
+SURVIVED app/firmware/src/ui.c:169  " + " -> " - "  | uint32_t p = e->low + ROLL_KEYS - 1u - i, k = p % 12u;
+SURVIVED app/firmware/src/ui.c:185  " < " -> " <= "  | s1 = (n.tick + n.dur - 1u < end ? n.tick + n.dur - 1u - page : end - 1u - page) / e->grid;
+MUTANTS: 12 tried, 8 killed, 4 survived (of 127 candidates in US-11)
+EXIT_CODE: 1

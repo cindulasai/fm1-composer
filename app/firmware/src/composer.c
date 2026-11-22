@@ -28,6 +28,7 @@ static int app_sysex(const uint8_t *p, uint32_t n);
 #include "piece.h"
 #include "synth.c"
 #include "player.c"
+#include "edit.c"
 #include "lib.c"
 #include "xfer.c"
 #include "ui.c"
@@ -40,6 +41,10 @@ static uint8_t play_buf[PIECE_MAX_BYTES] POOL;  /* the piece being played, copie
 static volatile uint8_t idle_ok;
 static uint32_t scr, cur, top, dirty = D_ALL;
 static uint32_t loaded_id = 0xFFFFFFFFu, sel, mute, solo, tempo_x10, save_pending;
+/* EDIT: the cursor's tick, grid (index into GRID), the keys' octave, the next new note, unsaved edits, HOME armed */
+static const uint16_t GRID[4] = {12, 24, 48, 96};
+static uint32_t ed_tick, ed_gi = 1, ed_len = 24, ed_vel = 100, edited, discard, preview;
+static int32_t ed_octs;
 static uint8_t role[PIECE_MAX_CH], snd[PIECE_MAX_CH];
 static const char *status = "";
 static char title[PIECE_NAME + 1];
@@ -89,6 +94,9 @@ static int open_piece(uint32_t i)
         return -1;
     }
     loaded_id = e->id;
+    edit_forget();
+    edited = discard = 0;
+    ed_tick = 0;
     pf = pref_find(e->id);
     post(SC_ALL_OFF, 0, 0, 0);
     for (ch = 0; ch < PIECE_MAX_CH; ch++) {      /* (piece_view: unused channels are OTHER, default sound, volume 0) */
@@ -114,6 +122,22 @@ static void save_prefs(void)
     set_status(blob_save(0, &prefs, sizeof prefs) ? "SAVE FAILED" : "SAVED");
 }
 
+/* SAVE: an edited piece first (a new entry, then the old one deleted: a power cut between keeps both), then the
+ * choices, under the piece's new id */
+static void save_all(void)
+{
+    if (edited) {
+        int32_t id = lib_put(title, play_buf, pc_u32(play_buf + 40));
+        if (id < 0) { set_status(id == LIB_FULL ? "LIBRARY FULL" : "SAVE FAILED"); return; }
+        lib_del(loaded_id);
+        loaded_id = (uint32_t)id;
+        edited = 0;
+        cur = 0;                                /* (newest first: it is the top entry now) */
+        dirty |= D_HEAD;
+    }
+    save_prefs();
+}
+
 static const uint8_t WHITE_KEY[8] = {0, 2, 4, 6, 7, 9, 11, 12};   /* F3 G3 A3 B3 C4 D4 E4 F4: fm1_in.notes bits */
 
 static void player_input(uint32_t pressed, uint32_t keys)
@@ -126,8 +150,18 @@ static void player_input(uint32_t pressed, uint32_t keys)
     }
     if (pressed & 1u << BTN_SAVE) {
         if (player_playing()) { save_pending = 1; set_status("SAVES WHEN STOPPED"); }
-        else save_prefs();
+        else save_all();
     }
+    if (pressed & 1u << BTN_EDIT) {
+        uint32_t g = GRID[ed_gi];
+        if (player_playing()) ed_tick = player_pos() - player_pos() % (16u * g);
+        ed_tick -= ed_tick % g;
+        scr = 2;
+        dirty = D_ALL;
+        set_status(player_playing() ? "STOP TO EDIT" : "");
+        return;
+    }
+    fm1_enc_take(ENC_KNOB3);                    /* (EDIT's: not kept for it) */
     if ((d = fm1_enc_take(ENC_KNOB1) + fm1_enc_take(ENC_SELECT))) {
         sel = (uint32_t)(((int32_t)sel + d) % (int32_t)pl_v.nch + (int32_t)pl_v.nch) % pl_v.nch;
         dirty |= D_STRIPS;
@@ -148,6 +182,103 @@ static void player_input(uint32_t pressed, uint32_t keys)
         if (fm1_in.buttons & 1u << BTN_SEL) { solo ^= 1u << k; player_solo(k, (int)(solo >> k & 1u)); }
         else { mute ^= 1u << k; player_mute(k, (int)(mute >> k & 1u)); }
         dirty |= D_STRIPS;
+    }
+}
+
+/* the notes of the selected channel starting in the cursor's step: up to 16 */
+static uint32_t cell_notes(piece_note_t *out)
+{
+    piece_cur_t c;
+    piece_note_t n;
+    uint32_t k = 0, g = GRID[ed_gi];
+    piece_cursor(&pl_v.ch[sel], &c);
+    while (piece_next(&c, &n) && n.tick < ed_tick + g)
+        if (n.tick >= ed_tick && k < 16u) out[k++] = n;
+    return k;
+}
+
+static uint32_t ed_low(void) { return (uint32_t)(53 + 12 * ed_octs); }   /* F3 key's pitch */
+
+static void edited_now(int r)
+{
+    if (r == ED_OK) { edited = 1; discard = 0; player_refresh(); dirty |= D_ROLL | D_HEAD; set_status(""); }
+    else set_status(r == ED_FULL ? "PIECE FULL" : "CANNOT EDIT THERE");
+}
+
+static void edit_input(uint32_t pressed, uint32_t keys)
+{
+    piece_note_t cn[16];
+    uint32_t k, n, g = GRID[ed_gi], playing = (uint32_t)player_playing();
+    int32_t d;
+    if (pressed & 1u << BTN_PLAY) {
+        if (playing) { player_stop(); set_status("STOPPED"); }
+        else { player_play_from(ed_tick - ed_tick % (4u * PIECE_PPQ)); set_status("PLAYING FROM THIS BAR"); }
+    }
+    if (pressed & 1u << BTN_SAVE) {
+        if (playing) { save_pending = 1; set_status("SAVES WHEN STOPPED"); }
+        else save_all();
+    }
+    if ((d = fm1_enc_take(ENC_SELECT))) {       /* the cursor, a step a click, inside the piece */
+        int32_t t = (int32_t)ed_tick + d * (int32_t)g, last = (int32_t)((pl_v.len_ticks - 1u) / g * g);
+        ed_tick = (uint32_t)(t < 0 ? 0 : t > last ? last : t);
+        dirty |= D_ROLL | D_HEAD;
+    }
+    if ((d = fm1_enc_take(ENC_KNOB1))) {         /* the grid; the cursor snaps to it */
+        int32_t i = (int32_t)ed_gi + d;
+        ed_gi = (uint32_t)(i < 0 ? 0 : i > 3 ? 3 : i);
+        ed_tick -= ed_tick % GRID[ed_gi];
+        dirty |= D_ROLL | D_HEAD;
+    }
+    if (pressed & (1u << BTN_OCT_DOWN | 1u << BTN_OCT_UP)) {
+        ed_octs += (pressed & 1u << BTN_OCT_UP ? 1 : 0) - (pressed & 1u << BTN_OCT_DOWN ? 1 : 0);
+        ed_octs = ed_octs < -3 ? -3 : ed_octs > 3 ? 3 : ed_octs;
+        dirty |= D_ROLL;
+    }
+    if ((d = fm1_enc_take(ENC_PRESETS))) {
+        snd[sel] = (uint8_t)(((int32_t)snd[sel] + d) % (int32_t)sound_count + (int32_t)sound_count) % sound_count;
+        post(SC_SOUND, sel, snd[sel], 0);
+    }
+    for (k = 0; k < ROLL_KEYS; k++)             /* a preview ends with its key */
+        if ((preview >> k & 1u) && !(fm1_in.notes >> k & 1u)) { post(SC_NOTE_OFF, sel, ed_low() + k, 0); preview &= ~(1u << k); }
+    {
+        int32_t dl = fm1_enc_take(ENC_KNOB2), dv = fm1_enc_take(ENC_KNOB3);
+        if ((dl || dv || keys) && playing) { set_status("STOP TO EDIT"); return; }
+        n = cell_notes(cn);
+        if (dl || dv) {                         /* length / velocity: of the notes in the step, and of new ones */
+            int32_t len = (int32_t)(n ? cn[0].dur : ed_len) + dl * (int32_t)g, vel = (int32_t)(n ? cn[0].vel : ed_vel) + dv * 4;
+            uint32_t i;
+            int r = ED_OK;
+            ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len);
+            ed_vel = (uint32_t)(vel < 1 ? 1 : vel > 127 ? 127 : vel);
+            for (i = 0; i < n && r == ED_OK; i++) r = edit_set(play_buf, sel, cn[i].tick, cn[i].pitch, ed_len, ed_vel);
+            if (n) edited_now(r);
+            dirty |= D_FOOT;
+        }
+        for (k = 0; k < ROLL_KEYS; k++) {       /* a key: its note in the step goes, else a new one starts here */
+            uint32_t p = ed_low() + k, i;
+            int r;
+            if (!(keys >> k & 1u)) continue;
+            for (i = 0; i < n && cn[i].pitch != p; i++) {}
+            if (i < n) r = edit_delete(play_buf, sel, cn[i].tick, p);
+            else {
+                r = edit_insert(play_buf, sel, ed_tick, p, ed_len, ed_vel);
+                if (r == ED_OK) { post(SC_NOTE_ON, sel, p, ed_vel); preview |= 1u << k; }
+            }
+            edited_now(r);
+            n = cell_notes(cn);
+        }
+    }
+    if (pressed & 1u << BTN_FX) {               /* undo */
+        uint32_t ch, t;
+        if (playing) set_status("STOP TO EDIT");
+        else if (edit_undo(play_buf, &ch, &t) == ED_OK) {
+            sel = ch;
+            ed_tick = t - t % g;
+            edited = 1;
+            player_refresh();
+            dirty |= D_ROLL | D_HEAD;
+            set_status("UNDONE");
+        } else set_status("NOTHING TO UNDO");
     }
 }
 
@@ -189,20 +320,26 @@ static void app_main(void)
         keys = fm1_input_note_edges() | (fm1_in.notes & ~held);   /* (also a press shorter than a pass) */
         held = fm1_in.notes;
         if (scr == 0) {
-            fm1_enc_take(ENC_KNOB1); fm1_enc_take(ENC_PRESETS); fm1_enc_take(ENC_KNOB2);
+            fm1_enc_take(ENC_KNOB1); fm1_enc_take(ENC_PRESETS); fm1_enc_take(ENC_KNOB2); fm1_enc_take(ENC_KNOB3);
             library_input(pressed);
         } else {
-            if (pressed & 1u << BTN_HOME) {
-                player_stop();
-                while (player_playing()) platform_poll();
-                scr = 0;
-                dirty = D_ALL;
+            if (scr == 2) {
+                if (pressed & 1u << BTN_HOME) { scr = 1; dirty = D_ALL; }
+                else edit_input(pressed, keys);
+            } else if (pressed & 1u << BTN_HOME) {
+                if (edited && !discard) { discard = 1; set_status("UNSAVED EDITS: HOME AGAIN TO DISCARD"); }
+                else {
+                    player_stop();
+                    while (player_playing()) platform_poll();
+                    scr = 0;
+                    dirty = D_ALL;
+                }
             } else {
                 player_input(pressed, keys);
             }
         }
         if (was_playing && !playing) {
-            if (save_pending) { save_pending = 0; save_prefs(); }
+            if (save_pending) { save_pending = 0; save_all(); }
             else if (scr) set_status("STOPPED");
         }
         was_playing = playing;
@@ -215,7 +352,13 @@ static void app_main(void)
         if (dirty) {
             idle_ok = 1;
             if (scr == 0) ui_library(dirty, cur, &top);
-            else {
+            else if (scr == 2) {
+                piece_note_t cn[16];
+                uint32_t n = cell_notes(cn);
+                ui_edit_t e = {status, play_buf, sel, role[sel], ed_tick, GRID[ed_gi], ed_gi, ed_low(),
+                               n ? cn[0].dur : ed_len, n ? cn[0].vel : ed_vel, n, n ? cn[0].pitch : 0, edited};
+                ui_edit(dirty, &e);
+            } else {
                 ui_player_t p = {title, status, pl_v.nch, sel, mute, solo, tempo_x10, player_pos(), role, snd};
                 ui_player(dirty, &p);
             }

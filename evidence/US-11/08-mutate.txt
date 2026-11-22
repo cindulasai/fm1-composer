@@ -1,0 +1,3 @@
+COMMAND: sh prove mutants US-11
+MUTANTS: 12 tried, 12 killed, 0 survived (of 125 candidates in US-11)
+EXIT_CODE: 0

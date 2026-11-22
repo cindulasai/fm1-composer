@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-11
+SURVIVED app/firmware/src/player.c:96  " < " -> " <= "  | while (pl_has[ch] && pl_next[ch].tick < t) pl_has[ch] = (uint8_t)piece_next(&pl_cur[ch], &pl_next[ch]);
+MUTANTS: 12 tried, 11 killed, 1 survived (of 125 candidates in US-11)
+EXIT_CODE: 1

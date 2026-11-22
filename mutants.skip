@@ -49,3 +49,5 @@ app/firmware/src/ui.c | if (cur < *top) *top = cur; | at cur == top it sets top 
 app/firmware/src/edit.c | if (d > 0) for (i = len; i-- > at;) b[i + n] = b[i]; | d is never 0 (insert passes k >= 1, ed_pack calls only when it removed some): > and >= agree
 app/firmware/src/edit.c | else for (i = at; i + n < len; i++) b[i] = b[i + n]; | <= copies b[len] only to a byte past the new end: same piece; at len 32 KB the overread is ASan's (Linux CI; test_10_4 deletes from a full piece)
 app/firmware/src/edit.c | if (w < off + n * PIECE_EV) ed_shift(b, ch, w, -(int32_t)((off + n * PIECE_EV - w) / PIECE_EV)); | <= adds a shift of 0 events: moves nothing, adds 0
+app/firmware/src/composer.c | ed_tick = (uint32_t)(t < 0 ? 0 : t > last ? last : t); | at t == 0 both give 0
+app/firmware/src/composer.c | ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len); | at len == 1 both give 1
