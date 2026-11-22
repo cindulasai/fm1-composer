@@ -1,0 +1,6 @@
+COMMAND: sh prove mutants US-1
+SURVIVED app/tools/get_emu.sh:11  " && " -> " || "  | [ -x "$D/fm1-live" ] && { echo "$D/fm1-live"; exit 0; }
+SURVIVED app/tools/get_emu.sh:14  " - " -> " + "  | echo "$SUM  $T/$A" | shasum -a 256 -c - >/dev/null || { echo "get_emu.sh: checksum mismatch" >&2; rm -rf "$T"; exit 1; }
+SURVIVED app/tools/get_emu.sh:18  " || " -> " && "  | [ -x "$D/fm1-live" ] || { echo "get_emu.sh: fm1-live not in the archive" >&2; exit 1; }
+MUTANTS: 3 tried, 0 killed, 3 survived (of 3 candidates in US-1)
+EXIT_CODE: 1
