@@ -163,3 +163,11 @@ def test_11_1_edit_while_playing_opens_at_the_bar_playing(tmp_path):
     lines += [f"{t + 50} btn {BTN['PLAY']}", f"{t + 50 + 5500} btn {BTN['EDIT']}"]   # 5.5 s at 120 BPM: tick ~1056, bar 3
     log, _ = run_host(script(tmp_path, "eplay", lines, t + 5800))
     assert (4, "BAR 3  1/16") in at(log, t + 5550) and (222, "STOP TO EDIT") in at(log, t + 5550)
+
+
+def test_11_2_oct_down_moves_the_keys_down(tmp_path):
+    steps = [(100, f"btn {BTN['OCT-']}"), *key(200, 0), (400, "shot")]
+    (log, _), t0 = run(tmp_path, [song()], steps, 500)
+    img = shot(tmp_path.name, t0 + 400)
+    assert amber(cell(img, 0, 41, low=41))                              # F3 key an octave down: F2
+    assert (196, "F2  LEN 1/16  VEL 100") in at(log, t0 + 200)
