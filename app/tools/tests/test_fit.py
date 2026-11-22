@@ -131,3 +131,12 @@ def test_3_3_a_note_never_released_ends_with_its_track(tmp_path):
     m.save(tmp_path / "hang.mid")
     piece, _ = fitmod.fit(str(tmp_path / "hang.mid"))
     assert sorted((n.tick, n.pitch, n.dur) for n in piece.channels[0].notes) == [(192, 60, 240), (384, 64, 48)]
+
+
+def test_3_4_bad_key_signature_is_an_error_not_a_traceback(tmp_path):
+    import struct
+    trk = b"\x00\xff\x59\x02\x08\x00\x00\x90\x3c\x40\x60\x80\x3c\x00\x00\xff\x2f\x00"     # 8 sharps: no such key
+    p = tmp_path / "key.mid"
+    p.write_bytes(b"MThd" + struct.pack(">IHHH", 6, 1, 1, 96) + b"MTrk" + struct.pack(">I", len(trk)) + trk)
+    with pytest.raises(FitError, match="not a readable MIDI file"):
+        fit(str(p))

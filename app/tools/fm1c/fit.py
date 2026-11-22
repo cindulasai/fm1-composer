@@ -81,7 +81,7 @@ def _read(path: str) -> mido.MidiFile:
         raise FitError(f"{path}: {os.path.getsize(path) // 1024} KB is larger than the 8 MB this tool reads")
     try:
         return mido.MidiFile(path, clip=True)
-    except (OSError, EOFError, ValueError, KeyError, IndexError) as e:
+    except (OSError, EOFError, ValueError, KeyError, IndexError, mido.midifiles.meta.KeySignatureError) as e:
         raise FitError(f"{path}: not a readable MIDI file ({e})") from None
 
 
