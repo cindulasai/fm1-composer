@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-13
+SURVIVED app/studio/engine/studio/src/fit.rs:140  " < " -> " <= "  | for c in piece.channels.iter_mut() { c.notes.retain(|n| n.tick < len); }
+SURVIVED app/studio/engine/studio/src/f1p.rs:65  " * " -> " / "  | let mut out = Vec::with_capacity(notes.len() * 6);
+MUTANTS: 11 tried, 9 killed, 2 survived (of 99 candidates in US-13)
+EXIT_CODE: 1

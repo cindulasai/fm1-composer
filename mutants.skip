@@ -52,3 +52,4 @@ app/firmware/src/edit.c | if (w < off + n * PIECE_EV) ed_shift(b, ch, w, -(int32
 app/firmware/src/composer.c | ed_tick = (uint32_t)(t < 0 ? 0 : t > last ? last : t); | at t == 0 both give 0
 app/firmware/src/composer.c | ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len); | at len == 1 both give 1
 app/firmware/src/composer.c | ed_gi = (uint32_t)(i < 0 ? 0 : i > 3 ? 3 : i); | at i == 0 both give 0
+app/studio/engine/studio/src/f1p.rs | let mut out = Vec::with_capacity(notes.len() * 6); | a capacity hint only: the bytes are the same

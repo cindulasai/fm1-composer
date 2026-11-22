@@ -1,0 +1,26 @@
+[package]
+name = "studio"
+description = "COMPOSER Studio engine: a brief or a MIDI file -> a .f1p piece, byte-identical to fm1c"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "studio-cli"
+path = "src/bin/studio-cli.rs"
+
+[dependencies]
+t2m-core = { path = "../crates/t2m-core" }
+t2m-compose = { path = "../crates/t2m-compose" }
+t2m-midi = { path = "../crates/t2m-midi" }
+t2m-intent = { path = "../crates/t2m-intent" }
+unicode-normalization = "0.1.24"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.130"
+
+[lints]
+workspace = true
