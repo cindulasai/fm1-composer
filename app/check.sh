@@ -33,4 +33,7 @@ if "$PY" -m pytest -q -x -p no:cacheprovider tools/tests > build/pytest.log 2>&1
 else
     tail -n 40 build/pytest.log; exit 1
 fi
+if [ ! -f build/composer.fwsc ] || [ ! -f studio/web/emu/fm1_web.wasm ]; then    # (Studio's FM-1 tests skipped)
+    echo "studio emu e2e: SKIP (needs build/composer.fwsc from CI and studio/web/emu: sh tools/get_web_emu.sh)"
+fi
 sh tests/emu_e2e.sh                             # the real firmware in fm1-emu (or one SKIP line saying what is missing)

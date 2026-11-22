@@ -17,6 +17,6 @@
 | US-14 | Studio page: idea → AI → piece | 1 | proven | 0 |
 | US-15 | Side by side: the emulator on the page | 1 | proven | 0 |
 | US-16 | Left: text2midi's own interface | 1 | todo | 0 |
-| US-17 | Right: fm1-emu's own page + MIDI cable | 1 | todo | 0 |
+| US-17 | Right: fm1-emu's own page + MIDI cable | 1 | proven | 0 |
 
 ## Impediments

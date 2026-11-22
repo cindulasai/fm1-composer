@@ -1,0 +1,9 @@
+COMMAND: sh prove mutants US-17
+awk: towc: multibyte conversion failure on: '‰PNG'
+
+ input record number 1, file app/docs/studio.png
+ source line number 12
+SURVIVED app/tools/get_web_emu.sh:24  " || " -> " && "  | [ -z "$(git -C "$SRC" status --porcelain --untracked-files=no)" ] || { echo "get_web_emu.sh: $SRC has local changes; not building it" >&2; exit 2; }
+SURVIVED app/tools/fm1c/cli.py:317  "true" -> "false"  | s.add_argument("--no-open", action="store_true", help="print the address; do not open a browser")
+MUTANTS: 12 tried, 10 killed, 2 survived (of 79 candidates in US-17)
+EXIT_CODE: 1

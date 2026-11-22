@@ -1,0 +1,11 @@
+COMMAND: sh prove mutants US-17
+awk: towc: multibyte conversion failure on: '‰PNG'
+
+ input record number 1, file app/docs/studio.png
+ source line number 12
+SURVIVED app/studio/web/shell.js:39  " + " -> " - "  | const frames = transferFrames(made.f1p), total = frames.reduce((n, f) => n + f.length, 0);
+SURVIVED app/studio/web/cable.js:15  "true" -> "false"  | return { inputs, outputs, sysexEnabled: true, onstatechange: null, addEventListener() {}, removeEventListener() {} };
+SURVIVED app/studio/web/fm1link.js:51  " < " -> " <= "  | const name = String.fromCharCode(...raw.subarray(0, raw.indexOf(0) < 0 ? 24 : raw.indexOf(0)));
+SURVIVED app/tools/fm1c/cli.py:154  " and " -> " or "  | print("building COMPOSER Studio (once; needs Rust and npm) ...", flush=True)
+MUTANTS: 12 tried, 8 killed, 4 survived (of 82 candidates in US-17)
+EXIT_CODE: 1

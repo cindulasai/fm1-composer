@@ -42,31 +42,33 @@ gh run download -n composer-fwsc -D build                   # the firmware CI bu
 
 ## COMPOSER Studio
 
-One page, two sides. On the left you write the idea; on the right is an FM-1 running COMPOSER, the emulator
-[fm1-emu](https://github.com/joakimeriksson/fm1-emu) built for the browser. Everything runs in the page: the AI is
-called straight from it with your own key, and the composer is text2midi's, compiled to WebAssembly.
+One page, two apps you may already know, joined by a MIDI cable:
 
-1. Type an idea ("slow melancholic lo-fi in D minor, 70 bpm, dusty piano") and press **Generate**. The brief appears:
-   style, tempo, key, parts, and anything the AI had to assume.
-2. The piece appears with its size ("4 channels, 811 notes, 32 bars"). **Another take** composes the same brief again
-   with a new seed. **Open a MIDI file** fits any MIDI file instead.
-3. **Start the FM-1**, then **Push to the FM-1**. The piece goes in over the emulator's MIDI jack, and Studio reads it
-   back from the emulated flash before it says "on the FM-1".
-4. Play it with the panel under the screen or the keyboard: space PLAY, Esc HOME, arrows SELECT. The library is kept
-   in this browser, so it is still there after a reload. **Download .f1p / .mid** saves the piece.
+- **Left: [text2midi](https://github.com/cindulasai/text2midi_v2)'s own window**, the same one as its desktop app.
+  Describe the music and press **Make it**, or pick an example. Reroll any part, try takes, lock what you like, undo,
+  and hear it with **Play**. text2midi's composer runs in the page (compiled to WebAssembly); the AI is called straight
+  from the page with your own key.
+- **Right: [fm1-emu](https://github.com/joakimeriksson/fm1-emu)'s own page**, the FM-1 emulator, running COMPOSER.
+  Studio shows up in its **MIDI in** list as "COMPOSER Studio", like a MIDI keyboard would.
+- **Send to FM-1** fits text2midi's piece to the FM-1 (every change is listed) and plays it into that cable, into the
+  FM-1's MIDI IN. Studio reads the piece back from the emulated flash before it says "On the FM-1". Press PLAY on the
+  FM-1 (or Space) to hear it there.
 
-To run it, from `app` (after the Quick start's first line):
+Both apps run unchanged, at pinned versions: Studio adds only the cable, the Send button, and the small stand-in
+that answers text2midi's window in the browser in place of its desktop shell.
+
+To run it, from `app` (after the Quick start's first line; needs Rust and Node.js, see "Building and checking"):
 
 ```sh
-sh tools/get_web_emu.sh             # fm1-emu's browser build, pinned (needs Rust, see "Building and checking")
+sh tools/get_web_emu.sh             # fm1-emu's page, built at its pinned commit
 gh run download -n composer-fwsc -D build                   # the firmware CI built
 sh tools/studio_key.sh              # optional: your MiniMax key into a git-ignored file
-./fm1c studio                       # opens http://127.0.0.1:8714/
+./fm1c studio                       # builds Studio once, then opens http://127.0.0.1:8714/
 ```
 
-**Settings** takes a key for MiniMax, DeepSeek, Anthropic or any OpenAI-compatible service instead. The key stays
-on your computer: `tools/studio_key.sh` writes `studio/web/local/ai.json` (git-ignored, readable only by you), a key
-typed in Settings stays in the browser, and the page sends it only to the provider you picked. `fm1c studio` serves
+text2midi's **Settings** (⚙) takes a key for any of its providers instead. In this page the key stays in this browser
+(text2midi's window says "system keychain": that is its desktop app), and it is sent only to the provider you picked.
+`tools/studio_key.sh` writes `studio/web/local/ai.json` (git-ignored, readable only by you). `fm1c studio` serves
 the page to this computer only (127.0.0.1).
 
 ## Playing
@@ -135,7 +137,8 @@ playback stops. `fm1c` says "staged" and then "saved" (or exits at once with `--
 CI (GitHub Actions) builds the `.fwsc` with JieLi's toolchain (`sh build.sh`, Linux x86-64). Everything else runs
 on your computer. Studio's engine and the browser emulator are Rust compiled to WebAssembly, so checking needs
 [Rust](https://rustup.rs) with `rustup target add wasm32-unknown-unknown` and
-`cargo install wasm-bindgen-cli --version 0.2.130`, plus a headless Chromium for the page tests
+`cargo install wasm-bindgen-cli --version 0.2.130`, [Node.js](https://nodejs.org) (to build text2midi's window), plus a
+headless Chromium for the page tests
 (`../.venv/bin/python -m playwright install chromium-headless-shell`). Then:
 
 ```sh
@@ -147,8 +150,9 @@ The gate runs, in order:
 - pytest: unit, property and hostile tests, plus end-to-end tests through host mode (the firmware compiled
   for this computer, driven by scripted keys and SysEx, checked by the screen text and the WAV it makes).
 - Studio: the engine against `fm1c` (the same bytes for every suite brief and for 300 random MIDI files), and the
-  page in headless Chromium with the AI faked: generating, errors, pushing into the browser emulator, and its screen
-  compared pixel for pixel with host mode.
+  page in headless Chromium with the AI faked: text2midi's window (making, takes, undo, preview sound, AI failures),
+  fm1-emu's page served unchanged, Send read back from its flash, and its screen compared pixel for pixel with host
+  mode.
 - The CI-built firmware in fm1-emu (`tests/emu_e2e.sh`): screens pixel-identical to host mode, pushes over
   emulated USB, USB audio, a power cut at every flash write, and on-chip timing. Without the emulator or a
   `build/composer.fwsc`, this step prints one `emu e2e: SKIP` line saying which is missing.

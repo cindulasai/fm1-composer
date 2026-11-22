@@ -60,3 +60,17 @@ app/studio/web/index.html | <label>Model <input id="ai-model" type="text" spellc
 app/studio/web/studio.js | : `Could not reach the AI (${p.label}). Check the connection and try again.`); | the mutated "and" is inside the message text
 app/studio/web/index.html | <label>Base URL <input id="ai-base" type="url" spellcheck="false"></label> | spellcheck: no behaviour a test can see
 app/studio/web/emu.js | if (n > 0) { | n == 0 would send an empty message and add 0: the same
+app/studio/t2m-ui/studio/core.js | for (let n = 2; n < 10000; n++) if (!all[`${stem}-${n}.t2m.json`]) return `${stem}-${n}.t2m.json`; | 10000 vs 10001 names of one title: the same (main.rs's own bound)
+app/studio/t2m-ui/studio/ai.js | if (local) return { provider: local.provider || 'minimax', model: local.model || 'MiniMax-M3.1-Flash', base_url: local.base || null, key: local.key }; | base_url null or undefined: both mean the provider's own address
+app/studio/engine/studio/src/desk.rs | v.get(k).and_then(Value::as_array).map(|a| a.iter().map(|x| x.as_bool().unwrap_or(false)).collect()).unwrap_or_default() | text2midi's window sends booleans only (Arrangement.svelte); a non-boolean never arrives
+app/studio/build.sh | (cd t2m-ui && npx vite build --config vite.studio.config.js) | with || the build is skipped and an earlier web/t2m is used: the same page while nothing changed since
+app/tools/get_web_emu.sh | bash "$SRC/web/build.sh" "$tmp/dist" > "$tmp/build.log" 2>&1 || { tail -n 20 "$tmp/build.log" >&2; exit 1; } | ">" here is a shell redirect, not a comparison
+app/studio/engine/studio/src/desk.rs | Ok(Desk { session: Session::new().map_err(|e| e.to_string())?, engine: Engine::new(sample_rate), loaded: false }) | an engine with no piece renders silence too (t2m-audio Engine::render while stopped)
+app/studio/build.sh | [ -d "$HOME/.cargo/bin" ] && PATH="$HOME/.cargo/bin:$PATH" | where cargo is on PATH already (CI, this computer) the line changes nothing
+app/studio/web/fm1link.js | const name = String.fromCharCode(...raw.subarray(0, raw.indexOf(0) < 0 ? 24 : raw.indexOf(0))); | differs only for an empty name, which the firmware never stores (lib_put refuses it)
+app/tools/fm1c/cli.py | print("building COMPOSER Studio (once; needs Rust and npm) ...", flush=True) | message text ("and" inside the words)
+app/studio/engine/studio/src/desk.rs | self.loaded = true; | play sets it again before anything is heard (render runs only after play)
+app/studio/engine/studio/src/desk.rs | self.engine.set_solo(t, soloed.get(t).copied().unwrap_or(false)); | every part soloed sounds as no part soloed (t2m-audio: solo picks among parts)
+app/tools/get_web_emu.sh | git -C "$SRC" cat-file -e "$COMMIT^{commit}" 2>/dev/null || git -C "$SRC" fetch -q origin | with && it also fetches when the commit is already there: the same checkout, one more network call
+app/studio/engine/studio/src/desk.rs | let note = a.get("asked").and_then(Value::as_bool).unwrap_or(false) | "asked" is missing only for empty or over-long text, which open_prompt refuses before any note is made
+app/studio/build.sh | [ -d t2m-ui/node_modules ] || (cd t2m-ui && npm ci --silent --no-audit --no-fund) | with node_modules there (every run after the first) the install is skipped either way

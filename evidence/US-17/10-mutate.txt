@@ -1,0 +1,7 @@
+COMMAND: sh prove mutants US-17
+awk: towc: multibyte conversion failure on: '‰PNG'
+
+ input record number 1, file app/docs/studio.png
+ source line number 12
+MUTANTS: 12 tried, 12 killed, 0 survived (of 79 candidates in US-17)
+EXIT_CODE: 0

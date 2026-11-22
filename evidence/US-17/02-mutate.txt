@@ -1,0 +1,10 @@
+COMMAND: sh prove mutants US-17
+awk: towc: multibyte conversion failure on: '‰PNG'
+
+ input record number 1, file app/docs/studio.png
+ source line number 12
+SURVIVED app/studio/web/fm1link.js:27  " < " -> " <= "  | for (let off = 0; off < piece.length; off += 256) {
+SURVIVED app/studio/web/fm1link.js:67  " - " -> " + "  | return out.sort((a, b) => b.seq - a.seq);
+SURVIVED app/tools/get_web_emu.sh:27  " > " -> " >= "  | bash "$SRC/web/build.sh" "$tmp/dist" > "$tmp/build.log" 2>&1 || { tail -n 20 "$tmp/build.log" >&2; exit 1; }
+MUTANTS: 11 tried, 8 killed, 3 survived (of 86 candidates in US-17)
+EXIT_CODE: 1

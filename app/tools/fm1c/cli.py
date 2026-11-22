@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import json
 import http.server
 import os
 import shutil
@@ -96,6 +97,12 @@ def cmd_compose(a) -> int:
         return _convert(mid, out, a.name or stem, a.force, a.poly)
 
 
+STUDIO_CABLE = '<script src="../cable.js"></script>\n'
+COMPOSER_ENTRY = {"id": "composer", "name": "COMPOSER", "version": "", "author": "cindulasai", "license": "GPL-3.0-only",
+                  "about": "Plays multi-part arrangements; COMPOSER Studio sends them in over MIDI IN.",
+                  "repo": "https://github.com/cindulasai/fm1-composer", "package": "../firmware/composer.fwsc"}
+
+
 class _StudioHandler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".wasm": "application/wasm",
                       ".js": "text/javascript", ".mjs": "text/javascript"}
@@ -104,6 +111,32 @@ class _StudioHandler(http.server.SimpleHTTPRequestHandler):
         if path.split("?", 1)[0] == "/firmware/composer.fwsc":   # the firmware CI built (or $FM1C_FWSC)
             return os.environ.get("FM1C_FWSC") or os.path.join(os.path.dirname(STUDIO), "build", "composer.fwsc")
         return super().translate_path(path)
+
+    def do_GET(self):
+        """fm1-emu's own page with Studio's MIDI cable (one script before its own), and fm1-emu's firmware list with
+        COMPOSER first; every other file as it is."""
+        path = self.path.split("?", 1)[0]
+        emu = os.path.join(self.directory, "emu")
+        if path in ("/emu/", "/emu/index.html") and os.path.isfile(os.path.join(emu, "index.html")):
+            with open(os.path.join(emu, "index.html"), encoding="utf-8") as f:
+                page = f.read()
+            at = page.index("<script")
+            return self._send(page[:at] + STUDIO_CABLE + page[at:], "text/html; charset=utf-8")
+        if path == "/emu/firmwares.json" and os.path.isfile(os.path.join(emu, "firmwares.json")):
+            with open(os.path.join(emu, "firmwares.json"), encoding="utf-8") as f:
+                catalog = json.load(f)
+            catalog["firmwares"] = [COMPOSER_ENTRY] + [x for x in catalog["firmwares"] if x.get("id") != "composer"]
+            catalog["default"] = "composer"
+            return self._send(json.dumps(catalog), "application/json")
+        return super().do_GET()
+
+    def _send(self, text, ctype):
+        body = text.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -117,8 +150,8 @@ def cmd_studio(a) -> int:
     if not 0 <= a.port <= 65535:
         raise UsageError(f"--port must be 0 to 65535, not {a.port}")
     web = os.path.join(STUDIO, "web")
-    if not os.path.isfile(os.path.join(web, "engine", "studio.js")):
-        print("building COMPOSER Studio's engine (once; needs Rust) ...", flush=True)
+    if not (os.path.isfile(os.path.join(web, "engine", "studio.js")) and os.path.isfile(os.path.join(web, "t2m", "index.html"))):
+        print("building COMPOSER Studio (once; needs Rust and npm) ...", flush=True)
         if subprocess.run(["sh", os.path.join(STUDIO, "build.sh")]).returncode != 0:
             raise UsageError("COMPOSER Studio's engine could not be built (see above)")
     try:
