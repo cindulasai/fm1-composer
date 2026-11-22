@@ -13,6 +13,8 @@ S4. In PLAYER: KNOB1 picks channel, PRESETS turns its sound (heard at once); key
 S5. Push while playing: music keeps playing; piece staged, saved to flash at next stop; `fm1c push` prints "staged — saves when playback stops" then "saved" once stopped.
 S6. Cable pulled / power cut mid-push or mid-save: library afterwards = exactly the pieces committed before; no corrupt entry listed; next push works.
 S7. In PLAYER: EDIT opens the selected channel as a piano roll; SELECT moves the cursor, a key adds that note (or removes it), KNOB2/KNOB3 set length/velocity, FX undoes; PLAY plays from the cursor's bar; SAVE → the edited piece replaces the old one, `fm1c pull` shows the new notes.
+S8. `./fm1c studio` opens COMPOSER Studio: left, I type "slow melancholic lo-fi in D minor, 70 bpm" and press Generate; the brief and its assumptions show, then "6 channels, 812 notes"; I press Push: a progress bar, then the right side (the FM-1 emulator running COMPOSER) lists the piece; PLAY on it plays.
+
 ## Features
 | ID | Feature (one testable line) | Since | State |
 |----|-----------------------------|-------|-------|
@@ -26,6 +28,10 @@ S7. In PLAYER: EDIT opens the selected channel as a piano roll; SELECT moves the
 | F8 | UI: LIBRARY, PLAYER (8 strips; sound turned in place with PRESETS); per-piece sounds, mutes, tempo saved | v1 | shipped |
 | F9 | Emulator e2e: real `.fwsc` in fm1-live — push over emulated USB, navigate, play, audio, flash cut, strict CPU | v1 | shipped |
 | F10 | Note edit core: insert / delete / change notes of a piece in RAM; piece valid after every op; undo log | v2 | shipped |
+| F12 | Pieces over the MIDI-in jack: SysEx on the TRS input reaches the same transfer as USB | v3 | planned |
+| F13 | Studio engine (WASM): text2midi's composer (copied, pinned) + fit + .f1p encode in Rust, byte-identical to `fm1c compose` | v3 | planned |
+| F14 | Studio page: an idea in plain English → AI (from the browser, user's key) → brief → piece; key in a git-ignored local file or the page's settings | v3 | planned |
+| F15 | Side by side: fm1-emu's browser build (MIT, pinned) runs COMPOSER on the same page; the piece is pushed over the emulated MIDI jack, appears in LIBRARY, plays | v3 | planned |
 | F11 | EDIT screen: piano roll per channel; keys toggle notes at the cursor; grid, length, velocity, octave; play from the cursor's bar; SAVE replaces the piece | v2 | shipped |
 
 ## Design
@@ -38,6 +44,8 @@ lib (`app/firmware/src/lib.c`) — interface: `lib_mount()`, `lib_count()`, `lib
 synth (`app/firmware/src/synth.c`) — interface: `synth_sound(ch,id)`, `synth_on(ch,pitch,vel)`, `synth_off(ch,pitch)`, `synth_all_off()`, `synth_render(out,n)`; `sounds[]` catalog — hides: voice pool + stealing, engines, drum kit, mixer, levels.
 player (`app/firmware/src/player.c`) — interface: `player_load(view)`, `player_play/stop()`, `player_tempo(x10)`, `player_mute/solo(ch,on)`, `player_tick(nframes)` (audio ISR, per 32 frames), `player_pos()` — hides: event cursors, note-off queue, loop wrap, stuck-note safety.
 edit (`app/firmware/src/edit.c`) — interface: `edit_insert(b,ch,tick,pitch,dur,vel)`, `edit_delete(b,ch,tick,pitch)`, `edit_set(b,ch,tick,pitch,dur,vel)` → ED_OK|ED_ARG|ED_FULL|ED_EXISTS|ED_NONE; `edit_undo(b)` — hides: event shifting, delta/rest re-encoding, channel offsets, length, CRC, undo log (64 ops).
+studio engine (`app/studio/engine`, Rust → WASM) — interface: `prompt() -> system text`, `brief_from_reply(text) -> brief JSON | error`, `make(brief_json, seed) -> {midi, f1p, report[], channels, notes}` — hides: text2midi's crates (copied from text2midi_v2 @9540490, see PROVENANCE.md), SMF read, fit, encode.
+studio page (`app/studio/web`, static: index.html, studio.js) — AI call (MiniMax / Anthropic / OpenAI-compatible) from the browser; emulator worklet driven by messages (boot, key, enc, midi; frame); push = paced SysEx frames on the MIDI jack (≤ 3 bytes/ms), confirmed by reading the library from the emulator's flash.
 ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRARY, PLAYER, EDIT, drawn where dirty; prefs in blob 0 keyed by piece id (200, least recently saved replaced).
 
 ## Test plan
@@ -69,6 +77,11 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 13 | Identity FM-1_95N (unused in hub list as of 2026-11-22); verify before public release | council | yes |
 | 14 | fm1c finds the FM-1 by its USB name "Felucca" (shared by Felucca-based firmwares; the updater relies on it, so unchanged), else "FM-1" | council | no |
 | 15 | DATA idempotent: an identical repeat of the last chunk is re-acknowledged; fm1c retries DATA (a lost frame or answer costs one retry) | council | no |
+| 20 | Studio = static browser page, no back end: AI called from the browser (MiniMax, Anthropic, DeepSeek, OpenAI allow it: CORS checked 2026-11-22) | user | yes |
+| 21 | Emulator on the page = fm1-emu's web build (MIT, commit 588db9e988ea), unmodified, fetched + built by tools/get_web_emu.sh | council | yes |
+| 22 | Push in the page over the emulated MIDI jack (the web build has no USB); firmware accepts transfer SysEx on the jack too | council | yes |
+| 23 | While private: the user's MiniMax key in app/studio/web/local/ai.json (git-ignored, made by tools/studio_key.sh); a test fails if any tracked file holds it; public page = backlog | user | yes |
+| 24 | Engine copies text2midi_v2's crates (core, compose, midi, intent) unchanged; text2midi_v2 itself untouched | user | yes |
 | 17 | Edit while stopped only (bytes shift under the player); PLAY in EDIT plays from the cursor's bar | council | no |
 | 18 | SAVE of an edited piece = put new entry, then delete old (power cut between: both kept, nothing lost); prefs move to the new id | council | yes |
 | 19 | EDIT controls: SELECT cursor, KNOB1 grid 1/32..1/4, KNOB2 length, KNOB3 velocity, OCT-/+ octave, keys toggle, FX undo | council | no |
@@ -79,6 +92,9 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 "16 voices" → narrowed to the measured number in README.
 
 ## Backlog
+- Public Studio page: free / demo AI keys or an in-browser model (no key); public repo or other free static host — user decides
+- Desktop app (Studio packaged)
+- Studio: Web MIDI push to a real FM-1 over USB; audio preview before pushing
 - Describe-in-words on the Mac (text2midi LLM path) from `fm1c`
 - Own 4-op FM engine (FM sounds on an FM synth)
 - Custom FM-1-shaped generator if fit reductions are frequent
@@ -88,3 +104,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 ## Versions
 - v1 — Phase 1: library player + fm1c (US-1–US-9)
 - v2 — Phase 2: note editing on the device (US-10–US-11)
+- v3 — COMPOSER Studio in the browser, emulator side by side (US-12–US-15)
