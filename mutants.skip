@@ -35,7 +35,8 @@ app/tools/fm1c/link.py | threading.Thread(target=self._read, daemon=True).start(
 app/tools/fm1c/link.py | while (left := end - time.monotonic()) > 0: | at exactly 0 left, recv(0) returns nothing; same outcome
 app/tools/fm1c/cli.py | os.replace(tmp, out)                          # whole or not at all | comment
 app/tools/fm1c/cli.py | print(f"  - {line}") | literal text
-app/tools/fm1c/cli.py | x.add_argument("--port", help="MIDI port (part of its name; default FM-1, or $FM1C_PORT)") | help text
+app/tools/fm1c/cli.py | x.add_argument("--port", help="MIDI port (part of its name; default Felucca or FM-1, or $FM1C_PORT)") | help text
+app/tools/fm1c/cli.py | e.add_argument("--fwsc", help="the firmware (default app/build/composer.fwsc, or $FM1C_FWSC)") | help text
 app/tools/fm1c/cli.py | p = _Parser(prog="fm1c", description="Compose, convert and push pieces for COMPOSER on the M-VAVE FM-1.") | help text
 app/firmware/src/composer.c | _Static_assert(sizeof prefs <= SECTOR_MAX, "prefs fit a blob"); | compile-time; only differs at exactly SECTOR_MAX bytes
 app/firmware/src/prefs.c | if (prefs.p[i].stamp < p->stamp) p = &prefs.p[i]; | stamps are unique (each save takes the next), so < and <= pick the same slot

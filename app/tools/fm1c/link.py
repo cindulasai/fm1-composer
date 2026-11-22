@@ -149,8 +149,14 @@ class ExecPort:
 
 
 def open_port(spec: str | None):
-    spec = spec or os.environ.get("FM1C_PORT") or "FM-1"
-    return ExecPort(spec[5:]) if spec.startswith("exec:") else MidiPort(spec)
+    """the named port; by default the FM-1 by its USB name (Felucca, as every Felucca-based firmware), else FM-1"""
+    spec = spec or os.environ.get("FM1C_PORT")
+    if spec:
+        return ExecPort(spec[5:]) if spec.startswith("exec:") else MidiPort(spec)
+    try:
+        return MidiPort("Felucca")
+    except PortError:
+        return MidiPort("FM-1")
 
 
 class Link:

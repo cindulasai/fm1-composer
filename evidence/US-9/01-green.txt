@@ -1,0 +1,5 @@
+COMMAND: cd app && sh check.sh
+.......................................                                  [100%]
+107 passed, 4 skipped in 34.55s
+emu e2e: 7 passed in 63.78s (0:01:03)
+EXIT_CODE: 0

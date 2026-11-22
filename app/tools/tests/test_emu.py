@@ -1,0 +1,217 @@
+"""US-9: the firmware CI builds, in fm1-emu: boot screen, pushes over emulated USB, playing heard on USB audio,
+power cut at every flash write of a save, strict on-chip timing. Screens are compared, pixel for pixel (RGB565),
+with host mode running the same steps. Run by tests/emu_e2e.sh (FM1_EMU_RUN=1); the SKIP and `fm1c emu` checks
+run in the plain gate."""
+import os, re, struct, subprocess, sys
+from pathlib import Path
+import pytest
+from conftest import APP, run_host
+
+sys.path.insert(0, str(APP / "tools"))
+from fm1c import link  # noqa: E402
+from fm1c.piece import Piece, PieceError, Channel, Note, encode  # noqa: E402
+from test_cli import fm1c  # noqa: E402
+
+LIVE, FWSC = os.environ.get("FM1_LIVE", ""), os.environ.get("FM1_FWSC", "")
+emu_only = pytest.mark.skipif(os.environ.get("FM1_EMU_RUN") != "1", reason="run by tests/emu_e2e.sh")
+ROLES = ["lead", "bass", "drums", "pad", "chords", "counter", "arp", "fx"]
+
+
+def piece(name, bars=4):
+    chans = [Channel(r, [Note(t * 96, (36 if r == "drums" else 48 + c * 3) + t % 3, 80, 110) for t in range(bars * 4)])
+             for c, r in enumerate(ROLES)]
+    return encode(Piece(name, 1200, bars * 384, chans))
+
+
+def dense():
+    """as many notes as a piece may hold: 8 channels of 16th-note pairs, near the 32 KB limit"""
+    best, bars = None, 1
+    while True:
+        chans = [Channel(r, [Note(s * 24, (38 if r == "drums" else 40 + c * 5) + k * 7 + s % 5, 20, 100)
+                             for s in range(bars * 16) for k in range(2)]) for c, r in enumerate(ROLES)]
+        try:
+            best, bars = encode(Piece("dense", 1400, bars * 384, chans)), bars + 1
+        except PieceError:                                   # (one bar more than fits)
+            return best
+
+
+def frames(data):
+    return ([link.frame(3, struct.pack("<I", len(data)))]
+            + [link.frame(4, struct.pack("<I", o) + data[o:o + 256]) for o in range(0, len(data), 256)] + [link.frame(5)])
+
+
+def usb_script(pieces, t=1500, gap=100):
+    """FM1_USB_SEND for the pushes (no answer is awaited, so a frame every `gap` ms); (script, ms after)"""
+    out = []
+    for d in pieces:
+        for f in frames(d):
+            out.append(f"{t}:{f.hex()}")
+            t += gap
+        t += 200
+    return ";".join(out), t
+
+
+def emu(tmp, ms, usb=None, keys=None, flash=None, cut=None, strict=False, wav=False):
+    """one headless fm1-live run; (report text, LCD as RGB565 bytes, USB audio samples or None)"""
+    work = tmp / "run"
+    (work / "work").mkdir(parents=True, exist_ok=True)
+    env = {**os.environ}
+    for k in ("FM1_USB_SEND", "FM1_BENCH_KEYS", "FM1_FLASH_CUT", "FM1_STRICT", "FM1_USB_WAV"):
+        env.pop(k, None)
+    env["FM1_NO_PLAY"] = "1"                                 # (--shot presses PLAY by itself otherwise)
+    args = [LIVE, "--fwsc", FWSC, "--shot", str(ms), "--lcd-only"]
+    if usb:
+        (work / "usb.txt").write_text(usb)
+        env["FM1_USB_SEND"] = "@" + str(work / "usb.txt")
+    if usb or wav:
+        args.append("--usb")
+    if keys:
+        env["FM1_BENCH_KEYS"] = keys
+    if flash:
+        args += ["--flash", str(flash)]
+    if cut:
+        env["FM1_FLASH_CUT"] = str(cut)
+    if strict:
+        env["FM1_STRICT"] = "1"
+    if wav:
+        env["FM1_USB_WAV"] = str(work / "usb.raw")
+    r = subprocess.run(args, cwd=work, env=env, capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+    samples = None
+    if wav:
+        raw = (work / "usb.raw").read_bytes()
+        samples = struct.unpack(f"<{len(raw) // 2}h", raw)
+    return r.stdout + r.stderr, rgb565(work / "work/lcd.ppm"), samples
+
+
+def rgb565(path):
+    from PIL import Image
+    im = Image.open(path).convert("RGB")
+    rgb = im.tobytes()
+    return bytes(v >> (2 if k % 3 == 1 else 3) for k, v in enumerate(rgb))
+
+
+def host_ref(tmp, name, pieces):
+    """the LIBRARY screen host mode draws after the same pushes"""
+    lines, t = [], 100
+    for d in pieces:
+        for f in frames(d):
+            lines.append(f"{t} sysex {f.hex()}")
+            t += 2
+        t += 20
+    p = tmp / f"{name}.txt"
+    p.write_text("\n".join(lines + [f"{t + 500} shot", f"{t + 600} end"]) + "\n")
+    run_host(p)
+    return rgb565(APP / f"build/host/{name}-{t + 500}.ppm")
+
+
+def replies(report):
+    """the reply commands the firmware sent, in order"""
+    out = []
+    for m in re.finditer(r"usb in:\s+([0-9a-f ]+)", report):
+        p = link.parse(bytes.fromhex(m[1].replace(" ", "")))
+        if p:
+            out.append(p[0])
+    return out
+
+
+def rms(s, a=0, b=None):
+    seg = s[a * 2:None if b is None else b * 2]
+    return (sum(v * v for v in seg) / max(1, len(seg))) ** 0.5
+
+
+@emu_only
+def test_9_1_boot_screen_is_host_modes(tmp_path):
+    _, lcd, _ = emu(tmp_path, 1000)
+    run_host("boot")
+    assert lcd == rgb565(APP / "build/host/boot-1000.ppm")
+
+
+@emu_only
+def test_9_2_push_two_pieces_over_usb_then_play(tmp_path):
+    a, b = piece("alpha"), piece("beta")
+    usb, t = usb_script([a, b])
+    report, lcd, s = emu(tmp_path, t + 500, usb=usb, wav=True)
+    n = len(frames(a)) - 2
+    assert replies(report) == [0x43] + [0x44] * n + [0x45] + [0x43] + [0x44] * n + [0x45], replies(report)
+    assert lcd == host_ref(tmp_path, "emu2", [a, b]), "LIBRARY lists both, as host mode does"
+    assert s and rms(s) == 0, "silent until PLAY"
+    report, lcd, s = emu(tmp_path, t + 2500, usb=usb, keys=f"{t + 300}:PLAY,{t + 350}:PLAY^", wav=True)
+    assert rms(s, len(s) // 2 - 44100) > 300, "playing, heard on the USB audio"
+
+
+@emu_only
+def test_9_3_power_cut_at_every_flash_write_of_a_save(tmp_path):
+    a, b = piece("alpha"), piece("beta")
+    usb, t = usb_script([a, b])
+    refs = [host_ref(tmp_path, "cut0", []), host_ref(tmp_path, "cut1", [a]), host_ref(tmp_path, "cut2", [a, b])]
+    report, _, _ = emu(tmp_path, t, usb=usb, flash=tmp_path / "whole.bin")
+    ops = int(re.search(r"flash: (\d+) erases / programs", report)[1])
+    assert ops >= 4, report[-500:]
+    states = []
+    for n in range(1, ops + 1):
+        f = tmp_path / f"cut{n}.bin"
+        report, _, _ = emu(tmp_path, t, usb=usb, flash=f, cut=n)
+        assert f"power cut at op {n}" in report
+        _, lcd, _ = emu(tmp_path, 1000, flash=f)               # power back on
+        assert lcd in refs, f"cut at op {n}: the library is not one of: empty, alpha, alpha + beta"
+        states.append(refs.index(lcd))
+    assert states == sorted(states) and 1 in states, states  # never a piece back from an unfinished save
+    _, lcd, _ = emu(tmp_path, 1000, flash=tmp_path / "whole.bin")
+    assert lcd == refs[2]
+    f = tmp_path / f"cut{states.index(1) + 1}.bin"             # after a cut, the next push works
+    report, _, _ = emu(tmp_path, 4000, usb=usb_script([piece("gamma")])[0], flash=f)
+    assert replies(report)[-1] == 0x45, replies(report)
+
+
+@emu_only
+def test_9_4_strict_timing_densest_piece_never_starves(tmp_path):
+    d = dense()
+    assert len(d) > 30000
+    usb, t = usb_script([d], gap=60)
+    report, _, s = emu(tmp_path, t + 10500, usb=usb, keys=f"{t + 200}:PLAY,{t + 250}:PLAY^", strict=True, wav=True)
+    assert replies(report)[-1] == 0x45, "saved under on-chip timing"
+    m = re.search(r"usb audio: .*\((\d+) empty, (\d+) of them underruns\)", report)
+    assert m and m[1] == "0" and m[2] == "0", report[-800:]
+    assert rms(s, len(s) // 2 - 5 * 44100) > 300, "10 s of the densest piece, heard"
+
+
+def test_9_5_missing_emulator_or_firmware_is_a_visible_skip(tmp_path):
+    sh = APP / "tests/emu_e2e.sh"
+    r = subprocess.run(["sh", str(sh)], env={**os.environ, "FM1_LIVE": str(tmp_path / "none")}, capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.startswith("emu e2e: SKIP") and "fm1-live" in r.stdout
+    r = subprocess.run(["sh", str(sh)], env={**os.environ, "FM1_LIVE": "/bin/sh", "FM1_FWSC": str(tmp_path / "x.fwsc")},
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.startswith("emu e2e: SKIP") and ".fwsc" in r.stdout
+    gate = (APP / "check.sh").read_text()
+    assert re.search(r"^sh tests/emu_e2e\.sh(\s+#.*)?$", gate, re.M), "the gate runs it, its line shown"
+
+
+def test_9_5_fm1c_emu_starts_the_emulator(tmp_path):
+    fake = tmp_path / "fm1-live"
+    fake.write_text("#!/bin/sh\necho \"ARGS $*\"\n")
+    fake.chmod(0o755)
+    fw = tmp_path / "c.fwsc"
+    fw.write_bytes(b"x")
+    os.environ["FM1C_LIVE"] = str(fake)
+    try:
+        r = fm1c("emu", "--fwsc", fw, "--flash", tmp_path / "lib/f.bin")
+        assert r.returncode == 0 and f"ARGS --fwsc {fw} --usb --flash {tmp_path / 'lib/f.bin'}" in r.stdout, r.stdout + r.stderr
+        assert (tmp_path / "lib").is_dir()
+        r = fm1c("emu", "--fwsc", tmp_path / "none.fwsc")
+        assert r.returncode == 2 and "no COMPOSER firmware" in r.stderr and "Traceback" not in r.stderr
+        os.environ["FM1C_LIVE"] = str(tmp_path / "nothing")
+        r = fm1c("emu", "--fwsc", fw)
+        assert r.returncode == 2 and "get_emu.sh" in r.stderr
+    finally:
+        os.environ.pop("FM1C_LIVE", None)
+
+
+def test_7_3_default_port_is_the_fm1s_usb_name(monkeypatch):
+    from test_link import fake_rtmidi
+    fake_rtmidi(monkeypatch, ["Felucca (emu)"], ["Felucca (emu)"])
+    monkeypatch.delenv("FM1C_PORT", raising=False)
+    assert isinstance(link.open_port(None), link.MidiPort)
+    fake_rtmidi(monkeypatch, ["other"], ["other"])
+    with pytest.raises(link.PortError, match="FM-1"):
+        link.open_port(None)

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 
+from . import emu as emumod
 from . import fit as fitmod
 from . import link as linkmod
 from .piece import PieceError, decode, encode
@@ -161,8 +162,12 @@ def cmd_pull(a) -> int:
     return 0
 
 
+def cmd_emu(a) -> int:
+    return emumod.run(a.fwsc, a.flash)
+
+
 def _port_args(x):
-    x.add_argument("--port", help="MIDI port (part of its name; default FM-1, or $FM1C_PORT)")
+    x.add_argument("--port", help="MIDI port (part of its name; default Felucca or FM-1, or $FM1C_PORT)")
     x.add_argument("--timeout", type=float, default=3.0, help=argparse.SUPPRESS)
 
 
@@ -204,6 +209,10 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--force", action="store_true")
     _port_args(g)
     g.set_defaults(fn=cmd_pull)
+    e = sub.add_parser("emu", help="run COMPOSER in fm1-emu with USB, so push / list / ... reach it")
+    e.add_argument("--fwsc", help="the firmware (default app/build/composer.fwsc, or $FM1C_FWSC)")
+    e.add_argument("--flash", help=f"the emulated flash, the library in it (default {emumod.FLASH})")
+    e.set_defaults(fn=cmd_emu)
     return p
 
 
@@ -211,12 +220,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         a = build_parser().parse_args(argv)
         if not getattr(a, "fn", None):
-            raise UsageError("a command is needed: convert, compose, push, list, delete, pull (fm1c --help)")
+            raise UsageError("a command is needed: convert, compose, push, list, delete, pull, emu (fm1c --help)")
         return a.fn(a)
     except UsageError as e:
         print(f"fm1c: {e}", file=sys.stderr)
         return 2
-    except (fitmod.FitError, PieceError, linkmod.PortError) as e:
+    except (fitmod.FitError, PieceError, linkmod.PortError, emumod.EmuError) as e:
         print(f"fm1c: {e}", file=sys.stderr)
         return 2
     except linkmod.LinkError as e:

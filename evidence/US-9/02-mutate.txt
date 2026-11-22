@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-9
+SURVIVED app/tools/fm1c/cli.py:170  " or " -> " and "  | x.add_argument("--port", help="MIDI port (part of its name; default Felucca or FM-1, or $FM1C_PORT)")
+MUTANTS: 11 tried, 10 killed, 1 survived (of 63 candidates in US-9)
+EXIT_CODE: 1

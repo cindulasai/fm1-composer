@@ -30,6 +30,8 @@ jobs:
           test -d ~/fw-AC79_AIoT_SDK
       - name: Build the FM-1 package
         run: sh app/build.sh
+      - name: fm1-emu (the gate runs the new package in it)
+        run: sh app/tools/get_emu.sh
       - name: Gate
         run: PY=python3 sh app/check.sh
       - uses: actions/upload-artifact@v4
