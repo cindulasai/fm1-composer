@@ -31,6 +31,8 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, I type "slow melancholic lo-fi 
 | F12 | Pieces over the MIDI-in jack: SysEx on the TRS input reaches the same transfer as USB | v3 | shipped |
 | F13 | Studio engine (WASM): text2midi's composer (copied, pinned) + fit + .f1p encode in Rust, byte-identical to `fm1c compose` | v3 | shipped |
 | F14 | Studio page: an idea in plain English → AI (from the browser, user's key) → brief → piece; key in a git-ignored local file or the page's settings | v3 | shipped |
+| F16 | Studio left = text2midi's own interface (Svelte UI copied unchanged @ pinned commit; its Tauri commands served in the browser by t2m-session → WASM + browser AI): gallery, prompt, takes, lock, undo, piano roll, preview audio | v4 | planned |
+| F17 | Studio right = fm1-emu's own page (unchanged, pinned) booting COMPOSER via its ?package= link; Studio is a virtual MIDI input there ("COMPOSER Studio"); Send to FM-1 = text2midi's MIDI → fit → .f1p → SysEx over that input → LIBRARY, plays | v4 | planned |
 | F15 | Side by side: fm1-emu's browser build (MIT, pinned) runs COMPOSER on the same page; the piece is pushed over the emulated MIDI jack, appears in LIBRARY, plays | v3 | shipped |
 | F11 | EDIT screen: piano roll per channel; keys toggle notes at the cursor; grid, length, velocity, octave; play from the cursor's bar; SAVE replaces the piece | v2 | shipped |
 
@@ -80,6 +82,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 20 | Studio = static browser page, no back end: AI called from the browser (MiniMax, Anthropic, DeepSeek, OpenAI allow it: CORS checked 2026-11-22) | user | yes |
 | 21 | Emulator on the page = fm1-emu's web build (MIT, commit 588db9e988ea), unmodified, fetched + built by tools/get_web_emu.sh | council | yes |
 | 22 | Push in the page over the emulated MIDI jack (the web build has no USB); firmware accepts transfer SysEx on the jack too | council | yes |
+| 25 | Reuse, never recreate: Studio = text2midi's UI (left) + fm1-emu's page (right), both unchanged, joined by a virtual MIDI cable; only glue is ours (invoke shim, MIDI shim, Send button); custom device pane and own form removed | user | yes |
 | 23 | While private: the user's MiniMax key in app/studio/web/local/ai.json (git-ignored, made by tools/studio_key.sh); a test fails if any tracked file holds it; public page = backlog | user | yes |
 | 24 | Engine copies text2midi_v2's crates (core, compose, midi, intent) unchanged; text2midi_v2 itself untouched | user | yes |
 | 17 | Edit while stopped only (bytes shift under the player); PLAY in EDIT plays from the cursor's bar | council | no |
@@ -106,3 +109,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v1 — Phase 1: library player + fm1c (US-1–US-9)
 - v2 — Phase 2: note editing on the device (US-10–US-11)
 - v3 — COMPOSER Studio in the browser, emulator side by side (US-12–US-15)
+- v4 — Studio = text2midi's UI + fm1-emu's page, reused unchanged, MIDI cable between (US-16–US-17)
