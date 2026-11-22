@@ -46,3 +46,6 @@ app/firmware/src/composer.c | tempo_x10 = (uint32_t)(t < 300 ? 300 : t > 3000 ? 
 app/firmware/src/composer.c | if (!(keys >> WHITE_KEY[k] & 1u) || k >= pl_v.nch) continue; | a key one past the piece's channels mutes a channel with no notes and no strip: nothing heard, nothing drawn
 app/firmware/src/composer.c | if (scr && playing) { | outside PLAYER nothing is playing (HOME stops it); stopped in PLAYER, both branches leave the position as it is
 app/firmware/src/ui.c | if (cur < *top) *top = cur; | at cur == top it sets top to what it is
+app/firmware/src/edit.c | if (d > 0) for (i = len; i-- > at;) b[i + n] = b[i]; | d is never 0 (insert passes k >= 1, ed_pack calls only when it removed some): > and >= agree
+app/firmware/src/edit.c | else for (i = at; i + n < len; i++) b[i] = b[i + n]; | <= copies b[len] only to a byte past the new end: same piece; at len 32 KB the overread is ASan's (Linux CI; test_10_4 deletes from a full piece)
+app/firmware/src/edit.c | if (w < off + n * PIECE_EV) ed_shift(b, ch, w, -(int32_t)((off + n * PIECE_EV - w) / PIECE_EV)); | <= adds a shift of 0 events: moves nothing, adds 0
