@@ -8,7 +8,7 @@
 | US-5 | Player | 1 | proven | 0 |
 | US-6 | Library in flash | 1 | proven | 0 |
 | US-7 | Transfer | 1 | proven | 0 |
-| US-8 | UI | 1 | todo | 0 |
+| US-8 | UI | 1 | proven | 0 |
 | US-9 | Emulator end to end | 1 | todo | 0 |
 
 ## Impediments

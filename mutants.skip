@@ -37,3 +37,11 @@ app/tools/fm1c/cli.py | os.replace(tmp, out)                          # whole or
 app/tools/fm1c/cli.py | print(f"  - {line}") | literal text
 app/tools/fm1c/cli.py | x.add_argument("--port", help="MIDI port (part of its name; default FM-1, or $FM1C_PORT)") | help text
 app/tools/fm1c/cli.py | p = _Parser(prog="fm1c", description="Compose, convert and push pieces for COMPOSER on the M-VAVE FM-1.") | help text
+app/firmware/src/composer.c | _Static_assert(sizeof prefs <= SECTOR_MAX, "prefs fit a blob"); | compile-time; only differs at exactly SECTOR_MAX bytes
+app/firmware/src/prefs.c | if (prefs.p[i].stamp < p->stamp) p = &prefs.p[i]; | stamps are unique (each save takes the next), so < and <= pick the same slot
+app/firmware/src/composer.c | if ((n = lib_read(i, play_buf, sizeof play_buf)) < 0 || piece_check(play_buf, (uint32_t)n) || player_load(play_buf)) { | a read of 0 bytes fails piece_check just the same
+app/firmware/src/composer.c | for (ch = 0; ch < PIECE_MAX_CH; ch++) player_mute(ch, (int)(mute >> ch & 1u)); | player_mute ignores a channel past 7
+app/firmware/src/composer.c | tempo_x10 = (uint32_t)(t < 300 ? 300 : t > 3000 ? 3000 : t); | at exactly 300 both give 300
+app/firmware/src/composer.c | if (!(keys >> WHITE_KEY[k] & 1u) || k >= pl_v.nch) continue; | a key one past the piece's channels mutes a channel with no notes and no strip: nothing heard, nothing drawn
+app/firmware/src/composer.c | if (scr && playing) { | outside PLAYER nothing is playing (HOME stops it); stopped in PLAYER, both branches leave the position as it is
+app/firmware/src/ui.c | if (cur < *top) *top = cur; | at cur == top it sets top to what it is

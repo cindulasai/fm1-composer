@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-8
+SURVIVED app/firmware/src/composer.c:124  " < " -> " <= "  | if (ch < pl_v.nch) post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
+SURVIVED app/firmware/src/ui.c:17  " < " -> " <= "  | for (; *f && o + 1u < max; f++) {
+SURVIVED app/firmware/src/ui.c:27  " < " -> " <= "  | while (k && o + 1u < max) b[o++] = d[--k];
+SURVIVED app/firmware/src/ui.c:67  " < " -> " <= "  | for (i = 0; i < LIB_ROWS; i++) {
+SURVIVED app/firmware/src/ui.c:113  " < " -> " <= "  | ui_text(26, y, 70, &FONT_S, ROLE_NAME[p->role[ch] < ROLE_COUNT ? p->role[ch] : ROLE_OTHER], c, 0);
+MUTANTS: 11 tried, 6 killed, 5 survived (of 61 candidates in US-8)
+EXIT_CODE: 1

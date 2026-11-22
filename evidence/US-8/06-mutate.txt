@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-8
+SURVIVED app/firmware/src/composer.c:179  " >= " -> " > "  | if (!(keys >> WHITE_KEY[k] & 1u) || k >= pl_v.nch) continue;
+SURVIVED app/firmware/src/ui.c:73  " + " -> " - "  | ui_fmt(b, sizeof b, "%uK", (e->len + 1023u) / 1024u);
+MUTANTS: 12 tried, 10 killed, 2 survived (of 57 candidates in US-8)
+EXIT_CODE: 1
