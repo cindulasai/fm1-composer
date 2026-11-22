@@ -456,8 +456,20 @@ static void test_4_4_hush_silences_everything(void)
     CHECK(peak < 30, "hush: silent within 50 ms (%d)", peak);
 }
 
+static void test_4_4_render_before_init_is_silent(void)
+{
+    int32_t out[2 * CTL];
+    uint32_t i;
+    memset(chs, 0, sizeof chs); memset(trk, 0, sizeof trk);
+    trk[3].v[0].active = 1;                             /* (whatever the RAM held) */
+    for (i = 0; i < 2 * CTL; i++) out[i] = 7;
+    synth_render(out, CTL);
+    for (i = 0; i < 2 * CTL; i++) CHECK(out[i] == 7, "untouched before init");
+}
+
 int main(void)
 {
+    test_4_4_render_before_init_is_silent();
     test_4_1_budget_and_stealing();
     test_4_1_mono_and_retrigger();
     test_4_1_full_channel_takes_its_released_voice();

@@ -323,6 +323,7 @@ static void synth_render(int32_t *out, uint32_t n)
         const chan_t *c = &chs[ch];
         const engine_t *e = c->e;
         int any = 0;
+        if (!e) continue;                       /* (the audio may start before synth_init: silence) */
         if (e->block) e->block(t);
         for (i = 0; i < n; i++) buf[i] = 0;
         for (k = 0; k < NVOICE; k++) {
