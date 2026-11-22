@@ -250,6 +250,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
             int r = ED_OK;
             ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len);
             ed_vel = (uint32_t)(vel < 1 ? 1 : vel > 127 ? 127 : vel);
+            edit_mark();                        /* one turn: one undo */
             for (i = 0; i < n && r == ED_OK; i++) r = edit_set(play_buf, sel, cn[i].tick, cn[i].pitch, ed_len, ed_vel);
             if (n) edited_now(r);
             dirty |= D_FOOT;
@@ -259,6 +260,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
             int r;
             if (!(keys >> k & 1u)) continue;
             for (i = 0; i < n && cn[i].pitch != p; i++) {}
+            edit_mark();
             if (i < n) r = edit_delete(play_buf, sel, cn[i].tick, p);
             else {
                 r = edit_insert(play_buf, sel, ed_tick, p, ed_len, ed_vel);

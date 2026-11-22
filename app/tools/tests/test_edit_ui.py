@@ -93,7 +93,7 @@ def test_11_3_length_velocity_and_undo(tmp_path):
 def test_11_4_save_replaces_the_piece_and_keeps_the_choices(tmp_path, host_bin):
     names = catalog(tmp_path)
     flash = str(tmp_path / "flash.bin")
-    steps = [(50, f"btn {BTN['HOME']}"), (100, f"enc {ENC['PRESETS']} 1"), (200, f"btn {BTN['EDIT']}"),
+    steps = [(50, f"btn {BTN['HOME']}"), (100, f"enc {ENC['PRESETS']} 1"), *key(130, 0), (200, f"btn {BTN['EDIT']}"),
              *key(300, 9), (500, f"btn {BTN['SAVE']}")]
     (log, _), t0 = run(tmp_path, [song()], steps, 900, name="esave1", env={"HOST_FLASH": flash})
     assert (222, "SAVED") in at(log, t0 + 500)
@@ -103,6 +103,7 @@ def test_11_4_save_replaces_the_piece_and_keeps_the_choices(tmp_path, host_bin):
     (log2, _) = run_host(script(tmp_path, "esave2", ["100 btn 12"], 600), env={"HOST_FLASH": flash})
     assert (4, "1 PIECE") in at(log2, 0, 99) and (28, "> song") in at(log2, 0, 99)
     assert [txt for ms, y, x, c, txt in screen_full(log2) if ms >= 100 and y == 64 and x == 98][-1] == turned
+    assert [txt for ms, y, x, c, txt in screen_full(log2) if ms >= 100 and y == 64 and x == 206][-1] == "M"   # mute kept
     fl = tmp_path / "xflash.bin"
     shutil.copy(flash, fl)
     port = f"exec:{host_bin} {fl}"
@@ -115,19 +116,21 @@ def test_11_4_save_replaces_the_piece_and_keeps_the_choices(tmp_path, host_bin):
 
 
 def test_11_6_edits_while_playing_unsaved_and_full(tmp_path):
-    steps = [(50, f"btn {BTN['PLAY']}"), *key(150, 9), (300, f"btn {BTN['PLAY']}"), (400, "shot"),
+    steps = [(50, f"btn {BTN['PLAY']}"), *key(150, 9), (230, f"enc {ENC['KNOB2']} 2"), (260, f"enc {ENC['KNOB3']} -3"),
+             (300, f"btn {BTN['PLAY']}"), (400, "shot"),
              *key(500, 9), (700, f"btn {BTN['HOME']}"), (800, f"btn {BTN['HOME']}"), (900, f"btn {BTN['HOME']}"),
              (1000, f"btn {BTN['PLAY']}"), (1100, f"btn {BTN['PLAY']}"), (1200, f"btn {BTN['EDIT']}"), (1300, "shot")]
     (log, _), t0 = run(tmp_path, [song()], steps, 1400)
     assert (222, "PLAYING FROM THIS BAR") in at(log, t0 + 50, t0 + 149)
     assert (222, "STOP TO EDIT") in at(log, t0 + 150, t0 + 299)
     assert not amber(cell(shot(tmp_path.name, t0 + 400), 0, 62))       # nothing changed while playing
+    assert (222, "STOP TO EDIT") in at(log, t0 + 230, t0 + 299) and (196, "C4  LEN 1/16  VEL 100") in at(log, t0 + 300, t0 + 499)
     assert (222, "UNSAVED EDITS: HOME AGAIN TO DISCARD") in at(log, t0 + 800, t0 + 899)
     assert (4, "COMPOSER") in at(log, t0 + 900, t0 + 999)               # the second HOME leaves
     assert not amber(cell(shot(tmp_path.name, t0 + 1300), 0, 62))      # and the edit is gone
 
 
-def test_11_6_piece_full_and_library_full(tmp_path):
+def test_11_6_piece_full_and_library_full(tmp_path, host_bin):
     full = song([Note(i, 60 + i % 12, 10, 90) for i in range((32768 - 68) // 6)], "full", bars=999)
     assert len(full) == 32768
     (log, _), t0 = run(tmp_path, [full], key(100, 0), 300, name="efull")      # (F3: not in that step yet)
@@ -136,6 +139,20 @@ def test_11_6_piece_full_and_library_full(tmp_path):
     assert (len(big[0]) + 64 + 4095) // 4096 == 8 and len(big[0]) + 6 + 64 <= 8 * 4096   # 8 sectors each, edited too: 9 fill 72 of 73
     steps = [*key(100, 9), (300, f"btn {BTN['SAVE']}"), (400, f"btn {BTN['HOME']}"), (500, f"btn {BTN['HOME']}"),
              (600, f"btn {BTN['HOME']}")]
-    (log, _), t0 = run(tmp_path, big, steps, 700, name="elibfull")
+    flash = tmp_path / "full.bin"
+    (log, _), t0 = run(tmp_path, big, steps, 700, name="elibfull", env={"HOST_FLASH": str(flash)})
     assert (222, "LIBRARY FULL") in at(log, t0 + 300, t0 + 399)
     assert (4, "9 PIECES") in at(log, t0 + 500) and (28, "> big8") in at(log, t0 + 500)
+    port = f"exec:{host_bin} {flash}"
+    pid = [ln.split()[0].lstrip("#") for ln in fm1c("list", "--port", port).stdout.splitlines() if "big8" in ln][0]
+    assert fm1c("pull", pid, "-o", tmp_path / "b8.f1p", "--port", port).returncode == 0
+    assert (tmp_path / "b8.f1p").read_bytes() == big[8]                 # the old piece, byte for byte
+
+
+def test_11_3_one_knob_turn_on_a_chord_is_one_undo(tmp_path):
+    chord = [Note(0, 60, 24, 100), Note(0, 64, 24, 100), Note(0, 67, 24, 100)]
+    steps = [(100, f"enc {ENC['KNOB2']} 1"), (200, f"btn {BTN['FX']}"), (300, f"btn {BTN['FX']}")]
+    (log, _), t0 = run(tmp_path, [song(chord)], steps, 400)
+    assert (196, "C4  LEN 1/8  VEL 100") in at(log, t0 + 100, t0 + 199)
+    assert (196, "C4  LEN 1/16  VEL 100") in at(log, t0 + 200, t0 + 299)       # all three back with one FX
+    assert (222, "NOTHING TO UNDO") in at(log, t0 + 300)
