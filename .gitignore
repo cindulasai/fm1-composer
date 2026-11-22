@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+app/build/
+out/
+.env*
+adversary/
+vendor/fm1-emu/
+.pytest_cache/
+.hypothesis/

@@ -1,0 +1,206 @@
+#!/bin/sh
+# prove — evidence runner + machine adversary (build-something v2). Lives at build root.
+#   sh prove <story> <label> -- '<command>'   run check from build root; full output ->
+#        evidence/<story>/<nn>-<label>.txt (COMMAND: first line, EXIT_CODE: last); prints tail only
+#   sh prove close <story>    gate + mutation; then tick criteria, board row -> proven, commit "<story>: <title>"
+#   sh prove status <tier> <story>...   set board status (done | done-self | done-unverified | todo | blocked)
+#   sh prove mutate <story>   flip operators/booleans in story's non-test Files, one at a time, in a
+#        temp copy of app/, rerun the gate; a mutant the gate passes SURVIVED (no test watches it)
+#   sh prove audit            every tick <-> evidence <-> exit code; clean mutation run + own commit per closed story
+# env: PROVE_DIR (default evidence), PROVE_TAIL (12), PROVE_MUTANTS (12), PROVE_GATE ("sh check.sh"), PROVE_APP (app)
+# mutants.skip line "<file> | <trimmed source line> | <reason>" excuses an equivalent mutant
+set -u
+root=$(cd "$(dirname "$0")" && pwd)
+cd "$root" || exit 2
+
+if [ "${1:-}" = "audit" ]; then
+  [ -f BOARD.md ] || { echo "AUDIT: no BOARD.md at $root"; exit 2; }
+  problems=$(mktemp); checks=$(mktemp); closed=$(mktemp)
+  trap 'rm -f "$problems" "$checks" "$closed"' EXIT
+  awk -v P="$problems" -v C="$checks" -v R="$closed" '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function close_story() {
+      if (story == "") return
+      st = status[story]
+      if (st == "") { print story ": in " FILENAME " but missing from BOARD.md" >> P; return }
+      if (st == "proven" || st == "done" || st == "done-self") {
+        if (open > 0) print story ": status " st " with " open " unticked criteria" >> P
+        if (files == "") print story ": no Files: line" >> P
+        else print story "\t" files >> C
+        print story >> R
+      }
+      if (st == "done" && soft > 0) print story ": status done but " soft " judgment-only [~] criteria (cap is done-self)" >> P
+    }
+    FNR == NR {                                   # pass 1: BOARD.md
+      if ($0 ~ /^\|[ \t]*US-[0-9]+[ \t]*\|/) {
+        n = split($0, c, "|"); id = trim(c[2]); s = trim(c[5]); status[id] = s; count[s]++
+      }
+      next
+    }
+    FNR == 1 { close_story(); story = "" }
+    /^### US-[0-9]+/ { close_story(); story = $2; files = ""; open = 0; soft = 0; next }
+    story == "" { next }
+    /Files:/ { f = $0; sub(/.*Files:[ \t]*/, "", f); files = f; next }
+    /^- \[ \]/ { open++; next }
+    /^- \[~\]/ { soft++; next }
+    /^- \[x\]/ {
+      if (!match($0, /evidence\/[^ `)]+\.txt/)) { print story ": ticked without an evidence citation: " $0 >> P; next }
+      ev = substr($0, RSTART, RLENGTH); first = ""; last = ""; k = 0
+      while ((getline line < ev) > 0) { if (k++ == 0) first = line; last = line }
+      close(ev)
+      if (k == 0) print story ": cited evidence missing or empty: " ev >> P
+      else {
+        if (first !~ /^COMMAND: ./) print story ": " ev " does not start with COMMAND:" >> P
+        if (last != "EXIT_CODE: 0") print story ": " ev " ends with \"" last "\", not EXIT_CODE: 0" >> P
+      }
+      next
+    }
+    END {
+      close_story()
+      printf "BOARD:"
+      split("todo proven done done-self done-unverified blocked", order, " ")
+      for (i = 1; i <= 6; i++) printf " %s=%d", order[i], count[order[i]] + 0
+      printf "\n"
+    }
+  ' BOARD.md stories/*.md
+  # every closed story needs a clean mutation run: proof its tests notice broken code
+  while read -r story; do
+    mut=$(ls evidence/"$story"/*-mutate.txt 2>/dev/null | tail -n 1)
+    if [ -z "$mut" ]; then echo "$story: no mutation run (sh prove close $story)" >> "$problems"
+    elif [ "$(tail -n 1 "$mut")" != "EXIT_CODE: 0" ]; then echo "$story: latest mutation run $mut has survivors — add the tests that kill them" >> "$problems"; fi
+  done < "$closed"
+  # every closed story needs its own commit that touches at least one of its declared files
+  while IFS="$(printf '\t')" read -r story files; do
+    touched=$(git log --format= --name-only --grep="^$story:" 2>/dev/null)
+    if [ -z "$touched" ]; then echo "$story: no commit titled \"$story: ...\"" >> "$problems"; continue; fi
+    hit=0
+    for f in $(printf '%s' "$files" | tr ',' ' '); do
+      printf '%s\n' "$touched" | grep -qxF "$f" && hit=1
+    done
+    [ "$hit" = 1 ] || echo "$story: its commit touches none of its declared Files ($files)" >> "$problems"
+  done < "$checks"
+  if [ -s "$problems" ]; then
+    cat "$problems"; echo "AUDIT: FAILED ($(wc -l < "$problems" | tr -d ' ') problems)"; exit 1
+  fi
+  echo "AUDIT: ok"; exit 0
+fi
+
+if [ "${1:-}" = "status" ]; then
+  tier=${2:?usage: sh prove status <tier> <story>...}; shift 2
+  for st in "$@"; do
+    awk -v S="$st" -v T="$tier" 'BEGIN { FS = OFS = "|" } $2 ~ "^[ \t]*" S "[ \t]*$" { $5 = " " T " " } { print }' BOARD.md > BOARD.md.tmp && mv BOARD.md.tmp BOARD.md
+  done
+  grep -E '^\|[ \t]*US-' BOARD.md; exit 0
+fi
+
+if [ "${1:-}" = "close" ]; then
+  story=${2:?usage: sh prove close <story>}
+  app=${PROVE_APP:-app}; gate=${PROVE_GATE:-sh check.sh}
+  sf=$(grep -l "^### $story " stories/*.md | head -n 1)
+  [ -n "$sf" ] || { echo "CLOSE: $story not found in stories/"; exit 2; }
+  title=$(sed -n "s/^### $story[ \t]*[^A-Za-z0-9]*[ \t]*//p" "$sf" | head -n 1)
+  files=$(awk -v S="$story" '/^### US-[0-9]+/ { on = ($2 == S) } on && /Files:/ { f = $0; sub(/.*Files:[ \t]*/, "", f); gsub(/,/, " ", f); print f }' "$sf")
+  # every open criterion needs a test carrying its ID (2.1 -> test_2_1_... or "2.1 ...")
+  miss=""
+  for id in $(awk -v S="$story" '/^### US-[0-9]+/ { on = ($2 == S) } on && /^- \[ \] [0-9]+\.[0-9]+/ { print $4 }' "$sf"); do
+    pat="(^|[^0-9])$(printf '%s' "$id" | sed 's/\./[._]/')([^0-9]|\$)"
+    hit=0
+    for f in $files; do [ -f "$f" ] && grep -Eq "$pat" "$f" && hit=1; done
+    [ "$hit" = 1 ] || miss="$miss $id"
+  done
+  [ -z "$miss" ] || { echo "CLOSE: no test in $story's Files carries criterion ID:$miss (name tests test_2_1_... or '2.1 ...')"; exit 1; }
+  sh "$0" "$story" green -- "cd $app && $gate" || { echo "CLOSE: gate red — $story stays open"; exit 1; }
+  sh "$0" "$story" mutate -- "sh prove mutants $story" || { echo "CLOSE: mutants survived — add the killing tests, rerun"; exit 1; }
+  ev=$(ls evidence/"$story"/*-green.txt | tail -n 1)
+  awk -v S="$story" -v E="$ev" '/^### US-[0-9]+/ { on = ($2 == S) } on && /^- \[ \] / { sub(/^- \[ \] /, "- [x] "); $0 = $0 " → " E } { print }' "$sf" > "$sf.tmp" && mv "$sf.tmp" "$sf"
+  sh "$0" status proven "$story" > /dev/null
+  for f in $files; do [ -e "$f" ] && git add "$f"; done
+  git add evidence/"$story" stories BOARD.md 2>/dev/null; [ -f mutants.skip ] && git add mutants.skip
+  git commit -q -m "$story: $title" && echo "CLOSED $story: proven, committed ($(git log -1 --format=%h))"
+  exit 0
+fi
+
+if [ "${1:-}" = "mutate" ]; then            # shorthand: record a mutation run as evidence
+  [ -n "${2:-}" ] || { echo "usage: sh prove mutate <story>" >&2; exit 2; }
+  exec sh "$0" "$2" mutate -- "sh prove mutants $2"
+fi
+
+if [ "${1:-}" = "mutants" ]; then
+  story=${2:?usage: sh prove mutants <story>}
+  app=${PROVE_APP:-app}; gate=${PROVE_GATE:-sh check.sh}; max=${PROVE_MUTANTS:-12}
+  files=$(awk -v S="$story" '
+    /^### US-[0-9]+/ { on = ($2 == S) }
+    on && /Files:/ { f = $0; sub(/.*Files:[ \t]*/, "", f); gsub(/,/, " ", f); print f }' stories/*.md)
+  work=$(mktemp -d); cands=$(mktemp)
+  trap 'rm -rf "$work" "$cands"' EXIT
+  for f in $files; do
+    case "$f" in "$app"/*) ;; *) continue ;; esac
+    case "$(printf '%s' "$f" | tr 'A-Z' 'a-z')" in
+      *test*|*spec*|*check.sh|*smoke*|*.md|*.txt|*.json|*.toml|*.yml|*.yaml|*.lock|*.css|*.svg|*.csv) continue ;;
+    esac
+    [ -f "$f" ] || continue
+    awk -v F="$f" -v SKIP="mutants.skip" '
+      function add(a, b) { from[++m] = a; to[m] = b }
+      BEGIN {
+        add(" === ", " !== "); add(" !== ", " === "); add(" == ", " != "); add(" != ", " == ")
+        add(" <= ", " < "); add(" >= ", " > "); add(" < ", " <= "); add(" > ", " >= ")
+        add(" + ", " - "); add(" - ", " + "); add(" * ", " / ")
+        add(" and ", " or "); add(" or ", " and "); add(" && ", " || "); add(" || ", " && ")
+        add("True", "False"); add("False", "True"); add("true", "false"); add("false", "true")
+        while ((getline l < SKIP) > 0) { k = split(l, p, " \\| "); if (k >= 2) skip[p[1] SUBSEP p[2]] = 1 }
+      }
+      {
+        t = $0; gsub(/^[ \t]+|[ \t]+$/, "", t)
+        if (t == "" || t ~ /^(#|\/\/|\/\*|\*|--|import |from |use |package |require|"""|<!--)/) next
+        if ((F SUBSEP t) in skip) next
+        for (j = 1; j <= m; j++) if (index($0, from[j]) > 0) { printf "%s\t%d\t%s\t%s\n", F, NR, from[j], to[j]; break }
+      }' "$f" >> "$cands"
+  done
+  total=$(wc -l < "$cands" | tr -d ' ')
+  if [ "$total" -eq 0 ]; then echo "MUTANTS: 0 candidates in $story's non-test files — nothing to mutate"; exit 0; fi
+  cp -R "$app" "$work/app"
+  start=$(date +%s)
+  if ! ( cd "$work/app" && sh -c "$gate" ) > "$work/base.log" 2>&1 < /dev/null; then
+    tail -n 5 "$work/base.log"; echo "MUTANTS: the gate is red before any mutation — fix that first"; exit 2
+  fi
+  limit=$(( ( $(date +%s) - start ) * 3 + 20 ))
+  step=$(( (total + max - 1) / max )); tried=0; killed=0; i=0; tab=$(printf '\t')
+  : > "$work/survivors"
+  while IFS="$tab" read -r f line from to; do
+    i=$((i + 1)); [ $(( (i - 1) % step )) -eq 0 ] || continue
+    rel=${f#"$app"/}; tried=$((tried + 1))
+    awk -v L="$line" -v A="$from" -v B="$to" 'NR == L { k = index($0, A); $0 = substr($0, 1, k - 1) B substr($0, k + length(A)) } { print }' "$f" > "$work/app/$rel"
+    ( cd "$work/app" && sh -c "$gate" ) > /dev/null 2>&1 < /dev/null &
+    pid=$!
+    ( sleep "$limit"; kill -9 "$pid" 2>/dev/null ) > /dev/null 2>&1 &
+    dog=$!
+    if wait "$pid" 2>/dev/null; then
+      printf 'SURVIVED %s:%s  "%s" -> "%s"  | %s\n' "$f" "$line" "$from" "$to" "$(sed -n "${line}p" "$f" | sed 's/^[ \t]*//')" >> "$work/survivors"
+    else
+      killed=$((killed + 1))
+    fi
+    kill "$dog" 2>/dev/null; wait "$dog" 2>/dev/null
+    cp "$f" "$work/app/$rel"
+  done < "$cands"
+  head -n 10 "$work/survivors"
+  echo "MUTANTS: $tried tried, $killed killed, $((tried - killed)) survived (of $total candidates in $story)"
+  [ "$tried" -eq "$killed" ]; exit $?
+fi
+
+if [ $# -lt 3 ]; then
+  echo "usage: sh prove <story> <label> -- '<command>' | close <story> | status <tier> <story>... | mutate <story> | audit" >&2; exit 2
+fi
+story=$1; label=$2; shift 2
+[ "${1:-}" = "--" ] && shift
+dir="${PROVE_DIR:-evidence}/$story"
+mkdir -p "$dir"
+n=$(find "$dir" -maxdepth 1 -name '*.txt' | wc -l | tr -d ' ')
+out=$(printf '%s/%02d-%s.txt' "$dir" $((n + 1)) "$label")
+printf 'COMMAND: %s\n' "$*" > "$out"
+sh -c "$*" >> "$out" 2>&1 < /dev/null
+rc=$?
+[ -n "$(tail -c 1 "$out")" ] && echo >> "$out"      # keep EXIT_CODE on its own line
+printf 'EXIT_CODE: %s\n' "$rc" >> "$out"
+tail -n "${PROVE_TAIL:-12}" "$out"
+echo "saved: $out ($(wc -l < "$out" | tr -d ' ') lines)"
+exit "$rc"
