@@ -4,7 +4,11 @@
 set -eu
 cd "$(dirname "$0")/.."
 name=${1:-}
-[ -n "$name" ] && [ -f "tests/scripts/$name.txt" ] || { echo "unknown script: ${name:-<none>} (tests/scripts/*.txt)" >&2; exit 2; }
+case "$name" in
+    /*.txt) script=$name; name=$(basename "$name" .txt) ;;     # (a script written by a test)
+    *) script=tests/scripts/$name.txt ;;
+esac
+[ -n "$name" ] && [ -f "$script" ] || { echo "unknown script: ${name:-<none>} (tests/scripts/*.txt)" >&2; exit 2; }
 shift
 mkdir -p build/host
 bin=build/host/composer
@@ -14,4 +18,4 @@ if ! cc -O1 -g -Wall -Wno-unused-function -DDINGHY_HOST -DAPP_VER='"dev"' ${HOST
     rm -f "$tmp"; exit 1
 fi
 mv "$tmp" "$bin"
-"$bin" "build/host/$name" "tests/scripts/$name.txt" > "build/host/$name.log"
+"$bin" "build/host/$name" "$script" > "build/host/$name.log"

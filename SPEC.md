@@ -32,7 +32,7 @@ fit (`app/tools/fm1c/fit.py`) — interface: `fit(midi_path, limits)->(Piece, Re
 link (`app/tools/fm1c/link.py`) — interface: `Link(port).info()/list()/put(name,bytes)/delete(id)/get(id)` raising `LinkError(code,msg)` — hides: SysEx framing, 7-bit packing, chunking, CRC, retries, timeouts.
 cli (`app/tools/fm1c/cli.py`) — `fm1c compose|convert|push|list|delete|pull|emu` exit 0 ok / 1 device refused / 2 usage or file.
 xfer (`app/firmware/src/xfer.c`) — interface: `xfer_byte(b)` (from platform SysEx tap), `xfer_poll()` (main loop) — hides: protocol state, staging buffer (pool, 32 KB), replies.
-lib (`app/firmware/src/lib.c`) — interface: `lib_mount()`, `lib_count()`, `lib_entry(i)->{id,name,size}`, `lib_data(i)->const u8*`, `lib_put(name,buf,len)->id|err`, `lib_del(id)`, `lib_free()` — hides: sector journal in 0x97000–0xF3FFF (93 sectors), directory records with seq+CRC, commit-last ordering, garbage collection.
+lib (`app/firmware/src/lib.c`) — interface: `lib_mount()`, `lib_count()`, `lib_entry(i)->{id,name,len}`, `lib_read(i,dst,max)->len|err`, `lib_put(name,buf,len)->id|err`, `lib_del(id)`, `lib_find(id)`, `lib_free()`, `lib_room()` — hides: whole-sector entries in 0x97000–0xDFFFF (73 sectors), 64-byte header with CRCs written last, delete = one word programmed, lazy erase of dirty sectors.
 synth (`app/firmware/src/synth.c`) — interface: `synth_sound(ch,id)`, `synth_on(ch,pitch,vel)`, `synth_off(ch,pitch)`, `synth_all_off()`, `synth_render(out,n)`; `sounds[]` catalog — hides: voice pool + stealing, engines, drum kit, mixer, levels.
 player (`app/firmware/src/player.c`) — interface: `player_load(view)`, `player_play/stop()`, `player_tempo(x10)`, `player_mute/solo(ch,on)`, `player_tick(nframes)` (audio ISR, per 32 frames), `player_pos()` — hides: event cursors, note-off queue, loop wrap, stuck-note safety.
 ui (`app/firmware/src/composer.c`) — app_main/app_audio; screens LIBRARY, PLAYER, SOUND; prefs in blobs keyed by piece id.
@@ -60,7 +60,7 @@ ui (`app/firmware/src/composer.c`) — app_main/app_audio; screens LIBRARY, PLAY
 | 7 | JieLi build on GitHub Actions (disk 99% full; no local VM/Docker) | council | no |
 | 8 | Own SysEx tap with ID 0x7D ahead of the updater's SysEx; updater untouched | council | yes |
 | 9 | Push while playing → stage in RAM, commit at stop (flash erase silences audio ~50 ms/sector) | council | no |
-| 10 | Library in 0x97000–0xF3FFF (372 KB); blobs = per-piece prefs; settings = global | council | yes |
+| 10 | Library in 0x97000–0xDFFFF (292 KB, 73 sectors = all of FL_DATA; 0xE0000 is the updater's staging); blobs = per-piece prefs; settings = global | council | yes |
 | 11 | Piece max 32 KB, 96 PPQ, ≤ 4096 notes/channel; longer → truncated with report | council | no |
 | 12 | Drums: own small synth kit (GM notes 35–59 subset) since Felucca-Engines has none | council | no |
 | 13 | Identity FM-1_95N (unused in hub list as of 2026-11-22); verify before public release | council | yes |

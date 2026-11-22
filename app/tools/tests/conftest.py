@@ -5,21 +5,20 @@ import pytest
 APP = Path(__file__).resolve().parents[2]
 
 
-def run_host(script, *cflags):
-    """Run COMPOSER in host mode; return (log text, wav path)."""
-    r = subprocess.run(["sh", str(APP / "tests/host_e2e.sh"), script, *cflags], capture_output=True, text=True)
+def run_host(script, *cflags, env=None):
+    """Run COMPOSER in host mode (a script name, or the path of a .txt); return (log text, wav path)."""
+    import os
+    r = subprocess.run(["sh", str(APP / "tests/host_e2e.sh"), str(script), *cflags], capture_output=True, text=True,
+                       env={**os.environ, **(env or {})})
     assert r.returncode == 0, r.stderr
-    return (APP / f"build/host/{script}.log").read_text(), APP / f"build/host/{script}.wav"
+    name = Path(str(script)).stem
+    return (APP / f"build/host/{name}.log").read_text(), APP / f"build/host/{name}.wav"
 
 
 def screen(log):
     """The SCREEN lines of a host log: [(ms, y, text)]."""
-    out = []
-    for line in log.splitlines():
-        parts = line.split(None, 4)
-        if len(parts) == 5 and parts[2] == "SCREEN":
-            out.append((int(parts[0]), int(parts[3]), parts[4]))
-    return out
+    import re
+    return [(int(m[1]), int(m[2]), m[3]) for m in re.finditer(r"^ *(\d+) ms  SCREEN (\d+) \d+ ?(.*)$", log, re.M)]
 
 
 def wav_frames(path):

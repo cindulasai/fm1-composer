@@ -9,7 +9,8 @@ import sys
 import tempfile
 
 from . import fit as fitmod
-from .piece import PieceError, encode
+from . import link as linkmod
+from .piece import PieceError, decode, encode
 
 DEFAULT_T2M = os.path.expanduser("~/Claude/Projects/text2midi_v2/target/release/t2m-cli")
 
@@ -81,6 +82,90 @@ def cmd_compose(a) -> int:
         return _convert(mid, out, a.name or stem, a.force, a.poly)
 
 
+def _link(a):
+    return linkmod.Link(linkmod.open_port(a.port), timeout=a.timeout)
+
+
+def cmd_push(a) -> int:
+    pieces = []
+    for path in a.files:
+        with open(path, "rb") as f:
+            data = f.read(linkmod.CHUNK * 129)
+        try:
+            pieces.append((path, data, decode(data).name))
+        except PieceError as e:
+            raise UsageError(f"{path}: {e}") from e
+    port = linkmod.open_port(a.port)
+    lk, pushed, verified, refused, checked = linkmod.Link(port, timeout=a.timeout), 0, 0, 0, 0
+    try:
+        for path, data, name in pieces:
+            try:
+                how, pid = lk.put(data)
+                if how == "staged":
+                    print(f"{name}: staged — saves when playback stops")
+                    if a.no_wait:
+                        pushed += 1
+                        continue
+                    pid = lk.wait_saved(a.wait)
+                    print(f"{name}: saved")
+                pushed += 1
+                ok = lk.get(pid, len(data)) == data
+                checked += 1
+                verified += ok
+                print(f"{name}: #{pid}, {len(data)} bytes, {'verified' if ok else 'READ BACK DIFFERS'}")
+            except linkmod.LinkError as e:
+                refused += 1
+                print(f"{name}: refused — {e}", file=sys.stderr)
+    finally:
+        port.close()
+    print(f"pushed {pushed}, verified {verified}" + (f", refused {refused}" if refused else ""))
+    return 1 if refused or verified < checked else 0
+
+
+def cmd_list(a) -> int:
+    lk = _link(a)
+    try:
+        info, items = lk.info(), lk.list()
+    finally:
+        lk.port.close()
+    for it in items:
+        print(f"#{it['id']:<5} {it['name']:<24} {it['len'] / 1024:5.1f} KB")
+    print(f"{len(items)} piece{'s' if len(items) != 1 else ''}, {info['free'] // 1024} KB free"
+          + (", playing" if info["playing"] else "") + (", one piece waiting to be saved" if info["staged"] else ""))
+    return 0
+
+
+def cmd_delete(a) -> int:
+    lk = _link(a)
+    try:
+        lk.delete(a.id)
+    finally:
+        lk.port.close()
+    print(f"deleted #{a.id}")
+    return 0
+
+
+def cmd_pull(a) -> int:
+    lk = _link(a)
+    try:
+        hit = [it for it in lk.list() if it["id"] == a.id]
+        if not hit:
+            raise linkmod.LinkError(10, f"no piece #{a.id}")
+        data = lk.get(a.id, hit[0]["len"])
+    finally:
+        lk.port.close()
+    decode(data)                                                  # what came back is a whole piece
+    out = a.out or f"{hit[0]['name'] or 'piece'}.f1p"
+    _write(out, data, a.force)
+    print(f"#{a.id} -> {out} ({len(data)} bytes)")
+    return 0
+
+
+def _port_args(x):
+    x.add_argument("--port", help="MIDI port (part of its name; default FM-1, or $FM1C_PORT)")
+    x.add_argument("--timeout", type=float, default=3.0, help=argparse.SUPPRESS)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = _Parser(prog="fm1c", description="Compose, convert and push pieces for COMPOSER on the M-VAVE FM-1.")
     sub = p.add_subparsers(dest="cmd", parser_class=_Parser)
@@ -100,6 +185,25 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--force", action="store_true")
     k.add_argument("--poly", type=int, default=6, choices=range(1, 17), metavar="1..16")
     k.set_defaults(fn=cmd_compose)
+    u = sub.add_parser("push", help="send .f1p pieces to the FM-1's library (each read back to verify)")
+    u.add_argument("files", nargs="+")
+    u.add_argument("--no-wait", action="store_true", help="do not wait while a piece is staged during playback")
+    u.add_argument("--wait", type=float, default=600.0, help=argparse.SUPPRESS)
+    _port_args(u)
+    u.set_defaults(fn=cmd_push)
+    li = sub.add_parser("list", help="the pieces in the FM-1's library")
+    _port_args(li)
+    li.set_defaults(fn=cmd_list)
+    d = sub.add_parser("delete", help="remove a piece from the FM-1's library by its #id")
+    d.add_argument("id", type=int)
+    _port_args(d)
+    d.set_defaults(fn=cmd_delete)
+    g = sub.add_parser("pull", help="copy a piece from the FM-1 back to this computer")
+    g.add_argument("id", type=int)
+    g.add_argument("-o", "--out")
+    g.add_argument("--force", action="store_true")
+    _port_args(g)
+    g.set_defaults(fn=cmd_pull)
     return p
 
 
@@ -107,14 +211,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         a = build_parser().parse_args(argv)
         if not getattr(a, "fn", None):
-            raise UsageError("a command is needed: convert, compose (fm1c --help)")
+            raise UsageError("a command is needed: convert, compose, push, list, delete, pull (fm1c --help)")
         return a.fn(a)
     except UsageError as e:
         print(f"fm1c: {e}", file=sys.stderr)
         return 2
-    except (fitmod.FitError, PieceError) as e:
+    except (fitmod.FitError, PieceError, linkmod.PortError) as e:
         print(f"fm1c: {e}", file=sys.stderr)
         return 2
+    except linkmod.LinkError as e:
+        print(f"fm1c: the FM-1 refused: {e}", file=sys.stderr)
+        return 1
     except KeyboardInterrupt:
         print("fm1c: interrupted", file=sys.stderr)
         return 2

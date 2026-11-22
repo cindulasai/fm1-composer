@@ -7,9 +7,9 @@ cd "$(dirname "$0")/.."
 [ -f build/sanflags ] && { cat build/sanflags; exit 0; }
 mkdir -p build/san
 printf 'int main(void){return 0;}\n' > build/san/t.c
-F="-fsanitize=undefined -fno-sanitize-recover=all"
+F="-fsanitize=undefined,bounds -fno-sanitize-recover=all"
 if cc -fsanitize=address,undefined -o build/san/t build/san/t.c 2>/dev/null &&
    ( perl -e 'alarm 5; exec @ARGV' build/san/t ) >/dev/null 2>&1; then
-    F="-fsanitize=address,undefined -fno-sanitize-recover=all"
+    F="-fsanitize=address,undefined,bounds -fno-sanitize-recover=all"
 fi
 echo "$F" | tee build/sanflags
