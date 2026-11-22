@@ -401,11 +401,14 @@ static void platform_poll(void)
     {                                           /* the app's own SysEx (e.g. ID 7D) first; the rest to the updater */
         const uint8_t *sp;
         uint32_t sn;
-        if (ota_frame_get(&sp, &sn) && APP_SYSEX(sp, sn))
-            ota_frame_done();
+        if (ota_frame_get(&sp, &sn)) {      /* (only a frame seen here: one finishing meanwhile waits a pass) */
+            if (APP_SYSEX(sp, sn)) ota_frame_done();
+            else ota_service();
+        }
     }
-#endif
+#else
     ota_service();
+#endif
     if (usb.ota_req) {
         usb.ota_req = 0;
         if (flash_ok)
