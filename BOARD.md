@@ -5,7 +5,7 @@
 | US-2 | Piece format .f1p | 1 | proven | 0 |
 | US-3 | fm1c convert / compose | 1 | proven | 0 |
 | US-4 | Synth: 8 channels, voice pool, sounds | 1 | proven | 0 |
-| US-5 | Player | 1 | todo | 0 |
+| US-5 | Player | 1 | proven | 0 |
 | US-6 | Library in flash | 1 | todo | 0 |
 | US-7 | Transfer | 1 | todo | 0 |
 | US-8 | UI | 1 | todo | 0 |

@@ -17,3 +17,5 @@ app/firmware/src/drums.c | nz = (hp * (64 + bright) + nz * (127 - bright) / 2) >
 app/tools/gen_synth_tables.py | ang = [(p / 64 if p <= 64 else 1 + (p - 64) / 63) * math.pi / 4 for p in range(128)]          # 64 = centre (MIDI) | equivalent: at p == 64 both branches give pi/4
 app/firmware/src/synth.c | for (ch = 0; ch < NPART; ch++) synth_ch_off(ch); | equivalent: synth_ch_off(NPART) returns at once
 app/firmware/src/synth.c | int32_t l = out[2 * i] + softclip(mixl[i] >> 1), r = out[2 * i + 1] + softclip(mixr[i] >> 1); | equivalent: out holds only this synth (app_audio zeroes it); the whole mix inverted is the same sound
+app/firmware/src/player.c | if (ch < pl_v.nch) { | equivalent: a cursor on channel nch is never read (pl_events stops at nch); at nch == 8 the loop has ended first
+app/firmware/src/player.c | static void player_tempo(uint32_t x10) { pl_tempo = x10 < 300u ? 300u : x10 > 3000u ? 3000u : x10; } | equivalent: at 300 both arms give 300
