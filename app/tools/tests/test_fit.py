@@ -111,3 +111,23 @@ def test_3_3_fold_lands_on_the_edge(tmp_path):
     f = make_midi(tmp_path / "e2.mid", [("lead", 0, [(0, 108, 10, 80), (100, 12, 10, 80)])])
     piece, _ = fit(str(f))
     assert sorted(n.pitch for n in piece.channels[0].notes) == [24, 96]
+
+
+def test_3_3_note_lengths_survive_fitting(tmp_path):
+    from fm1c import fit as fitmod
+    mid = make_midi(tmp_path / "d.mid", [("lead", 0, [(960, 60, 480, 90), (1920, 62, 240, 90)])])   # 480 per beat
+    piece, _ = fitmod.fit(str(mid))
+    assert [(n.tick, n.dur) for n in piece.channels[0].notes] == [(192, 96), (384, 48)]
+
+
+def test_3_3_a_note_never_released_ends_with_its_track(tmp_path):
+    import mido
+    from fm1c import fit as fitmod
+    m = mido.MidiFile(type=1, ticks_per_beat=480)
+    m.tracks.append(mido.MidiTrack([mido.MetaMessage("track_name", name="lead", time=0),
+                                    mido.Message("note_on", note=60, velocity=90, time=960),      # never let go
+                                    mido.Message("note_on", note=64, velocity=90, time=960),
+                                    mido.Message("note_off", note=64, velocity=0, time=240)]))
+    m.save(tmp_path / "hang.mid")
+    piece, _ = fitmod.fit(str(tmp_path / "hang.mid"))
+    assert sorted((n.tick, n.pitch, n.dur) for n in piece.channels[0].notes) == [(192, 60, 240), (384, 64, 48)]

@@ -154,7 +154,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
         for p in [p for p in parts if p.role == "percussion"]:
             drums.notes += p.notes
             parts.remove(p)
-            rep.add(f"part '{p.name or 'percussion'}' merged into the drums")
+            rep.add(f"part '{p.name}' merged into the drums")   # (percussion is known by its name)
     parts.sort(key=lambda p: (PRIORITY.index(p.role), -len(p.notes)))
     for p in parts[MAX_CH:]:
         rep.add(f"part '{p.name or p.role}' ({p.role}, {len(p.notes)} notes) dropped: the FM-1 plays {MAX_CH} channels")

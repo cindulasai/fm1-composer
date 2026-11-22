@@ -42,6 +42,7 @@ def hostile_cases(tmp):
     good = make_midi(tmp / "good.mid", [("lead", 0, [(0, 60, 100, 90)])])
     (tmp / "corrupt.mid").write_bytes(b"MThd\x00\x00\x00\x06garbage")
     empty = make_midi(tmp / "empty.mid", [("lead", 0, [])])
+    late = make_midi(tmp / "late.mid", [("lead", 0, [(1000 * 4 * 480, 60, 100, 90)])])   # past bar 999
     big = tmp / "big.mid"
     with open(big, "wb") as f:
         f.truncate(10 * 1024 * 1024)
@@ -64,13 +65,14 @@ def hostile_cases(tmp):
         "bad poly": (["convert", good, "--poly", "0"], "invalid choice"),
         "t2m-cli missing": (["compose", BRIEF, "--t2m", tmp / "no-t2m"], "t2m-cli not found"),
         "brief missing": (["compose", tmp / "nobrief.json", "--t2m", "/bin/sh"], "no such brief"),
+        "no notes left": (["convert", late, "-o", tmp / "late.f1p"], "no notes left to play"),
         "t2m-cli not runnable": (["compose", BRIEF, "--t2m", noexec], "t2m-cli not found"),
     }
 
 
 @pytest.mark.parametrize("case", list(hostile_cases(Path("/tmp")).keys()) if False else [
     "missing file", "directory", "corrupt MIDI", "empty MIDI", "10 MB MIDI", "output exists", "output folder missing",
-    "unknown flag", "missing arg", "no command", "bad poly", "t2m-cli missing", "brief missing", "t2m-cli not runnable"])
+    "unknown flag", "missing arg", "no command", "bad poly", "t2m-cli missing", "brief missing", "t2m-cli not runnable", "no notes left"])
 def test_3_4_hostile_inputs_exit_2_cleanly(case, tmp_path):
     args, msg = hostile_cases(tmp_path)[case]
     before = sorted(p.name for p in tmp_path.iterdir())
@@ -137,3 +139,19 @@ def test_3_2_compose_names_the_output_after_the_brief(tmp_path):
     r = fm1c("compose", brief, "--t2m", fake_t2m(tmp_path), cwd=tmp_path)
     assert r.returncode == 0, r.stderr
     assert decode((tmp_path / "night drive.f1p").read_bytes())
+
+
+def test_3_1_outputs_are_ordinary_files(tmp_path):
+    import os, stat
+    mid = make_midi(tmp_path / "a.mid", [("lead", 0, [(0, 60, 240, 90)])])
+    old = os.umask(0o022)
+    try:
+        r = fm1c("convert", mid, "-o", tmp_path / "a.f1p")
+    finally:
+        os.umask(old)
+    assert r.returncode == 0 and stat.S_IMODE((tmp_path / "a.f1p").stat().st_mode) == 0o644
+
+
+def test_3_4_help_carries_the_claims():
+    r = fm1c("--help")
+    assert "16 voices (measured in fm1-emu" in r.stdout and "Inspired by SLOOP" in r.stdout

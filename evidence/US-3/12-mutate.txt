@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-3
+SURVIVED app/tools/fm1c/fit.py:117  " - " -> " + "  | p.notes.append((st, note, max(1, t - st), v))
+SURVIVED app/tools/fm1c/cli.py:194  " and " -> " or "  | p = _Parser(prog="fm1c", description="Compose, convert and push pieces for COMPOSER on the M-VAVE FM-1.",
+MUTANTS: 12 tried, 10 killed, 2 survived (of 68 candidates in US-3)
+EXIT_CODE: 1

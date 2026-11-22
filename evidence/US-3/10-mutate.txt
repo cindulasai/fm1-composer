@@ -1,0 +1,6 @@
+COMMAND: sh prove mutants US-3
+SURVIVED app/tools/fm1c/fit.py:117  " - " -> " + "  | p.notes.append((st, note, max(1, t - st), v))
+SURVIVED app/tools/fm1c/fit.py:157  " or " -> " and "  | rep.add(f"part '{p.name or 'percussion'}' merged into the drums")
+SURVIVED app/tools/fm1c/cli.py:20  " and " -> " or "  | "Inspired by SLOOP (isod89/sloop-fm1); built on Dinghy and Felucca.")
+MUTANTS: 12 tried, 9 killed, 3 survived (of 70 candidates in US-3)
+EXIT_CODE: 1
