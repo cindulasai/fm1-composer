@@ -1,0 +1,483 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* US-4: synth.c through its interface: voice budget and stealing, every sound audible and silent after release,
+ * role defaults, hostile calls ignored, render cost. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#define VCHK(k) ((k) < NVOICE ? (k) : (abort(), 0u))   /* every voice index in range */
+#include "synth.c"
+
+static int fails;
+#define CHECK(c, ...) do { if (!(c)) { printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); fails++; } } while (0)
+
+static int32_t peak, last_peak;
+static int64_t tail_abs, tail_n;
+static void run(uint32_t blocks, uint32_t tail_from)
+{
+    int32_t out[2 * CTL];
+    uint32_t b, i;
+    for (b = 0; b < blocks; b++) {
+        memset(out, 0, sizeof out);
+        synth_apply();
+        synth_render(out, CTL);
+        for (i = 0; i < 2 * CTL; i++) {
+            int32_t a = out[i] < 0 ? -out[i] : out[i];
+            if (a > 32767) { CHECK(0, "sample %d beyond full scale", out[i]); }
+            if (a > peak) peak = a;
+            if (b >= tail_from) { tail_abs += a; tail_n++; if (a > last_peak) last_peak = a; }
+        }
+    }
+}
+#define SEC(s) ((uint32_t)((s) * 44100 / CTL))
+
+static uint32_t find(const char *eng, const char *pr) { uint32_t s = sound_find(eng, pr); CHECK(s < sound_count, "no %s %s", eng, pr); return s; }
+
+static void test_4_1_budget_and_stealing(void)
+{
+    uint32_t ch, pad, k;
+    synth_init();
+    pad = find("ANALOG", "SOFT PAD");
+    for (ch = 0; ch < NPART; ch++) synth_sound(ch, pad);
+    for (ch = 0; ch < NPART; ch++) { synth_on(ch, 60, 100); run(1, 99); synth_on(ch, 64, 100); run(1, 99); }
+    CHECK(synth_active() == 16, "16 notes sound: %u", synth_active());
+    synth_off(3, 60);                                   /* released, still sounding */
+    run(2, 99);
+    CHECK(synth_active() == 16, "released still counts: %u", synth_active());
+    synth_on(0, 67, 100);                               /* the 17th: takes the released voice of channel 3 */
+    CHECK(synth_active() == 16, "budget kept: %u", synth_active());
+    CHECK(synth_count(3) == 1 && synth_count(0) == 3, "released voice stolen: ch3 %u ch0 %u", synth_count(3), synth_count(0));
+    synth_on(1, 67, 100);                               /* nothing released: the oldest of channel 1 */
+    CHECK(synth_active() == 16 && synth_count(1) == 2, "own oldest stolen: %u / %u", synth_active(), synth_count(1));
+    for (k = 0; k < NVOICE; k++) {
+        voice_t *v = &trk[1].v[k];
+        if (sounding(v)) CHECK(v->note == 64 || v->note == 67, "channel 1 kept %u", v->note);
+    }
+    run(SEC(0.05), 99);                                 /* the stolen ones fade out and free their slots */
+    for (k = 0; k < NVOICE; k++) CHECK(trk[1].v[k].stage != 4u, "fade finished");
+}
+
+static void test_4_1_mono_and_retrigger(void)
+{
+    uint32_t bass;
+    synth_init();
+    bass = find("ANALOG", "SQR BASS");                  /* a MONO preset */
+    synth_sound(2, bass);
+    synth_on(2, 40, 100); synth_on(2, 43, 100); synth_on(2, 45, 100);
+    CHECK(synth_count(2) == 1 && trk[2].v[0].note == 45, "mono plays the last note: %u", synth_count(2));
+    synth_sound(4, find("ANALOG", "SOFT PAD"));
+    synth_on(4, 60, 100); synth_on(4, 60, 90);          /* the same note again: one voice */
+    CHECK(synth_count(4) == 1, "same note retriggers: %u", synth_count(4));
+    run(SEC(0.5), 99);
+    {
+        int32_t before = trk[4].v[0].env;
+        synth_on(4, 60, 90);                            /* a held note retriggered: the envelope goes on */
+        CHECK(before > (1 << 20) && trk[4].v[0].env == before, "retrigger keeps the level: %d -> %d", before, trk[4].v[0].env);
+    }
+}
+
+static void test_4_2_every_sound_sounds_and_ends(void)
+{
+    uint32_t id;
+    synth_init();
+    for (id = 0; id < sound_count; id++) {
+        uint32_t note = sounds[id].e == &ENG_KIT ? 38u : 60u;
+        synth_init();
+        synth_sound(0, id);
+        synth_level(0, 127, 64);
+        peak = 0; last_peak = 0; tail_abs = 0; tail_n = 0;
+        synth_on(0, note, 110);
+        run(SEC(1.5), 1u << 30);
+        CHECK(peak > 300, "%s %s is silent (peak %d)", sound_engine(id), sound_name(id), peak);
+        synth_off(0, note);
+        peak = 0;
+        run(SEC(11.0), SEC(10.5));               /* the longest release (127) is 10 s to -60 dB */
+        CHECK(tail_abs / (tail_n ? tail_n : 1) < 200, "%s %s does not end (mean %lld)", sound_engine(id), sound_name(id),
+              (long long)(tail_abs / (tail_n ? tail_n : 1)));
+        CHECK(synth_active() == 0, "%s %s voice stuck", sound_engine(id), sound_name(id));
+    }
+}
+
+static void test_4_2_every_drum_sounds(void)
+{
+    static const uint8_t NOTES[] = {36, 37, 38, 39, 42, 45, 46, 49, 51, 56, 70};
+    uint32_t i;
+    for (i = 0; i < sizeof NOTES; i++) {
+        synth_init();
+        synth_sound(0, find("KIT", "STD KIT"));
+        synth_level(0, 127, 64);
+        peak = 0;
+        synth_on(0, NOTES[i], 120);
+        run(SEC(0.05), 1u << 30);
+        CHECK(peak > 300, "drum note %u silent (%d)", NOTES[i], peak);
+        run(SEC(2.0), 1u << 30);
+        CHECK(synth_active() == 0, "drum note %u still sounding after 2 s", NOTES[i]);
+    }
+}
+
+static void test_4_3_role_defaults(void)
+{
+    uint32_t r;
+    synth_init();
+    for (r = 0; r < ROLE_COUNT; r++) {
+        uint32_t d = sound_default(r);
+        CHECK(d < sound_count && sound_find(ROLE_SOUND[r][0], ROLE_SOUND[r][1]) == d, "role %u default missing", r);
+        CHECK(str_eq(sound_name(d), ROLE_SOUND[r][1]) && str_eq(sound_engine(d), ROLE_SOUND[r][0]), "role %u name", r);
+    }
+    CHECK(sound_default(ROLE_DRUMS) == find("KIT", "STD KIT"), "drums get the kit");
+    CHECK(sound_default(200) == sound_default(ROLE_OTHER), "unknown role: other's sound");
+    CHECK(sound_count == 40 && sound_count <= SOUND_MAX, "catalog size %u", sound_count);
+    CHECK(str_eq(sound_name(sound_count), "?") && str_eq(sound_engine(9999), "?"), "out of range names");
+}
+
+static void test_4_4_hostile_calls_ignored(void)
+{
+    uint32_t s0, i;
+    synth_init();
+    s0 = chs[0].sound;
+    synth_on(8, 60, 100); synth_on(0, 128, 100); synth_on(0, 60, 0); synth_on(0, 60, 200); synth_on(99999, 1, 1);
+    CHECK(synth_active() == 0, "bad notes ignored: %u", synth_active());
+    synth_sound(0, 9999); synth_sound(8, 0);
+    CHECK(chs[0].sound == s0, "bad sound ignored");
+    synth_off(0, 50); synth_off(8, 50); synth_off(0, 200); synth_ch_off(8); synth_level(9, 1, 1);
+    synth_level(1, 300, 300);
+    CHECK(chs[1].vol == 127 && chs[1].pan == 127, "levels clamp: %u %u", chs[1].vol, chs[1].pan);
+    for (i = 0; i < 32; i++) CHECK(synth_post(SC_LEVEL, 0, 100, 64) == 0, "post %u", i);
+    CHECK(synth_post(SC_LEVEL, 0, 100, 64) == -1, "queue full refuses");
+    synth_post(99, 0, 0, 0);
+    run(1, 99);
+    CHECK(sq_r == sq_w, "queue drained");
+    synth_post(SC_NOTE_ON, 0, 60, 100); run(1, 99);
+    CHECK(synth_count(0) == 1, "posted note on");
+    synth_post(SC_NOTE_OFF, 0, 60, 0); synth_post(SC_CH_OFF, 0, 0, 0); synth_post(SC_ALL_OFF, 0, 0, 0);
+    synth_post(SC_SOUND, 0, (uint8_t)find("ANALOG", "SAW LEAD"), 0);
+    run(SEC(3), 99);
+    CHECK(synth_active() == 0 && chs[0].sound == find("ANALOG", "SAW LEAD"), "posted off + sound: %u", synth_active());
+    synth_on(0, 60, 100); synth_ch_off(0); run(SEC(3), 99);
+    CHECK(synth_active() == 0, "channel off ends notes");
+    synth_sound(5, find("KIT", "STD KIT")); synth_on(5, 49, 100); synth_off(5, 49);
+    CHECK(synth_count(5) == 1, "note off does not cut a drum");
+    synth_all_off(); run(SEC(0.1), 99);
+    CHECK(synth_active() == 0, "all off stops drums too");
+}
+
+static void test_4_5_render_cost(void)
+{
+    uint32_t id, ch, worst = 0, worst_id = 0;
+    clock_t t0;
+    for (id = 0; id < sound_count; id++) {             /* the most expensive sound, 16 voices */
+        clock_t c0 = clock(), c;
+        synth_init();
+        for (ch = 0; ch < 8; ch++) { synth_sound(ch, id); synth_on(ch, 48 + ch, 100); synth_on(ch, 55 + ch, 100); }
+        run(200, 1u << 30);
+        c = clock() - c0;
+        if ((uint32_t)c > worst) { worst = (uint32_t)c; worst_id = id; }
+    }
+    synth_init();
+    for (ch = 0; ch < 8; ch++) { synth_sound(ch, worst_id); synth_on(ch, 48 + ch, 100); synth_on(ch, 55 + ch, 100); }
+    t0 = clock();
+    run(SEC(5), 1u << 30);
+    {
+        double us_per_256 = (double)(clock() - t0) / CLOCKS_PER_SEC * 1e6 / (SEC(5) / 8.0);
+        printf("render cost: worst sound %s %s, 16 voices: %.0f us per 256 frames on this host (budget 5805)\n",
+               sound_engine(worst_id), sound_name(worst_id), us_per_256);
+        CHECK(us_per_256 < 2000.0, "host render too slow: %.0f us", us_per_256);
+    }
+}
+
+static void test_4_1_full_channel_takes_its_released_voice(void)
+{
+    uint32_t k, n;
+    synth_init();
+    synth_sound(6, find("ANALOG", "SOFT PAD"));
+    for (n = 0; n < NVOICE; n++) { synth_on(6, 50 + n, 100); run(1, 99); }
+    synth_off(6, 50 + NVOICE - 1);                      /* the newest is released, the oldest still held */
+    synth_on(6, 80, 100);
+    for (k = 0; k < NVOICE; k++) {
+        voice_t *v = &trk[6].v[k];
+        CHECK(v->note != 50 + NVOICE - 1 || !sounding(v) || v->note == 80, "released voice reused");
+        if (v->note == 50) CHECK(sounding(v), "oldest held voice kept");
+    }
+}
+
+static void test_4_2_sustain_level_held(void)
+{
+    uint32_t pad;
+    int32_t want;
+    synth_init();
+    pad = find("ANALOG", "SOFT PAD");
+    synth_sound(0, pad);
+    synth_on(0, 60, 100);
+    run(SEC(6), 99);
+    want = (int32_t)sounds[pad].pr->env[2] << 17;
+    CHECK(trk[0].v[0].env > want - want / 50 && trk[0].v[0].env < want + want / 50, "sustain %d want %d", trk[0].v[0].env, want);
+}
+
+static double low_share(uint32_t note, uint32_t ms0, uint32_t ms1)
+{
+    int32_t out[2 * CTL], buf[44100];
+    uint32_t b, i, n = 0, hi = 0, nb = SEC(ms1 / 1000.0) + 1;
+    int32_t pk = 0;
+    synth_init();
+    synth_sound(0, find("KIT", "STD KIT"));
+    synth_level(0, 127, 64);
+    synth_on(0, note, 120);
+    for (b = 0; b < nb; b++) {
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+        for (i = 0; i < CTL; i++) {
+            uint32_t at = b * CTL + i;
+            if (at >= ms0 * 441u / 10u && at < ms1 * 441u / 10u && n < 44100u) buf[n++] = out[2 * i];
+        }
+    }
+    for (i = 0; i < n; i++) { int32_t a = buf[i] < 0 ? -buf[i] : buf[i]; if (a > pk) pk = a; }
+    for (i = 0; i < n; i++) { int32_t a = buf[i] < 0 ? -buf[i] : buf[i]; if (a * 4 < pk) hi++; }
+    return n ? (double)hi / n : 0.0;
+}
+
+static void test_4_2_drum_shapes(void)
+{
+    int32_t out[2 * CTL];
+    uint32_t b, i;
+    double kick = low_share(36, 2, 12), bell = low_share(56, 2, 6);
+    int32_t first;
+    CHECK(kick < 0.30, "kick tone is a sine (share below a quarter of the peak %.2f)", kick);
+    CHECK(bell > 0.35, "cowbell tone is two squares (share below a quarter of the peak %.2f)", bell);
+    synth_init();                                       /* the kick still rings at 100 ms (320 ms decay) */
+    synth_sound(0, find("KIT", "STD KIT"));
+    synth_level(0, 127, 64);
+    synth_on(0, 36, 120);
+    peak = 0;
+    first = 0;
+    for (b = 0; b < SEC(0.12); b++) {
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+        if (b < SEC(0.01))
+            for (i = 0; i < 2 * CTL; i++) { int32_t a = out[i] < 0 ? -out[i] : out[i]; if (a > first) first = a; }
+        if (b >= SEC(0.09))
+            for (i = 0; i < 2 * CTL; i++) { int32_t a = out[i] < 0 ? -out[i] : out[i]; if (a > peak) peak = a; }
+    }
+    CHECK(peak * 20 > first && first > 5000, "kick at 100 ms: %d of %d", peak, first);
+}
+
+static void test_4_4_drum_render_stays_in_its_buffer(void)
+{
+    int32_t out[CTL + 1];
+    vmod_t m;
+    uint32_t i;
+    synth_init();
+    synth_sound(0, find("KIT", "STD KIT"));
+    synth_on(0, 38, 120);
+    memset(&m, 0, sizeof m);
+    m.amp0 = m.amp1 = 32767;
+    for (i = 0; i <= CTL; i++) out[i] = 0x5A5A5A5A;
+    for (i = 0; i < 16; i++) out[i] = 0;
+    dk_render(&trk[0], &trk[0].v[0], out, 16, &m);
+    CHECK(out[16] == 0x5A5A5A5A, "drum render wrote past n");
+}
+
+static void test_4_4_channel_8_touches_nothing(void)
+{
+    synth_init();
+    synth_sound(NPART, 0); synth_level(NPART, 50, 50); synth_on(NPART, 60, 100); synth_off(NPART, 60);
+    synth_ch_off(NPART); synth_post(SC_SOUND, NPART, 1, 0); synth_post(SC_LEVEL, NPART, 9, 9); run(2, 99);
+    /* (an index past the channels would stop this test: the bounds sanitizer) */
+    CHECK(synth_count(NPART) == 0, "channel 8 counts nothing");
+}
+
+static void test_4_3_lookups_at_the_edges(void)
+{
+    synth_init();
+    CHECK(sound_find("NOPE", "NOPE") == sound_count && sound_find("KIT", "NOPE") == sound_count, "missing sound");
+    CHECK(str_eq(sound_name(sound_count), "?") && str_eq(sound_engine(sound_count), "?"), "one past the end");
+    CHECK(str_eq(sound_name(sound_count - 1), sounds[sound_count - 1].pr->name), "the last sound");
+    CHECK(sound_default(ROLE_COUNT) == sound_default(ROLE_OTHER) && sound_default(ROLE_COUNT - 1) == find("ANALOG", "PLUCK"), "role edges");
+}
+
+static void test_4_2_pan_and_volume(void)
+{
+    int32_t out[2 * CTL];
+    int64_t l = 0, r = 0;
+    uint32_t b, i, pass;
+    for (pass = 0; pass < 3; pass++) {
+        synth_init();
+        synth_sound(0, find("ANALOG", "SINE KEY"));
+        synth_level(0, pass == 2 ? 0 : 127, pass == 1 ? 0 : 64);
+        synth_on(0, 60, 120);
+        l = r = 0;
+        for (b = 0; b < SEC(0.2); b++) {
+            memset(out, 0, sizeof out);
+            synth_render(out, CTL);
+            for (i = 0; i < CTL; i++) { l += out[2 * i] < 0 ? -out[2 * i] : out[2 * i]; r += out[2 * i + 1] < 0 ? -out[2 * i + 1] : out[2 * i + 1]; }
+        }
+        if (pass == 0) CHECK(l > 100000 && r == l, "centre: L %lld R %lld", (long long)l, (long long)r);
+        if (pass == 1) CHECK(l > 100000 && r == 0, "hard left: L %lld R %lld", (long long)l, (long long)r);
+        if (pass == 2) CHECK(l == 0 && r == 0, "volume 0 is silent");
+    }
+}
+
+static void test_4_1_retrigger_keeps_engine_state(void)
+{
+    uint32_t id, k, tried = 0;
+    for (id = 0; id < sound_count; id++) {
+        voice_t *v;
+        int32_t s[8];
+        uint32_t ph0;
+        if (!sounds[id].e->keep || sounds[id].e->oneshot) continue;
+        synth_init();
+        synth_sound(0, id);
+        synth_on(0, 60, 100);
+        run(10, 99);
+        v = &trk[0].v[0];
+        for (k = 0; k < 8; k++) s[k] = v->s[k];
+        ph0 = v->ph[0];
+        synth_on(0, 60, 90);
+        CHECK(v->ph[0] == ph0, "%s: retrigger keeps the phase", sound_name(id));
+        for (k = 0; k < 8; k++)
+            if (k != 2 && k != 3 && (sounds[id].e->keep >> k & 1u)) CHECK(v->s[k] == s[k], "%s: keeps s[%u]", sound_name(id), k);
+        tried++;
+    }
+    CHECK(tried > 0, "some engine keeps state");
+}
+
+static void test_4_1_reused_voice_starts_like_new(void)
+{
+    uint32_t id = find("ANALOG", "SAW LEAD"), ph_new, k;
+    int32_t s_new[8];
+    synth_init(); synth_sound(0, id); synth_on(0, 64, 100);
+    ph_new = trk[0].v[0].ph[0];
+    for (k = 0; k < 8; k++) s_new[k] = trk[0].v[0].s[k];
+    synth_init(); synth_sound(0, id); synth_on(0, 64, 100);
+    trk[0].v[0].stage = 0; trk[0].v[0].active = 0;      /* (a used voice: its old state still there) */
+    trk[0].v[0].ph[0] = 0x12345678u; trk[0].v[0].s[5] = 999;
+    synth_on(0, 64, 100);
+    CHECK(trk[0].v[0].ph[0] == ph_new, "reused voice phase %u, new %u", trk[0].v[0].ph[0], ph_new);
+    CHECK(trk[0].v[0].s[5] == s_new[5], "reused voice: old engine state cleared (%d)", trk[0].v[0].s[5]);   /* (s[2] may seed from the age) */
+}
+
+static void test_4_2_decay_falls_to_sustain(void)
+{
+    uint32_t id = find("ANALOG", "SINE KEY"), b;
+    int32_t sus = (int32_t)sounds[id].pr->env[2] << 17, last = 1 << 24;
+    synth_init(); synth_sound(0, id); synth_on(0, 60, 100);
+    while (trk[0].v[0].stage == 1u) run(1, 99);
+    CHECK(sus < (1 << 24), "the preset decays");
+    for (b = 0; b < SEC(3); b++) {
+        run(1, 99);
+        CHECK(trk[0].v[0].env >= sus && trk[0].v[0].env <= last, "decay block %u: %d (sus %d)", b, trk[0].v[0].env, sus);
+        last = trk[0].v[0].env;
+        if (fails) break;
+    }
+}
+
+static void test_4_2_render_adds_to_out(void)
+{
+    int32_t a[2 * CTL], b[2 * CTL];
+    uint32_t i, blk;
+    for (blk = 0; blk < 20; blk++) {
+        synth_init(); synth_sound(0, find("ANALOG", "SAW LEAD")); synth_on(0, 60, 120);
+        for (i = 0; i <= blk; i++) { memset(a, 0, sizeof a); synth_render(a, CTL); }
+        synth_init(); synth_sound(0, find("ANALOG", "SAW LEAD")); synth_on(0, 60, 120);
+        for (i = 0; i <= blk; i++) { for (int j = 0; j < 2 * CTL; j++) b[j] = 1000; synth_render(b, CTL); }
+        for (i = 0; i < 2 * CTL; i++) CHECK(b[i] == a[i] + 1000 || b[i] == 32767, "mixes into out: %d vs %d", b[i], a[i]);
+        if (fails) break;
+    }
+}
+
+static voice_t *drum(uint32_t note, int e0, int e1, int e2, int e3)
+{
+    synth_init();
+    synth_sound(0, find("KIT", "STD KIT"));
+    synth_level(0, 127, 64);
+    trk[0].p[P_E0] = (int16_t)e0; trk[0].p[P_E1] = (int16_t)e1; trk[0].p[P_E2] = (int16_t)e2; trk[0].p[P_E3] = (int16_t)e3;
+    synth_on(0, note, 120);
+    return &trk[0].v[0];
+}
+
+static double drum_meas(uint32_t note, int e2, int e3, uint32_t ms, double *rms)
+{
+    int32_t out[2 * CTL], prev = 0;
+    uint32_t b, i, zc = 0, n = 0;
+    double sq = 0;
+    drum(note, 64, 64, e2, e3);
+    for (b = 0; b < ms * 441u / 10u / CTL; b++) {
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+        for (i = 0; i < CTL; i++) { int32_t x = out[2 * i]; zc += (x < 0) != (prev < 0); prev = x; sq += (double)x * x; n++; }
+    }
+    *rms = __builtin_sqrt(sq / n);
+    return (double)zc / ms;
+}
+
+static void test_4_2_drum_voices(void)
+{
+    uint32_t inc64, inc0, inc127, k0, k127, seed1;
+    double hat, snare, r, r0, r1;
+    inc64 = (uint32_t)drum(36, 64, 64, 64, 0)->s[2];
+    inc0 = (uint32_t)drum(36, 0, 64, 64, 0)->s[2];
+    inc127 = (uint32_t)drum(36, 127, 64, 64, 0)->s[2];
+    CHECK(inc0 < inc64 && inc64 < inc127 && inc127 < inc64 + inc64 / 3, "tune: %u %u %u", inc0, inc64, inc127);
+    CHECK((uint32_t)drum(35, 64, 64, 64, 0)->s[2] == inc64, "35 and 36 are the same kick");
+    CHECK((uint32_t)drum(41, 64, 64, 64, 0)->s[2] == pitch_inc(41 * 16) && (uint32_t)drum(50, 64, 64, 64, 0)->s[2] == pitch_inc(50 * 16), "toms by note");
+    k0 = (uint32_t)drum(38, 64, 0, 64, 0)->s[1];
+    k127 = (uint32_t)drum(38, 64, 127, 64, 0)->s[1];
+    CHECK(k0 < DK[DK_SNARE].k && DK[DK_SNARE].k < k127 && k127 <= 65535, "decay: %u %u", k0, k127);
+    seed1 = (uint32_t)drum(38, 64, 64, 64, 0)->s[4];
+    synth_on(0, 38, 120);                               /* the same drum again: a new hit, new noise */
+    CHECK((uint32_t)trk[0].v[0].s[4] != seed1, "hits differ (noise seed)");
+    drum(36, 64, 64, 64, 0);
+    run(SEC(0.3), 1u << 30);
+    CHECK(trk[0].v[0].active && (uint32_t)trk[0].v[0].s[2] == 4869577u, "the kick bottoms at 50 Hz: %d", trk[0].v[0].s[2]);
+    drum(38, 64, 64, 64, 0);
+    run(SEC(0.3), 1u << 30);
+    CHECK(!trk[0].v[0].active || (uint32_t)trk[0].v[0].s[2] < 4869577u, "only the kick has the floor");
+    hat = drum_meas(42, 64, 0, 20, &r);
+    snare = drum_meas(38, 64, 0, 20, &r);
+    CHECK(hat > snare * 1.3, "hats are brighter: %.1f vs %.1f crossings a ms", hat, snare);
+    drum_meas(36, 64, 0, 30, &r0);
+    drum_meas(36, 64, 127, 30, &r1);
+    CHECK(r1 > r0 * 1.1, "drive is louder: %.0f vs %.0f", r1, r0);
+    drum(56, 64, 64, 64, 0);
+    run(1, 99);
+    CHECK((uint64_t)trk[0].v[0].ph[1] * 100 / trk[0].v[0].ph[0] >= 140 && (uint64_t)trk[0].v[0].ph[1] * 100 / trk[0].v[0].ph[0] <= 145, "cowbell second tone 1.44x");
+}
+
+static void test_4_4_hush_silences_everything(void)
+{
+    uint32_t ch;
+    synth_init();
+    for (ch = 0; ch < NPART; ch++) { synth_sound(ch, find("ANALOG", "SOFT PAD")); synth_on(ch, 50 + ch, 100); synth_on(ch, 60 + ch, 100); }
+    run(SEC(1), 99);
+    synth_hush();
+    CHECK(synth_active() == 0, "hush takes every voice off the budget");
+    peak = 0;
+    run(SEC(0.05), 99);
+    run(2, 0); peak = 0; run(2, 99);
+    CHECK(peak < 30, "hush: silent within 50 ms (%d)", peak);
+}
+
+int main(void)
+{
+    test_4_1_budget_and_stealing();
+    test_4_1_mono_and_retrigger();
+    test_4_1_full_channel_takes_its_released_voice();
+    test_4_2_sustain_level_held();
+    test_4_2_drum_shapes();
+    test_4_2_every_sound_sounds_and_ends();
+    test_4_2_every_drum_sounds();
+    test_4_3_role_defaults();
+    test_4_4_hostile_calls_ignored();
+    test_4_4_drum_render_stays_in_its_buffer();
+    test_4_4_channel_8_touches_nothing();
+    test_4_3_lookups_at_the_edges();
+    test_4_2_pan_and_volume();
+    test_4_1_retrigger_keeps_engine_state();
+    test_4_1_reused_voice_starts_like_new();
+    test_4_2_decay_falls_to_sustain();
+    test_4_2_render_adds_to_out();
+    test_4_2_drum_voices();
+    test_4_4_hush_silences_everything();
+    test_4_5_render_cost();
+    printf("%s (%u sounds)\n", fails ? "FAILED" : "ok", sound_count);
+    return fails ? 1 : 0;
+}

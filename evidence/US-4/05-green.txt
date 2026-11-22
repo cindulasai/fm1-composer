@@ -1,0 +1,5 @@
+COMMAND: cd app && sh check.sh
+FAIL tests/synth_test.c:74: retrigger keeps the level: 3354741 -> 3354741
+render cost: worst sound TRIO CHIP CHOIR, 16 voices: 57 us per 256 frames on this host (budget 5805)
+FAILED (40 sounds)
+EXIT_CODE: 1

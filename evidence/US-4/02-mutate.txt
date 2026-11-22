@@ -1,0 +1,9 @@
+COMMAND: sh prove mutants US-4
+SURVIVED app/firmware/src/synth.c:139  " < " -> " <= "  | for (ch = 0; ch < NPART; ch++) {
+SURVIVED app/firmware/src/synth.c:234  " != " -> " == "  | if (crel != vrel ? crel : c->age < v->age) v = c;
+SURVIVED app/firmware/src/synth.c:285  " + " -> " - "  | v->env = sus + (int32_t)((int64_t)(v->env - sus) * ENV_K[pr->env[1] & 127u] >> 16);
+SURVIVED app/firmware/src/drums.c:71  " * " -> " / "  | v->s[0] = (int32_t)((uint32_t)v->s[0] * (uint32_t)v->s[1] >> 16);
+SURVIVED app/firmware/src/drums.c:92  " == " -> " != "  | if (ty == DK_BELL)
+SURVIVED app/tools/gen_synth_tables.py:22  " * " -> " / "  | vel = [round(32767 * (v / 127) ** 1.6) for v in range(128)]                                  # Q15 velocity curve
+MUTANTS: 12 tried, 6 killed, 6 survived (of 119 candidates in US-4)
+EXIT_CODE: 1

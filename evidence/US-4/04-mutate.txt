@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-4
+SURVIVED app/firmware/src/synth.c:186  " != " -> " == "  | int live = v->active && v->stage != 0u && v->stage != 4u;
+SURVIVED app/firmware/src/synth.c:289  " < " -> " <= "  | if (v->env < (1 << 24) / 2000) { v->env = 0; v->stage = 0; v->active = 0; v->gate = 0; }
+SURVIVED app/firmware/src/drums.c:37  " + " -> " - "  | [DK_RIDE] = {65172, 97391548u, 65535, 24000},   /* noise + 1 kHz ping, 0.9 s */
+SURVIVED app/firmware/src/drums.c:74  " < " -> " <= "  | if (a < 8) { v->active = 0; v->stage = 0; v->gate = 0; return 0; }
+SURVIVED app/firmware/src/drums.c:99  " + " -> " - "  | x = ((tone * tone_share) >> 15) + ((nz * v->s[7]) >> 15);
+MUTANTS: 12 tried, 7 killed, 5 survived (of 116 candidates in US-4)
+EXIT_CODE: 1

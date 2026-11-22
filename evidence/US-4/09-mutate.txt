@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-4
+SURVIVED app/firmware/src/synth.c:351  " + " -> " - "  | int32_t l = out[2 * i] + softclip(mixl[i] >> 1), r = out[2 * i + 1] + softclip(mixr[i] >> 1);
+SURVIVED app/firmware/src/drums.c:50  " == " -> " != "  | if (ty == DK_TOM) inc = pitch_inc((uint32_t)clamp((int32_t)v->note * 16 - 12 * 16, 0, 2047));
+MUTANTS: 12 tried, 10 killed, 2 survived (of 112 candidates in US-4)
+EXIT_CODE: 1

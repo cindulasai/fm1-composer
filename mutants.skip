@@ -1,1 +1,19 @@
 app/firmware/src/piece.h | for (i = 0; i < PIECE_NAME; i++) v->name[i] = (char)b[16 + i]; | equivalent: name[24] is set to 0 on the next line, so copying b[40] there first changes nothing
+app/firmware/src/synth.c | for (ch = 0; ch < NPART; ch++) { | equivalent: ch == NPART reaches synth_sound/synth_level, which both return at once for ch >= NPART
+app/firmware/src/synth.c | if (v->env < (1 << 24) / 2000) { v->env = 0; v->stage = 0; v->active = 0; v->gate = 0; } | equivalent: the end of a release at -66 dB; < or <= differ only when env is exactly 8388, one block later at most
+app/firmware/src/drums.c | if (a < 8) { v->active = 0; v->stage = 0; v->gate = 0; return 0; } | equivalent: < 8 or <= 8 at amplitude 8 of 32767 ends the hit one block apart, inaudible
+app/firmware/src/drums.c | x = ((tone * tone_share) >> 15) + ((nz * v->s[7]) >> 15); | equivalent: the noise is symmetric about zero, so tone minus noise is the same sound as tone plus noise
+app/firmware/src/synth.c | if (n > CTL) n = CTL; | equivalent: at n == CTL the assignment sets n to the value it has
+app/firmware/src/synth.c | c->cap = c->pr->mono ? 1u : (c->e->poly && c->e->poly < NVOICE) ? c->e->poly : (uint8_t)NVOICE; | equivalent: at poly == NVOICE both arms give NVOICE
+app/firmware/src/synth.c | chs[ch].vol = (uint8_t)(vol > 127u ? 127u : vol); | equivalent: at 127 both arms give 127
+app/firmware/src/synth.c | chs[ch].pan = (uint8_t)(pan > 127u ? 127u : pan); | equivalent: at 127 both arms give 127
+app/firmware/src/synth.c | for (pass = 0; pass < 3u && !best; pass++) | equivalent: a 4th pass runs only when nothing sounds, and finds nothing again
+app/firmware/src/synth.c | if (!best || v->age < best->age) best = v; | equivalent: ages are unique (one counter), never equal
+app/firmware/src/synth.c | for (k = 0; k < 8u; k++) | equivalent: at k == 8 the keep bit (keep is 8 bits) is 0, so s[8] is never touched
+app/firmware/src/synth.c | if (v->env >= 1 << 24) { v->env = 1 << 24; v->stage = 2; } | equivalent: at exactly 1 << 24 the decay starts one block later from the same level
+app/firmware/src/drums.c | if (v->s[3] < 65535) v->s[2] = (int32_t)((uint64_t)(uint32_t)v->s[2] * (uint32_t)v->s[3] >> 16); | equivalent: x 65535 >> 16 lowers the tone inc by 1/65536 a block on unswept drums, a few cents over a whole hit
+app/firmware/src/drums.c | tone = ((int32_t)v->ph[0] < 0 ? 18000 : -18000) + ((int32_t)v->ph[1] < 0 ? 14000 : -14000); | equivalent: only a phase of exactly 0 differs, one sample in 2^32
+app/firmware/src/drums.c | nz = (hp * (64 + bright) + nz * (127 - bright) / 2) >> 7; | equivalent: the noise is white and its first difference uncorrelated with it at lag 0, so adding or subtracting the plain share gives the same spectrum
+app/tools/gen_synth_tables.py | ang = [(p / 64 if p <= 64 else 1 + (p - 64) / 63) * math.pi / 4 for p in range(128)]          # 64 = centre (MIDI) | equivalent: at p == 64 both branches give pi/4
+app/firmware/src/synth.c | for (ch = 0; ch < NPART; ch++) synth_ch_off(ch); | equivalent: synth_ch_off(NPART) returns at once
+app/firmware/src/synth.c | int32_t l = out[2 * i] + softclip(mixl[i] >> 1), r = out[2 * i + 1] + softclip(mixr[i] >> 1); | equivalent: out holds only this synth (app_audio zeroes it); the whole mix inverted is the same sound

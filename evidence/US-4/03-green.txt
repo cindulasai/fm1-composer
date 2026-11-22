@@ -1,0 +1,4 @@
+COMMAND: cd app && sh check.sh
+.                                                                        [100%]
+73 passed in 3.94s
+EXIT_CODE: 0

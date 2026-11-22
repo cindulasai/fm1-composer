@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-4
+SURVIVED app/firmware/src/synth.c:307  " > " -> " >= "  | if (n > CTL) n = CTL;
+SURVIVED app/firmware/src/drums.c:83  " < " -> " <= "  | for (i = 0; i < n; i++) {
+MUTANTS: 12 tried, 10 killed, 2 survived (of 113 candidates in US-4)
+EXIT_CODE: 1
