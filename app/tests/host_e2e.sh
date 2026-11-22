@@ -13,7 +13,8 @@ shift
 mkdir -p build/host
 bin=build/host/composer
 tmp=$(mktemp build/host/.composer.XXXXXX)
-if ! cc -O1 -g -Wall -Wno-unused-function -DDINGHY_HOST -DAPP_VER='"dev"' ${HOST_CFLAGS:-} "$@" \
+san=${SANFLAGS:-$(sh tests/sanflags.sh)}                     # (out-of-bounds stops the run, never passes)
+if ! cc -O1 -g -Wall -Wno-unused-function -DDINGHY_HOST -DAPP_VER='"dev"' $san ${HOST_CFLAGS:-} "$@" \
     -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -Iengines -o "$tmp" firmware/src/composer.c; then
     rm -f "$tmp"; exit 1
 fi
