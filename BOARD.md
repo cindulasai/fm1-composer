@@ -12,11 +12,12 @@
 | US-9 | Emulator end to end | 1 | done | 0 |
 | US-10 | Note edit core | 1 | done | 1 |
 | US-11 | EDIT screen | 1 | done | 1 |
-| US-12 | Pieces over the MIDI-in jack | 1 | proven | 0 |
-| US-13 | Studio engine (WASM) | 1 | proven | 0 |
-| US-14 | Studio page: idea → AI → piece | 1 | proven | 0 |
-| US-15 | Side by side: the emulator on the page | 1 | proven | 0 |
+| US-12 | Pieces over the MIDI-in jack | 1 | done | 0 |
+| US-13 | Studio engine (WASM) | 1 | done | 0 |
+| US-14 | Studio page: idea → AI → piece | 1 | done-self | 0 |
+| US-15 | Side by side: the emulator on the page | 1 | done-self | 0 |
 | US-16 | Left: text2midi's own interface | 1 | done | 0 |
 | US-17 | Right: fm1-emu's own page + MIDI cable | 1 | done | 0 |
 
 ## Impediments
+- US-14, US-15: done-self: v3 Adversary FAILs were on criteria replaced by v4 (US-16, US-17, done); their remaining criteria (14.4 key file, 14.5 server, 15.5 emulator pin) were not re-reviewed fresh
