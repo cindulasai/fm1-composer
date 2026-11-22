@@ -156,3 +156,10 @@ def test_11_3_one_knob_turn_on_a_chord_is_one_undo(tmp_path):
     assert (196, "C4  LEN 1/8  VEL 100") in at(log, t0 + 100, t0 + 199)
     assert (196, "C4  LEN 1/16  VEL 100") in at(log, t0 + 200, t0 + 299)       # all three back with one FX
     assert (222, "NOTHING TO UNDO") in at(log, t0 + 300)
+
+
+def test_11_1_edit_while_playing_opens_at_the_bar_playing(tmp_path):
+    lines, t = push(100, song(bars=4))
+    lines += [f"{t + 50} btn {BTN['PLAY']}", f"{t + 50 + 5500} btn {BTN['EDIT']}"]   # 5.5 s at 120 BPM: tick ~1056, bar 3
+    log, _ = run_host(script(tmp_path, "eplay", lines, t + 5800))
+    assert (4, "BAR 3  1/16") in at(log, t + 5550) and (222, "STOP TO EDIT") in at(log, t + 5550)
