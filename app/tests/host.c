@@ -128,6 +128,57 @@ static int blob_load(uint32_t i, void *p, uint32_t n) { return i < NBLOB ? host_
 static int blob_save(uint32_t i, const void *p, uint32_t n) { return i < NBLOB ? host_save(host_blob[i], SECTOR_MAX, p, n, "blob", i) : -1; }
 static int slot_load(uint32_t i, void *p, uint32_t n) { return i < NSLOT ? host_load(host_slot[i], SLOT_MAX, p, n) : -1; }
 static int slot_save(uint32_t i, const void *p, uint32_t n) { return i < NSLOT ? host_save(host_slot[i], SLOT_MAX, p, n, "slot", i) : -1; }
+#ifdef LIB_SECT
+/* COMPOSER's library area as a NOR flash (erase -> 0xFF, a write clears bits). HOST_FLASH=FILE keeps it, with the
+ * settings and blobs, between runs: read at the start, written at the end (a power cycle) */
+static uint8_t host_lib[LIB_SECT * 4096u];
+static int host_lib_ok(uint32_t off, uint32_t n) { return off >= LIB_AT && off - LIB_AT <= sizeof host_lib && n <= sizeof host_lib - (off - LIB_AT); }
+static int host_fl_read(uint32_t off, void *p, uint32_t n) { if (!host_lib_ok(off, n)) return -1; memcpy(p, host_lib + (off - LIB_AT), n); return 0; }
+static int host_fl_erase(uint32_t off)
+{
+    if (!host_lib_ok(off, 4096) || (off & 4095u)) return -1;
+    memset(host_lib + (off - LIB_AT), 0xFF, 4096);
+    printf("%6u ms  flash erase %05X\n", fm1_ms, off);
+    return 0;
+}
+static int host_fl_write(uint32_t off, const void *p, uint32_t n)
+{
+    uint32_t i;
+    if (!host_lib_ok(off, n)) return -1;
+    for (i = 0; i < n; i++) host_lib[(off - LIB_AT) + i] &= ((const uint8_t *)p)[i];
+    return 0;
+}
+#endif
+static void host_flash_io(int save)
+{
+    const char *path = getenv("HOST_FLASH");
+    FILE *f;
+    if (!path || !(f = fopen(path, save ? "wb" : "rb"))) {
+#ifdef LIB_SECT
+        if (!save) memset(host_lib, 0xFF, sizeof host_lib);
+#endif
+        return;
+    }
+#ifdef LIB_SECT
+    if (save) fwrite(host_lib, 1, sizeof host_lib, f); else if (fread(host_lib, 1, sizeof host_lib, f) != sizeof host_lib) memset(host_lib, 0xFF, sizeof host_lib);
+#endif
+    if (save) { fwrite(host_set, 1, sizeof host_set, f); fwrite(host_blob, 1, sizeof host_blob, f); }
+    else if (fread(host_set, 1, sizeof host_set, f) != sizeof host_set || fread(host_blob, 1, sizeof host_blob, f) != sizeof host_blob) {
+        memset(host_set, 0, sizeof host_set); memset(host_blob, 0, sizeof host_blob);
+    }
+    fclose(f);
+}
+/* SysEx: "T sysex F0..F7" (hex) hands the frame to the app's hook as the USB path does; replies are logged */
+static uint8_t host_sx[256][700];
+static uint32_t host_sx_len[256], host_sx_n;
+static void ota_wire_send_log(const uint8_t *p, uint32_t n)
+{
+    uint32_t i;
+    printf("%6u ms  SYSEX out ", fm1_ms);
+    for (i = 0; i < n; i++) printf("%02X", p[i]);
+    printf("\n");
+}
+static int ota_wire_send(const uint8_t *p, uint32_t n) { ota_wire_send_log(p, n); return 0; }
 
 static uint8_t mq[64][4];                       /* status, data 1, data 2, source (1 USB, 2 TRS) */
 static uint32_t mq_w, mq_r;
@@ -148,7 +199,7 @@ static void app_main(void);
  * argument) replaces it, a line each: "T keys MASK" (hex or decimal), "T btn ID", "T midi ST D1 D2" (USB),
  * "T trs ST D1 D2" (the TRS jack), "T clock BPM N" (N MIDI clocks at BPM over USB, from T on), "T enc ID N" (encoder
  * ID turned N detents, + = clockwise), "T btndown ID" / "T btnup ID" (a button held, let go), "T end" */
-typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int8_t enc, encn; uint8_t smk, sa; uint16_t sb; uint8_t src; } host_ev_t;
+typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int8_t enc, encn; uint8_t smk, sa; uint16_t sb; uint8_t src; uint16_t sx; } host_ev_t;
 /* SMK-37 builds (BOARD_SMK37) also: "T vel V" (the velocity of the keys pressed from now), "T pad P V" (hardware pad
  * P hit at velocity V, V 0 = let go), "T fader F V" (0..127), "T wheel W RAW" (0 pitch, 1 mod; raw ADC 0..1023),
  * "T xkey K V" (keybed key K 0..36 at V, 0 = let go: the outer keys 0..4, 32..36); any build: "T shot" (the screen
@@ -172,7 +223,7 @@ static void read_script(const char *path)
 {
     static host_ev_t ev[65536];
     unsigned bpm = 0, nclk = 0;
-    char line[256], what[16];
+    char line[2048], what[16];
     FILE *f = fopen(path, "r");
     uint32_t n = 0, i;
     if (!f) { perror(path); exit(1); }
@@ -192,7 +243,16 @@ static void read_script(const char *path)
         else if (!strcmp(what, "fader")) { sscanf(line, "%*u %*s %u %u", &a, &b); e.smk = HS_FADER; e.sa = (uint8_t)a; e.sb = (uint16_t)b; }
         else if (!strcmp(what, "wheel")) { sscanf(line, "%*u %*s %u %u", &a, &b); e.smk = HS_WHEEL; e.sa = (uint8_t)a; e.sb = (uint16_t)b; }
         else if (!strcmp(what, "xkey")) { sscanf(line, "%*u %*s %u %u", &a, &b); e.smk = HS_XKEY; e.sa = (uint8_t)a; e.sb = (uint16_t)b; }
-        else if (!strcmp(what, "shot")) e.smk = HS_SHOT;   /* (any board: the screen now -> OUT-<ms>.ppm) */
+        else if (!strcmp(what, "shot")) e.smk = HS_SHOT;
+        else if (!strcmp(what, "sysex")) {     /* the frame's bytes between F0 and F7 */
+            const char *q = strstr(line, "sysex") + 5;
+            unsigned b2;
+            int k2, m = 0;
+            if (host_sx_n >= 256u) continue;
+            while (m < 700 && sscanf(q, " %2x%n", &b2, &k2) == 1) { if (b2 != 0xF0u && b2 != 0xF7u) host_sx[host_sx_n][m++] = (uint8_t)b2; q += k2; }
+            host_sx_len[host_sx_n] = (uint32_t)m;
+            e.sx = (uint16_t)(++host_sx_n);
+        }   /* (any board: the screen now -> OUT-<ms>.ppm) */
         else if (!strcmp(what, "midi") || !strcmp(what, "trs")) {
             sscanf(line, "%*u %*s %i %u %u", (int *)&a, &b, &c);
             e.st = (uint8_t)a; e.d1 = (uint8_t)b; e.d2 = (uint8_t)c; e.src = what[0] == 't' ? 2 : 1;
@@ -294,6 +354,11 @@ static void platform_poll(void)                 /* one call = one millisecond */
     while (step < script_n && script[step].t <= fm1_ms) {
         if (script[step].smk == HS_SHOT) {
             write_ppm(fm1_ms);
+        } else if (script[step].sx) {
+#ifdef APP_SYSEX
+            uint32_t k = script[step].sx - 1u;
+            if (!APP_SYSEX(host_sx[k], host_sx_len[k])) printf("%6u ms  SYSEX not ours\n", fm1_ms);
+#endif
         } else if (script[step].smk) {
 #if BOARD_SMK37
             static uint32_t vel = 100;
@@ -371,6 +436,7 @@ static void platform_poll(void)                 /* one call = one millisecond */
     } else if (shot < sizeof SHOT / sizeof SHOT[0] && fm1_ms == SHOT[shot])
         write_ppm(SHOT[shot++]);
     if (fm1_ms >= end_ms) {
+        host_flash_io(1);
         write_wav();
         perf_report();
         exit(0);
@@ -383,6 +449,7 @@ int main(int argc, char **argv)
     if (argc > 2) read_script(argv[2]);
     if (argc > 3) frame_fps = (uint32_t)atoi(argv[3]);
     perf_open();
+    host_flash_io(0);
     app_main();
     return 0;
 }

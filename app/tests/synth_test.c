@@ -122,12 +122,12 @@ static void test_4_3_role_defaults(void)
     for (r = 0; r < ROLE_COUNT; r++) {
         uint32_t d = sound_default(r);
         CHECK(d < sound_count && sound_find(ROLE_SOUND[r][0], ROLE_SOUND[r][1]) == d, "role %u default missing", r);
-        CHECK(str_eq(sound_name(d), ROLE_SOUND[r][1]) && str_eq(sound_engine(d), ROLE_SOUND[r][0]), "role %u name", r);
+        CHECK(snd_eq(sound_name(d), ROLE_SOUND[r][1]) && snd_eq(sound_engine(d), ROLE_SOUND[r][0]), "role %u name", r);
     }
     CHECK(sound_default(ROLE_DRUMS) == find("KIT", "STD KIT"), "drums get the kit");
     CHECK(sound_default(200) == sound_default(ROLE_OTHER), "unknown role: other's sound");
     CHECK(sound_count == 40 && sound_count <= SOUND_MAX, "catalog size %u", sound_count);
-    CHECK(str_eq(sound_name(sound_count), "?") && str_eq(sound_engine(9999), "?"), "out of range names");
+    CHECK(snd_eq(sound_name(sound_count), "?") && snd_eq(sound_engine(9999), "?"), "out of range names");
 }
 
 static void test_4_4_hostile_calls_ignored(void)
@@ -289,8 +289,8 @@ static void test_4_3_lookups_at_the_edges(void)
 {
     synth_init();
     CHECK(sound_find("NOPE", "NOPE") == sound_count && sound_find("KIT", "NOPE") == sound_count, "missing sound");
-    CHECK(str_eq(sound_name(sound_count), "?") && str_eq(sound_engine(sound_count), "?"), "one past the end");
-    CHECK(str_eq(sound_name(sound_count - 1), sounds[sound_count - 1].pr->name), "the last sound");
+    CHECK(snd_eq(sound_name(sound_count), "?") && snd_eq(sound_engine(sound_count), "?"), "one past the end");
+    CHECK(snd_eq(sound_name(sound_count - 1), sounds[sound_count - 1].pr->name), "the last sound");
     CHECK(sound_default(ROLE_COUNT) == sound_default(ROLE_OTHER) && sound_default(ROLE_COUNT - 1) == find("ANALOG", "PLUCK"), "role edges");
 }
 
@@ -456,8 +456,20 @@ static void test_4_4_hush_silences_everything(void)
     CHECK(peak < 30, "hush: silent within 50 ms (%d)", peak);
 }
 
+static void test_4_4_render_before_init_is_silent(void)
+{
+    int32_t out[2 * CTL];
+    uint32_t i;
+    memset(chs, 0, sizeof chs); memset(trk, 0, sizeof trk);
+    trk[3].v[0].active = 1;                             /* (whatever the RAM held) */
+    for (i = 0; i < 2 * CTL; i++) out[i] = 7;
+    synth_render(out, CTL);
+    for (i = 0; i < 2 * CTL; i++) CHECK(out[i] == 7, "untouched before init");
+}
+
 int main(void)
 {
+    test_4_4_render_before_init_is_silent();
     test_4_1_budget_and_stealing();
     test_4_1_mono_and_retrigger();
     test_4_1_full_channel_takes_its_released_voice();

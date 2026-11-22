@@ -52,7 +52,7 @@ static void sounds_init(void)
         }
 }
 
-static int str_eq(const char *a, const char *b)
+static int snd_eq(const char *a, const char *b)
 {
     while (*a && *a == *b) a++, b++;
     return *a == *b;
@@ -63,7 +63,7 @@ static uint32_t sound_find(const char *engine, const char *preset)
 {
     uint32_t i;
     for (i = 0; i < sound_count; i++)
-        if (str_eq(sounds[i].e->name, engine) && str_eq(sounds[i].pr->name, preset)) return i;
+        if (snd_eq(sounds[i].e->name, engine) && snd_eq(sounds[i].pr->name, preset)) return i;
     return sound_count;
 }
 
@@ -323,6 +323,7 @@ static void synth_render(int32_t *out, uint32_t n)
         const chan_t *c = &chs[ch];
         const engine_t *e = c->e;
         int any = 0;
+        if (!e) continue;                       /* (the audio may start before synth_init: silence) */
         if (e->block) e->block(t);
         for (i = 0; i < n; i++) buf[i] = 0;
         for (k = 0; k < NVOICE; k++) {

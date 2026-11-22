@@ -166,7 +166,7 @@ def build_loader():
 # ---- app
 
 def build_app():
-    flags = [*CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/hal", "-Ifirmware/src", "-Ifirmware/gen", f'-DFELUCCA_ID="{PRODUCT}"',
+    flags = [*CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/hal", "-Ifirmware/src", "-Ifirmware/gen", "-Iengines", f'-DFELUCCA_ID="{PRODUCT}"',
              f'-DAPP_VER="{VERSION or "0.0"}"']
     if BOARD == "smk37":
         if not re.fullmatch(r"[A-Z0-9]{1,7}", DATA_FAMILY):

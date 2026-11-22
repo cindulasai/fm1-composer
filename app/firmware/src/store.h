@@ -39,13 +39,19 @@
 #define SETTINGS_AT 0x000FC000u                 /* (Felucca's globals area) */
 #define BLOBS_AT 0x000F4000u
 #define SLOTS_AT 0x00097000u                    /* (Felucca's main store, FL_DATA) */
+#define LIB_AT 0x00097000u                      /* COMPOSER's library (lib.c): all of FL_DATA, up to the updater's */
+#define LIB_SECT 73u                            /* staging at 0xE0000. (slot_* unused: they would share it) */
 #define FL_RANGE_OK(off, n) (FL_IN(off, n, FL_OTA_LO, FL_OTA_HI) || FL_IN(off, n, SETTINGS_AT, SETTINGS_AT + 0x1000u) || \
                              FL_IN(off, n, BLOBS_AT, BLOBS_AT + NBLOB * 0x1000u) || \
-                             FL_IN(off, n, SLOTS_AT, SLOTS_AT + NSLOT * SLOT_SECT * 0x1000u))
+                             FL_IN(off, n, LIB_AT, LIB_AT + LIB_SECT * 0x1000u))
 #endif
 #include "fm1_flash_map.h"
 #define SECTOR_MAX (4096u - 12u)                /* settings, a blob: the sector minus the header */
 #define SLOT_MAX (SLOT_SECT * 0x1000u - 12u)
+#if !BOARD_SMK37
+_Static_assert(LIB_AT == FL_DATA_LO && LIB_AT + LIB_SECT * 0x1000u == FL_DATA_HI, "library: exactly FL_DATA");
+_Static_assert(LIB_AT + LIB_SECT * 0x1000u <= FL_OTA_LO, "library: clear of the updater's staging");
+#endif
 
 #if BOARD_SMK37
 _Static_assert(SETTINGS_AT >= FL_DATA_LO && SETTINGS_AT + 0x1000u <= BLOBS_AT, "SMK store: settings outside FL_DATA");
