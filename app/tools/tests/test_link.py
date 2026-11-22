@@ -80,9 +80,12 @@ def test_7_4_hostile_cli(tmp_path, port):
         (("push", tmp_path, "--port", port), 2, ""),
         (("push", "--port", port), 2, "required"),
         (("delete", "12345", "--port", port), 1, "no such piece"),
-        (("delete", "x", "--port", port), 2, "invalid int"),
+        (("delete", "x", "--port", port), 2, "is not a piece id"),
         (("pull", "777", "--port", port), 1, "no piece #777"),
         (("list", "--port", "exec:/nonexistent/prog"), 2, "cannot run"),
+        (("delete", "-1", "--port", "exec:/bin/cat"), 2, "is not a piece id"),
+        (("delete", "99999999999", "--port", "exec:/bin/cat"), 2, "is not a piece id"),
+        (("pull", "x7", "--port", "exec:/bin/cat"), 2, "is not a piece id"),
         (("list", "--port", "zz-no-such-port-zz"), 2, "no MIDI port matching"),
         (("list", "--port", "exec:sleep 30", "--timeout", "0.3"), 1, "no answer"),
     ]:
@@ -223,3 +226,23 @@ def test_7_4_a_lost_data_answer_is_retried():
     p = Fake(lambda c, k: None if (c, k) == (4, 1) else saved if c == 5 else ACK(c))
     assert link.Link(p, timeout=0.05).put(b"x" * 600) == ("saved", 9)
     assert p.sent == [3, 4, 4, 4, 4, 5]                     # 3 chunks, the first asked twice
+
+
+def test_7_2_push_during_playback_staged_then_saved(port, tmp_path, monkeypatch):
+    monkeypatch.setenv("XFER_PLAYING", "1")
+    monkeypatch.setenv("XFER_STOP_MS", "1500")
+    f = tmp_path / "s.f1p"
+    f.write_bytes(encode(Piece("s", 1200, 384, [Channel("lead", [Note(0, 60, 90, 96)])])))
+    r = fm1c("push", f, "--wait", "10", "--port", port)
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = r.stdout
+    assert out.index("staged — saves when playback stops") < out.index("pushed 1, verified 1"), out
+
+
+def test_7_4_a_midi_system_failing_silently_is_still_named(monkeypatch):
+    m = fake_rtmidi(monkeypatch, [], [])
+    def broken():
+        raise RuntimeError()
+    m.MidiIn = broken
+    with pytest.raises(link.PortError, match="MIDI is not available here: RuntimeError"):
+        link.MidiPort("FM-1")

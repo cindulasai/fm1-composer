@@ -6,6 +6,8 @@
  *   wait MS      the clock moves on */
 #include <stdio.h>
 #include <stdlib.h>
+#include <poll.h>
+#include <sys/time.h>
 #include <string.h>
 #include <stdint.h>
 #include "piece.h"
@@ -37,14 +39,26 @@ int main(int argc, char **argv)
     static char line[4096];
     static uint8_t f[2048];
     uint32_t now = 1, playing = getenv("XFER_PLAYING") ? 1u : 0u;   /* (XFER_PLAYING: start playing) */
+    uint32_t stop_at = getenv("XFER_STOP_MS") ? (uint32_t)atoi(getenv("XFER_STOP_MS")) : 0u;   /* playing stops then */
+    struct timeval t0, tn;
     FILE *fp;
     if (argc != 2) { fprintf(stderr, "usage: xfer_host FLASHFILE\n"); return 2; }
     memset(fl, 0xFF, sizeof fl);
     if ((fp = fopen(argv[1], "rb"))) { if (fread(fl, 1, sizeof fl, fp) != sizeof fl) memset(fl, 0xFF, sizeof fl); fclose(fp); }
     lib_mount();
-    while (fgets(line, sizeof line, stdin)) {
+    gettimeofday(&t0, 0);
+    for (;;) {
         uint32_t v, n = 0;
         const char *s = line;
+        if (stop_at) {                          /* the clock runs on its own: wait for a line or the next 50 ms */
+            struct pollfd pf = {0, POLLIN, 0};
+            int got = poll(&pf, 1, 50);
+            gettimeofday(&tn, 0);
+            now = 1u + (uint32_t)((tn.tv_sec - t0.tv_sec) * 1000 + (tn.tv_usec - t0.tv_usec) / 1000);
+            if (playing && now >= stop_at) playing = 0;
+            if (got <= 0) { xfer_poll(now, (int)playing); if (dirty && (fp = fopen(argv[1], "wb"))) { fwrite(fl, 1, sizeof fl, fp); fclose(fp); dirty = 0; } continue; }
+        }
+        if (!fgets(line, sizeof line, stdin)) break;
         if (sscanf(line, "play %u", &v) == 1) playing = v;
         else if (sscanf(line, "wait %u", &v) == 1) now += v;
         else {

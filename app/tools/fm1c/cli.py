@@ -16,6 +16,10 @@ from .piece import PieceError, decode, encode
 DEFAULT_T2M = os.path.expanduser("~/Claude/Projects/text2midi_v2/target/release/t2m-cli")
 
 
+EPILOG = ("COMPOSER plays up to 8 channels on 16 voices (measured in fm1-emu, not yet on a real FM-1). "
+          "Inspired by SLOOP (isod89/sloop-fm1); built on Dinghy, Felucca.")
+
+
 class UsageError(Exception):
     pass
 
@@ -35,6 +39,9 @@ def _write(out: str, data: bytes, force: bool) -> None:
         raise UsageError(f"{d}: no such folder")
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".fm1c-")
     try:
+        mask = os.umask(0)
+        os.umask(mask)
+        os.fchmod(fd, 0o666 & ~mask)                  # (mkstemp makes it 0600: a normal file instead)
         with os.fdopen(fd, "wb") as f:
             f.write(data)
         os.replace(tmp, out)                          # whole or not at all
@@ -46,6 +53,8 @@ def _write(out: str, data: bytes, force: bool) -> None:
 
 def _convert(mid: str, out: str, name: str | None, force: bool, poly: int) -> int:
     piece, rep = fitmod.fit(mid, name, fitmod.Limits(poly=poly))
+    if not any(c.notes for c in piece.channels):
+        raise UsageError(f"{mid}: no notes left to play after fitting it to the FM-1 ({'; '.join(rep.lines)})")
     data = encode(piece)
     _write(out, data, force)
     notes = sum(len(c.notes) for c in piece.channels)
@@ -136,6 +145,16 @@ def cmd_list(a) -> int:
     return 0
 
 
+def _piece_id(v: str) -> int:
+    try:
+        n = int(v)
+    except ValueError:
+        n = -1
+    if not 0 <= n <= 0xFFFFFFFF:
+        raise argparse.ArgumentTypeError(f"'{v}' is not a piece id (the # that fm1c list shows)")
+    return n
+
+
 def cmd_delete(a) -> int:
     lk = _link(a)
     try:
@@ -172,7 +191,8 @@ def _port_args(x):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = _Parser(prog="fm1c", description="Compose, convert and push pieces for COMPOSER on the M-VAVE FM-1.")
+    p = _Parser(prog="fm1c", description="Compose, convert and push pieces for COMPOSER on the M-VAVE FM-1.",
+                epilog=EPILOG)
     sub = p.add_subparsers(dest="cmd", parser_class=_Parser)
     c = sub.add_parser("convert", help="a MIDI file -> a .f1p piece fitted to the FM-1")
     c.add_argument("midi")
@@ -200,11 +220,11 @@ def build_parser() -> argparse.ArgumentParser:
     _port_args(li)
     li.set_defaults(fn=cmd_list)
     d = sub.add_parser("delete", help="remove a piece from the FM-1's library by its #id")
-    d.add_argument("id", type=int)
+    d.add_argument("id", type=_piece_id)
     _port_args(d)
     d.set_defaults(fn=cmd_delete)
     g = sub.add_parser("pull", help="copy a piece from the FM-1 back to this computer")
-    g.add_argument("id", type=int)
+    g.add_argument("id", type=_piece_id)
     g.add_argument("-o", "--out")
     g.add_argument("--force", action="store_true")
     _port_args(g)

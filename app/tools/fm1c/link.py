@@ -82,7 +82,7 @@ class MidiPort:
                 self.i, self.o = rtmidi.MidiIn(), rtmidi.MidiOut()
                 names, in_names = self.o.get_ports(), self.i.get_ports()
         except Exception as e:                                    # no MIDI system here (e.g. no ALSA sequencer)
-            raise PortError(f"no MIDI port matching '{want}' (MIDI is not available here: {e or type(e).__name__})") from e
+            raise PortError(f"no MIDI port matching '{want}' (MIDI is not available here: {str(e) or type(e).__name__})") from e
         finally:
             os.dup2(saved, 2)
             os.close(saved)
