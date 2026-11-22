@@ -241,15 +241,22 @@ def web_root():
 
 
 @pytest.fixture(scope="session")
-def page(web_root):
+def pw_browser():
+    """one headless Chromium for every browser test (Playwright's sync API allows one per process)"""
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         b = p.chromium.launch()
-        pg = b.new_page()
-        pg.goto(web_root + "/engine/")
-        pg.evaluate("async () => { window.E = await import('/engine/studio.js'); await window.E.default(); }")
-        yield pg
+        yield b
         b.close()
+
+
+@pytest.fixture(scope="session")
+def page(web_root, pw_browser):
+    pg = pw_browser.new_page()
+    pg.goto(web_root + "/engine/")
+    pg.evaluate("async () => { window.E = await import('/engine/studio.js'); await window.E.default(); }")
+    yield pg
+    pg.close()
 
 
 def test_13_3_wasm_make_equals_fm1c_compose(page, tmp_path):
