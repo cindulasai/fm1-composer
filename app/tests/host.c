@@ -169,8 +169,9 @@ static void host_flash_io(int save)
     fclose(f);
 }
 /* SysEx: "T sysex F0..F7" (hex) hands the frame to the app's hook as the USB path does; replies are logged */
-static uint8_t host_sx[256][700];
-static uint32_t host_sx_len[256], host_sx_n;
+#define HOST_SX_MAX 2048u                       /* SysEx frames a script may send */
+static uint8_t host_sx[HOST_SX_MAX][700];
+static uint32_t host_sx_len[HOST_SX_MAX], host_sx_n;
 static void ota_wire_send_log(const uint8_t *p, uint32_t n)
 {
     uint32_t i;
@@ -248,7 +249,7 @@ static void read_script(const char *path)
             const char *q = strstr(line, "sysex") + 5;
             unsigned b2;
             int k2, m = 0;
-            if (host_sx_n >= 256u) continue;
+            if (host_sx_n >= HOST_SX_MAX) { fprintf(stderr, "host: more than %u sysex lines in the script\n", HOST_SX_MAX); exit(2); }
             while (m < 700 && sscanf(q, " %2x%n", &b2, &k2) == 1) { if (b2 != 0xF0u && b2 != 0xF7u) host_sx[host_sx_n][m++] = (uint8_t)b2; q += k2; }
             host_sx_len[host_sx_n] = (uint32_t)m;
             e.sx = (uint16_t)(++host_sx_n);

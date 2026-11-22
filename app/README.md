@@ -51,6 +51,19 @@ gh run download -n composer-fwsc -D build                   # the firmware CI bu
 | | hold SEL + white key | solo |
 | | SAVE | keeps the sounds, mutes and tempo for this piece (when stopped; while playing it saves at the stop) |
 | | HOME | stops and goes back to the library |
+| | EDIT | opens the selected channel in EDIT |
+| EDIT | SELECT | moves the cursor one grid step |
+| | a note key | adds that note at the cursor (you hear it), or removes it if it is already there |
+| | KNOB1 | grid: 1/32, 1/16, 1/8, 1/4 |
+| | KNOB2 / KNOB3 | length / velocity of the note at the cursor (and of the next new one) |
+| | OCT- / OCT+ | the keys an octave down / up (the roll follows) |
+| | FX | undo (the last 64 edits) |
+| | PLAY | plays from the cursor's bar / stops; edits wait until it is stopped |
+| | SAVE | saves the edited piece in place of the old one, with your sounds, mutes and tempo |
+| | HOME | back to PLAYER; leaving the piece with unsaved edits asks for HOME twice |
+
+EDIT shows one channel as a piano roll: 16 grid steps across, the pitches of the 27 note keys down, the cursor's
+step lit, notes in amber (a note begun before the page in grey). `*` after the channel's name means unsaved edits.
 
 The player shows each channel's role (LEAD, BASS, DRUMS…), its sound and M / S, with the position as
 bar:beat. There are 40 sounds from six Felucca engines plus COMPOSER's own drum kits. Each role starts with a
