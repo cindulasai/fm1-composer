@@ -16,15 +16,15 @@ S6. Cable pulled / power cut mid-push or mid-save: library afterwards = exactly 
 ## Features
 | ID | Feature (one testable line) | Since | State |
 |----|-----------------------------|-------|-------|
-| F1 | Firmware COMPOSER builds from Dinghy (own identity FM-1_95N, own store magic), host mode on macOS, `.fwsc` by CI | v1 | planned |
-| F2 | Piece format `.f1p` v1: header + ≤8 channels + note events + CRC32; Python writer, C reader, identical semantics | v1 | planned |
-| F3 | `fm1c convert`/`compose`: MIDI or text2midi brief → `.f1p` fitted to FM-1 limits, every reduction reported | v1 | planned |
-| F4 | Synth: 8 channels, shared voice pool (16 target, measured), Felucca engines + own drum kit, sound catalog with role defaults | v1 | planned |
-| F5 | Player: sample-accurate-to-0.73 ms sequencing, tempo ±, loop, mute/solo, playhead | v1 | planned |
-| F6 | Library: pieces in flash, atomic commit, delete, survives power cut at any write; capacity shown | v1 | planned |
-| F7 | Transfer: SysEx protocol (ID 0x7D) INFO/LIST/PUT/DEL/GET with chunk CRC + ack; `fm1c push/list/delete/pull`; staging while playing | v1 | planned |
-| F8 | UI: LIBRARY, PLAYER (8 strips; sound turned in place with PRESETS); per-piece sounds, mutes, tempo saved | v1 | planned |
-| F9 | Emulator e2e: real `.fwsc` in fm1-live — push over emulated USB, navigate, play, audio, flash cut, strict CPU | v1 | planned |
+| F1 | Firmware COMPOSER builds from Dinghy (own identity FM-1_95N, own store magic), host mode on macOS, `.fwsc` by CI | v1 | shipped |
+| F2 | Piece format `.f1p` v1: header + ≤8 channels + note events + CRC32; Python writer, C reader, identical semantics | v1 | shipped |
+| F3 | `fm1c convert`/`compose`: MIDI or text2midi brief → `.f1p` fitted to FM-1 limits, every reduction reported | v1 | shipped |
+| F4 | Synth: 8 channels, shared voice pool (16 target, measured), Felucca engines + own drum kit, sound catalog with role defaults | v1 | shipped |
+| F5 | Player: sample-accurate-to-0.73 ms sequencing, tempo ±, loop, mute/solo, playhead | v1 | shipped |
+| F6 | Library: pieces in flash, atomic commit, delete, survives power cut at any write; capacity shown | v1 | shipped |
+| F7 | Transfer: SysEx protocol (ID 0x7D) INFO/LIST/PUT/DEL/GET with chunk CRC + ack; `fm1c push/list/delete/pull`; staging while playing | v1 | shipped |
+| F8 | UI: LIBRARY, PLAYER (8 strips; sound turned in place with PRESETS); per-piece sounds, mutes, tempo saved | v1 | shipped |
+| F9 | Emulator e2e: real `.fwsc` in fm1-live — push over emulated USB, navigate, play, audio, flash cut, strict CPU | v1 | shipped |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
