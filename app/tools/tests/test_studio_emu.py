@@ -70,7 +70,8 @@ def open_example(page, title="funk.classic suite 1"):
 
 def send(page, secs=90):
     page.click("#send")
-    page.wait_for_function("() => !document.querySelector('#status').textContent.startsWith('Sending')", timeout=secs * 1000)
+    page.wait_for_function("() => /^(On the FM-1|Sending stopped)/.test(document.querySelector('#status').textContent)",
+                           timeout=secs * 1000)
     return page.text_content("#status")
 
 
@@ -147,11 +148,14 @@ def test_17_4_send_before_start_twice_and_without_a_piece(studio):
     page.click("#send")
     page.wait_for_function("() => document.querySelector('#status').textContent.includes('Press Start on the FM-1')")
     start(page)
+    emu(page).evaluate("""() => { const c = window.composerCable, send = c.send.bind(c); window.__puts = 0;
+        c.send = (b) => { if (b[0] === 0xf0 && b[4] === 3) window.__puts++; return send(b); }; }""")
     page.click("#send")
-    page.click("#send", force=True)                                  # a second press while sending does nothing
-    page.wait_for_function("() => !document.querySelector('#status').textContent.startsWith('Sending')", timeout=90000)
+    page.click("#send", force=True)                                  # more presses while sending do nothing
+    page.click("#send", force=True)
+    page.wait_for_function("() => /^(On the FM-1|Sending stopped)/.test(document.querySelector('#status').textContent)", timeout=90000)
     assert page.text_content("#status").startswith("On the FM-1")
-    assert page.is_enabled("#send")
+    assert page.is_enabled("#send") and emu(page).evaluate("() => window.__puts") == 1           # one transfer (one PUT)
 
 
 def test_17_4_firmware_missing_or_emulator_not_built(studio, studio_url):
@@ -229,3 +233,13 @@ def test_17_4_get_web_emu_refuses_a_changed_checkout(tmp_path):
     r = subprocess.run(["sh", str(APP / "tools" / "get_web_emu.sh")], capture_output=True, text=True,
                        env={**os.environ, "FM1_EMU_SRC": str(clone)})
     assert r.returncode == 2 and "has local changes; not building it" in r.stderr
+
+
+def test_17_2_a_resend_that_never_arrives_is_not_called_saved(studio):
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    assert send(page).startswith("On the FM-1")
+    f.evaluate("() => { window.composerCable.send = () => {}; }")      # the cable drops everything now
+    status = send(page, secs=120)
+    assert status.startswith("Sending stopped: the FM-1 did not save"), status

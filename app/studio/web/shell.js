@@ -33,6 +33,9 @@ $('#send').addEventListener('click', async () => {
   $('#report').hidden = !report.length;
   sending = true;
   $('#send').disabled = true;
+  say('Checking the FM-1 …');
+  let before = -1;                             // the newest piece in the FM-1's saved flash now: Send must add a newer one
+  try { before = Math.max(-1, ...(await savedLibraries()).flat().map((p) => p.seq)); } catch { /* nothing saved yet */ }
   const bar = $('#send-progress');
   bar.hidden = false;
   try {
@@ -45,7 +48,7 @@ $('#send').addEventListener('click', async () => {
       bar.value = sent / total;
       await sleep(f.length / BYTES_PER_MS);
     }
-    const same = (p) => p.bytes.length === made.f1p.length && p.bytes.every((x, k) => x === made.f1p[k]);
+    const same = (p) => p.seq > before && p.bytes.length === made.f1p.length && p.bytes.every((x, k) => x === made.f1p[k]);
     let saved = false;
     for (let i = 0; i < 20 && !saved; i++) {    // read back from fm1-emu's saved flash
       await sleep(500);
