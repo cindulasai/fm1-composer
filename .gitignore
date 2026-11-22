@@ -12,3 +12,4 @@ vendor/fm1-emu/
 app/studio/engine/target/
 app/studio/web/engine/
 app/studio/web/local/
+app/studio/web/emu/
