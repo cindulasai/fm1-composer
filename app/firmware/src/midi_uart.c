@@ -4,7 +4,7 @@
  * RX DMA into a 128-byte ring, polled from the TIMER5 ISR (no UART IRQ).
  * Built only with FELUCCA_UART=1. Channel messages, clock and transport (F8 FA FB FC) go into midi_in_q next to
  * USB, as USB-MIDI packets with cable 1 (CIN = status >> 4), so midi_get tells the jack from USB (2, not 1);
- * other realtime, system common and SysEx are dropped.
+ * other realtime and system common are dropped; SysEx frames go to uart_sysex.c.
  *
  * The ring is read by content, not by the DMA count: every slot the parser has
  * not yet been given holds UM_EMPTY, and the reader takes bytes until it meets
@@ -14,6 +14,7 @@
  * the content cannot drift. (Fix from Felucca [Salt] 0.9-salt14 by ChanceTheMaker,
  * found by keremimo on an FM-1 with an Akai MPC Sample; GPL-3.0.) */
 #include "../hal/fm1_uart.h"   /* registers; relative, so the host tests find it too */
+#include "uart_sysex.c"         /* SysEx frames for the app (COMPOSER: pieces over the jack) */
 
 #define UM_RING 128u
 #define UM_EMPTY 0xFDu         /* undefined MIDI realtime byte: never sent, marks unwritten slots */
@@ -38,6 +39,7 @@ static uint32_t um_len(uint32_t s)                 /* data bytes of a channel st
 
 static void um_byte(uint32_t b)
 {
+    ux_byte(b);
     if (b >= 0xF8u) {                              /* realtime: the state is kept; clock and transport */
         if ((b == 0xF8u || b == 0xFAu || b == 0xFBu || b == 0xFCu) && mi_w - mi_r < MQ) {
             midi_in_q[mi_w % MQ] = 0x1Fu | b << 8; /* (cable 1: from the TRS jack) */

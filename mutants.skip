@@ -51,3 +51,4 @@ app/firmware/src/edit.c | else for (i = at; i + n < len; i++) b[i] = b[i + n]; |
 app/firmware/src/edit.c | if (w < off + n * PIECE_EV) ed_shift(b, ch, w, -(int32_t)((off + n * PIECE_EV - w) / PIECE_EV)); | <= adds a shift of 0 events: moves nothing, adds 0
 app/firmware/src/composer.c | ed_tick = (uint32_t)(t < 0 ? 0 : t > last ? last : t); | at t == 0 both give 0
 app/firmware/src/composer.c | ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len); | at len == 1 both give 1
+app/firmware/src/composer.c | ed_gi = (uint32_t)(i < 0 ? 0 : i > 3 ? 3 : i); | at i == 0 both give 0

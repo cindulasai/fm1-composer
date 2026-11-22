@@ -244,7 +244,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
         int32_t dl = fm1_enc_take(ENC_KNOB2), dv = fm1_enc_take(ENC_KNOB3);
         if ((dl || dv || keys) && playing) { set_status("STOP TO EDIT"); return; }
         n = cell_notes(cn);
-        if (dl || dv) {                         /* length / velocity: of the notes in the step, and of new ones */
+        if (dl || dv) {                         /* length / velocity: of the notes in the step, also of new ones */
             int32_t len = (int32_t)(n ? cn[0].dur : ed_len) + dl * (int32_t)g, vel = (int32_t)(n ? cn[0].vel : ed_vel) + dv * 4;
             uint32_t i;
             int r = ED_OK;
@@ -312,6 +312,13 @@ static void app_main(void)
         platform_poll();
         midi_in();
         playing = (uint32_t)player_playing();
+#ifdef UX_MAX
+        {                                       /* a frame from the MIDI jack: the same transfer as USB */
+            const uint8_t *sp;
+            uint32_t sn;
+            if (uart_sysex_get(&sp, &sn)) { xfer_frame(sp, sn, fm1_ms, (int)playing); uart_sysex_done(); }
+        }
+#endif
         xfer_poll(fm1_ms, (int)playing);
         if (xf_changed) {
             xf_changed = 0;

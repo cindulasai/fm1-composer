@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-12
+SURVIVED app/firmware/src/composer.c:233  " - " -> " + "  | ed_octs += (pressed & 1u << BTN_OCT_UP ? 1 : 0) - (pressed & 1u << BTN_OCT_DOWN ? 1 : 0);
+MUTANTS: 11 tried, 10 killed, 1 survived (of 73 candidates in US-12)
+EXIT_CODE: 1

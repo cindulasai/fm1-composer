@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-12
+SURVIVED app/firmware/src/midi_uart.c:43  " >= " -> " > "  | if (b >= 0xF8u) {                              /* realtime: the state is kept; clock and transport */
+SURVIVED app/firmware/src/midi_uart.c:69  " < " -> " <= "  | if (mi_w - mi_r < MQ) {
+SURVIVED app/firmware/src/composer.c:157  " - " -> " + "  | if (player_playing()) ed_tick = player_pos() - player_pos() % (16u * g);
+SURVIVED app/firmware/src/composer.c:228  " < " -> " <= "  | ed_gi = (uint32_t)(i < 0 ? 0 : i > 3 ? 3 : i);
+SURVIVED app/firmware/src/composer.c:247  " and " -> " or "  | if (dl || dv) {                         /* length / velocity: of the notes in the step, and of new ones */
+MUTANTS: 11 tried, 6 killed, 5 survived (of 74 candidates in US-12)
+EXIT_CODE: 1
