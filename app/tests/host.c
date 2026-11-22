@@ -172,6 +172,9 @@ static void host_flash_io(int save)
 #define HOST_SX_MAX 2048u                       /* SysEx frames a script may send */
 static uint8_t host_sx[HOST_SX_MAX][700];
 static uint32_t host_sx_len[HOST_SX_MAX], host_sx_n;
+#include "../firmware/src/uart_sysex.c"     /* the TRS jack's SysEx frames, as on the FM-1 */
+static uint8_t host_jack[1u << 20];             /* bytes on their way into the jack */
+static uint32_t host_jack_r, host_jack_w;
 static void ota_wire_send_log(const uint8_t *p, uint32_t n)
 {
     uint32_t i;
@@ -200,7 +203,7 @@ static void app_main(void);
  * argument) replaces it, a line each: "T keys MASK" (hex or decimal), "T btn ID", "T midi ST D1 D2" (USB),
  * "T trs ST D1 D2" (the TRS jack), "T clock BPM N" (N MIDI clocks at BPM over USB, from T on), "T enc ID N" (encoder
  * ID turned N detents, + = clockwise), "T btndown ID" / "T btnup ID" (a button held, let go), "T end" */
-typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int8_t enc, encn; uint8_t smk, sa; uint16_t sb; uint8_t src; uint16_t sx; } host_ev_t;
+typedef struct { uint32_t t, keys; int btn; uint8_t st, d1, d2; int8_t enc, encn; uint8_t smk, sa; uint16_t sb; uint8_t src; uint16_t sx; uint8_t jack; } host_ev_t;
 /* SMK-37 builds (BOARD_SMK37) also: "T vel V" (the velocity of the keys pressed from now), "T pad P V" (hardware pad
  * P hit at velocity V, V 0 = let go), "T fader F V" (0..127), "T wheel W RAW" (0 pitch, 1 mod; raw ADC 0..1023),
  * "T xkey K V" (keybed key K 0..36 at V, 0 = let go: the outer keys 0..4, 32..36); any build: "T shot" (the screen
@@ -245,12 +248,15 @@ static void read_script(const char *path)
         else if (!strcmp(what, "wheel")) { sscanf(line, "%*u %*s %u %u", &a, &b); e.smk = HS_WHEEL; e.sa = (uint8_t)a; e.sb = (uint16_t)b; }
         else if (!strcmp(what, "xkey")) { sscanf(line, "%*u %*s %u %u", &a, &b); e.smk = HS_XKEY; e.sa = (uint8_t)a; e.sb = (uint16_t)b; }
         else if (!strcmp(what, "shot")) e.smk = HS_SHOT;
-        else if (!strcmp(what, "sysex")) {     /* the frame's bytes between F0 and F7 */
-            const char *q = strstr(line, "sysex") + 5;
+        else if (!strcmp(what, "sysex") || !strcmp(what, "jack")) {   /* sysex: the bytes between F0 and F7 (USB);
+                                                   jack: bytes as they are, into the TRS jack at 31250 baud */
+            int jack = !strcmp(what, "jack");
+            const char *q = strstr(line, what) + strlen(what);
             unsigned b2;
             int k2, m = 0;
             if (host_sx_n >= HOST_SX_MAX) { fprintf(stderr, "host: more than %u sysex lines in the script\n", HOST_SX_MAX); exit(2); }
-            while (m < 700 && sscanf(q, " %2x%n", &b2, &k2) == 1) { if (b2 != 0xF0u && b2 != 0xF7u) host_sx[host_sx_n][m++] = (uint8_t)b2; q += k2; }
+            while (m < 700 && sscanf(q, " %2x%n", &b2, &k2) == 1) { if (jack || (b2 != 0xF0u && b2 != 0xF7u)) host_sx[host_sx_n][m++] = (uint8_t)b2; q += k2; }
+            e.jack = (uint8_t)jack;
             host_sx_len[host_sx_n] = (uint32_t)m;
             e.sx = (uint16_t)(++host_sx_n);
         }   /* (any board: the screen now -> OUT-<ms>.ppm) */
@@ -348,13 +354,18 @@ static void platform_poll(void)                 /* one call = one millisecond */
 {
     static uint32_t step, shot, owed, frame;
     static int32_t blk[2u * HALF_FRAMES];
+    uint32_t jb;
     fm1_ms++;
+    for (jb = 0; jb < 3u && host_jack_r != host_jack_w; jb++) ux_byte(host_jack[(host_jack_r++) % sizeof host_jack]);   /* 31250 baud */
 #if BOARD_SMK37
     fm1_in.frames++;                            /* (the SMK scans ~625 frames a second; enough for "settled") */
 #endif
     while (step < script_n && script[step].t <= fm1_ms) {
         if (script[step].smk == HS_SHOT) {
             write_ppm(fm1_ms);
+        } else if (script[step].sx && script[step].jack) {
+            uint32_t k = script[step].sx - 1u, i;
+            for (i = 0; i < host_sx_len[k]; i++) host_jack[(host_jack_w++) % sizeof host_jack] = host_sx[k][i];
         } else if (script[step].sx) {
 #ifdef APP_SYSEX
             uint32_t k = script[step].sx - 1u;
