@@ -9,7 +9,7 @@
  * it. A foreign store (another firmware's data) is all dirty: an empty library, nothing parsed, nothing erased
  * until a put.
  *
- * Interface: lib_mount, lib_count, lib_entry, lib_read, lib_put, lib_del, lib_find, lib_free, lib_room. Entries
+ * Interface: lib_mount, lib_count, lib_entry, lib_read, lib_pread, lib_put, lib_del, lib_find, lib_free, lib_room. Entries
  * are listed newest first. The flash calls are LIB_READ / LIB_ERASE / LIB_WRITE (the host tests' flash sim). */
 #ifndef LIB_READ
 #define LIB_READ(off, p, n) st_read(off, p, n)
@@ -157,6 +157,15 @@ static int lib_read(uint32_t i, uint8_t *dst, uint32_t max)
         if (LIB_READ(lib_at(e->first), &h, sizeof h) || lib_crc(0, dst, e->len) != h.dcrc) return LIB_EIO;
     }
     return (int)e->len;
+}
+
+/* n bytes of entry i from offset off (no CRC check: the piece carries its own): 0, or LIB_NONE / LIB_BAD / LIB_EIO */
+static int lib_pread(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n)
+{
+    const lib_entry_t *e = lib_entry(i);
+    if (!e) return LIB_NONE;
+    if (off > e->len || n > e->len - off) return LIB_BAD;
+    return LIB_READ(lib_at(e->first) + LIB_HDR + off, dst, n) ? LIB_EIO : LIB_OK;
 }
 
 static uint32_t lib_free(void)                  /* bytes of sectors not in use */

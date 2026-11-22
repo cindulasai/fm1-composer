@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-7
+SURVIVED app/tools/fm1c/link.py:84  " or " -> " and "  | "connect the FM-1, or start the emulator with fm1c emu")
+SURVIVED app/tools/fm1c/link.py:188  " + " -> " - "  | progress(min(off + CHUNK, len(data)), len(data))
+MUTANTS: 12 tried, 10 killed, 2 survived (of 174 candidates in US-7)
+EXIT_CODE: 1
