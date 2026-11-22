@@ -4,7 +4,7 @@ import { Fm1 } from './emu.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
-const TIMEOUT_MS = Number(params.get('timeout')) || 30000;
+const TIMEOUT_MS = Number(params.get('timeout')) || 120000;   // as text2midi's app: a full brief can take a minute
 const MAX_IDEA = 2000;                                  // as text2midi's intent crate
 const PROVIDERS = {
   minimax: { label: 'MiniMax', base: 'https://api.minimax.io/v1', model: 'MiniMax-M3.1-Flash', kind: 'openai' },
@@ -64,6 +64,8 @@ async function ask(cfg, system, user) {
   }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  const started = Date.now(), waiting = $('#status').textContent;
+  const ticker = setInterval(() => say(`${waiting} ${Math.round((Date.now() - started) / 1000)} s`), 1000);
   let res, text;
   try {
     res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal });
@@ -73,6 +75,7 @@ async function ask(cfg, system, user) {
                                        : `Could not reach the AI (${p.label}). Check the connection and try again.`);
   } finally {
     clearTimeout(timer);
+    clearInterval(ticker);
   }
   if (res.status === 401 || res.status === 403) throw new Error(`The AI refused the key (${res.status}). Check it in Settings.`);
   if (!res.ok) throw new Error(`The AI answered ${res.status}: ${errorText(text)}`);

@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-14
+SURVIVED app/studio/web/studio.js:112  " || " -> " && "  | $('#brief-length').textContent = `${bars} bars, ${(b.form || []).length} sections`;
+SURVIVED app/studio/web/studio.js:146  " > " -> " >= "  | if (n > MAX_IDEA) return say(`Keep the idea under ${MAX_IDEA} characters (it has ${n}).`, 'error');
+MUTANTS: 12 tried, 10 killed, 2 survived (of 96 candidates in US-14)
+EXIT_CODE: 1

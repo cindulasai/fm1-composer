@@ -43,7 +43,7 @@ def studio(browser, studio_url):
     """open(key, script, query) -> (page, calls); script: what the fake AI does for each request, in order"""
     ctxs = []
 
-    def open_(key="test-key", script=(), query=""):
+    def open_(key="test-key", script=(), query="", routes=None):
         ctx = browser.new_context(accept_downloads=True)
         ctxs.append(ctx)
         page = ctx.new_page()
@@ -67,6 +67,8 @@ def studio(browser, studio_url):
                                                            body=json.dumps({"provider": "minimax", "key": key}))
                    if key else r.fulfill(status=404, body="no"))
         page.route(re.compile(r"^https://"), ai)
+        for pattern, handler in (routes or {}).items():
+            page.route(pattern, handler)
         page.goto(studio_url + query)
         page.wait_for_selector("body[data-ready='1']")
         return page, calls, todo
@@ -99,6 +101,7 @@ def test_14_1_idea_to_brief_to_piece_and_downloads(studio, studio_cli, tmp_path)
     assert sent["messages"][0]["content"].startswith("You turn a short description") and "hiphop.lofi" in sent["messages"][0]["content"]
     assert page.text_content("#brief-title") == "Dusty Rain" and page.text_content("#brief-style") == "hiphop.lofi"
     assert page.text_content("#brief-key") == "A dorian"
+    assert page.text_content("#brief-length") == "32 bars, 5 sections"
     assert page.text_content("#brief-tempo") == "75 BPM" and "lo-fi is usually slow" in page.text_content("#brief-assumptions")
     assert re.match(r"^4 channels, \d+ notes, 32 bars, 75 BPM, \d+ bytes$", page.text_content("#piece-stats"))
     got = {}
@@ -154,6 +157,8 @@ def test_14_3_hostile_each_one_clear_message_page_stays_usable(studio, case):
     wait_done(page)
     assert page.get_attribute("#status", "class") == "error" and page.is_hidden("#piece")
     assert len(calls) == len(script)
+    if case == "401":                                          # word for word, no "Error:" prefix
+        assert page.text_content("#status") == "The AI refused the key (401). Check it in Settings."
     todo.append(("reply", brief_text()))                     # then it works
     generate(page)
     page.wait_for_selector("#piece:not([hidden])")
@@ -319,3 +324,10 @@ def test_14_3_settings_say_where_the_key_comes_from(studio):
     page.click("#settings-open")
     assert page.text_content("#settings-source") == "" and page.input_value("#ai-key") == "mine"
     assert page.input_value("#ai-model") == "my-model" and page.input_value("#ai-base") == "https://example.test/v1"
+
+
+def test_14_3_an_idea_of_exactly_2000_characters_is_sent(studio):
+    page, calls, _ = studio(script=[("reply", brief_text())])
+    generate(page, idea="y" * 2000)
+    page.wait_for_selector("#piece:not([hidden])")
+    assert calls[0].post_data_json["messages"][1]["content"] == "y" * 2000
