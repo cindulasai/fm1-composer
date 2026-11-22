@@ -6,7 +6,7 @@ stack: C99 firmware on Dinghy 0.5 platform (GPL-3.0) + Felucca-Engines (MIT); Py
 Firmware "COMPOSER" for the FM-1: a library of up to 8-channel pieces generated on the Mac, browsed and played on the device, each channel's sound chosen on the device. Mac tool `fm1c` composes (via text2midi, unchanged), fits pieces to the FM-1 and pushes them over USB-MIDI. For music lovers who want finished arrangements on a $65 synth.
 
 ## Scenarios
-S1. `fm1c compose ~/Claude/Projects/text2midi_v2/suite/briefs/electronic-house-1.json` → `out/electronic-house-1.f1p` + report "8 channels, 412 notes, 0 reductions" (or each reduction listed).
+S1. `fm1c compose ~/Claude/Projects/text2midi_v2/suite/briefs/electronic-house-1.json -o out/electronic-house-1.f1p` → that file + report "8 channels, 412 notes, 0 reductions" (or each reduction listed).
 S2. `fm1c emu` starts fm1-live with COMPOSER and USB; `fm1c push out/*.f1p` → "pushed 3, verified 3"; FM-1 screen LIBRARY lists the 3 names, newest first.
 S3. On FM-1: SELECT turns to a piece, PLAY → PLAYER screen, 8 channel strips with role + sound name, playhead bar:beat moving; music plays at the piece's tempo.
 S4. In PLAYER: KNOB1 picks channel, PRESETS turns its sound (heard at once); key F3..F4 (white keys 1–8) toggle mute; hold SEL + key = solo. SAVE stores sound choices; after power-off and back, piece reopens with those sounds.
