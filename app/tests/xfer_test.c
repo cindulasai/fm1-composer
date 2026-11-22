@@ -52,7 +52,7 @@ static void send(uint32_t cmd, const uint8_t *pay, uint32_t n)
 {
     uint8_t raw[300], f[400];
     uint32_t w;
-    memcpy(raw, pay, n);
+    if (n) memcpy(raw, pay, n);
     xf_wr32(raw + n, lib_crc(0, raw, n));
     f[0] = 0x7D; f[1] = 0x46; f[2] = 0x31; f[3] = (uint8_t)cmd;
     w = 4u + xf_pack7(raw, n + 4u, f + 4);
