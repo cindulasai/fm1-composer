@@ -1,0 +1,8 @@
+COMMAND: rm -rf adversary/clone && git clone -q . adversary/clone && cd adversary/clone/app && python3 -m venv ../.venv && ../.venv/bin/pip install -q -r tools/requirements.txt && sh check.sh
+
+[notice] A new release of pip is available: 26.1.2 -> 26.3
+[notice] To update, run: /Users/bot/Claude/Projects/fm1-composer/adversary/clone/.venv/bin/python3.14 -m pip install --upgrade pip
+.......................................                                  [100%]
+107 passed, 4 skipped in 36.59s
+emu e2e: SKIP (no fm1-live at ../vendor/fm1-emu/fm1-live: sh tools/get_emu.sh)
+EXIT_CODE: 0
