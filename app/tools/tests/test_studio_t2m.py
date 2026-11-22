@@ -55,7 +55,8 @@ def test_16_2_make_it_asks_the_ai_and_opens_the_piece(studio):
     assert req["max_completion_tokens"] == 8000 and req["reasoning_split"] is True and "max_tokens" not in req
     v = f.evaluate("() => window.studioDesk.call('view')")
     assert v["title"] == "Dusty Rain" and len(v["tracks"]) >= 3
-    assert f.locator(".pianoroll, canvas, svg").count() >= 1 or "Piano roll" in f.inner_text("body")
+    roll = re.search(r"Piano roll.*?(\d+) notes", f.inner_text("body"), re.S)
+    assert roll and int(roll.group(1)) > 0                                # text2midi's piano roll, with notes in it
 
 
 def test_16_3_takes_lock_undo_redo_reseed_as_in_text2midi(studio):
@@ -75,10 +76,22 @@ def test_16_3_takes_lock_undo_redo_reseed_as_in_text2midi(studio):
     f.click("button:has-text('Redo')")
     f.wait_for_function("s => window.studioDesk.call('view').seed === s", arg=b["seed"])
     lead = b["tracks"][0]["id"]
-    f.evaluate("t => window.studioInvoke('lock', { track: t, on: true })", lead)
-    assert next(t for t in view()["tracks"] if t["id"] == lead)["locked"]
-    takes = f.evaluate("t => window.studioInvoke('takes', { track: t, section: null, count: 3 })", b["tracks"][1]["id"])
-    assert len(takes) == 3
+    f.evaluate("""() => { const c = document.querySelector("canvas[aria-label^='Arrangement']"), r = c.getBoundingClientRect();
+        c.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + 40, clientY: r.top + 26 + 32 })); }""")
+    # (text2midi's own handler: a click on a part's name, lane 1 left of 168 px, locks it)
+    f.wait_for_function("t => window.studioDesk.call('view').tracks.find((x) => x.id === t).locked", arg=lead)
+    c = view()
+    f.click("button:has-text('New take')")                           # a new take keeps the locked part as it is
+    f.wait_for_function("s => window.studioDesk.call('view').seed !== s", arg=c["seed"])
+    d = view()
+    track = lambda v, i: next(t for t in v["tracks"] if t["id"] == i)                 # noqa: E731
+    assert track(d, lead)["notes"] == track(c, lead)["notes"]
+    assert any(track(d, t["id"])["notes"] != t["notes"] for t in c["tracks"] if t["id"] != lead)
+    other = c["tracks"][1]["id"]
+    takes = f.evaluate("t => window.studioInvoke('takes', { track: t, section: null, count: 3 })", other)
+    assert len(takes) == 3 and len({json.dumps(x["notes"]) for x in takes}) > 1
+    kept = f.evaluate("t => window.studioInvoke('keep_take', { track: t, section: null, take: 2 })", other)
+    assert track(kept, other)["notes"] == takes[1]["notes"] and kept["can_undo"]          # take 2 = the second (1-based)
 
 
 def test_16_4_preview_plays_and_stops(studio):
