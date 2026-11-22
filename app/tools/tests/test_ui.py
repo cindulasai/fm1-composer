@@ -1,7 +1,7 @@
 """US-8: COMPOSER's screens through host mode: pieces pushed over SysEx (the real transfer path), buttons, encoders
 and keys from a script; asserted on the screen text the firmware draws and the sound it makes."""
 import struct, sys
-from conftest import APP, run_host, screen, wav_frames
+from conftest import APP, run_host, screen, screen_full, wav_frames
 
 sys.path.insert(0, str(APP / "tools"))
 from fm1c import link  # noqa: E402
@@ -10,6 +10,9 @@ from fm1c.piece import Piece, Channel, Note, encode  # noqa: E402
 ROLES = ["lead", "bass", "drums", "pad", "chords", "counter", "arp", "fx"]
 BTN = {"SEL": 3, "HOME": 8, "SAVE": 9, "PLAY": 12}
 ENC = {"SELECT": 0, "KNOB1": 2, "KNOB2": 3, "PRESETS": 6}
+
+
+AMBER = (255 >> 3) << 11 | (165 >> 2) << 5
 
 
 def piece(name, nch=8, bars=8):
@@ -81,6 +84,7 @@ def test_8_2_player_strips_and_bar_beat(tmp_path):
 def test_8_3_sound_change_heard_and_saved_across_reboot(tmp_path):
     flash = str(tmp_path / "flash.bin")
     keys = [(50, f"btn {BTN['PLAY']}"), (600, f"enc {ENC['KNOB1']} 1"), (650, f"enc {ENC['PRESETS']} 5"),
+            (800, "keys 0x10"), (850, "keys 0x0"),
             (900, f"btn {BTN['SAVE']}"), (1500, f"btn {BTN['PLAY']}")]
     (log, wav), t = library_with(tmp_path, ["keep"], keys, 2500, name="save1", env={"HOST_FLASH": flash})
     s = at(log, t + 600)
@@ -92,7 +96,9 @@ def test_8_3_sound_change_heard_and_saved_across_reboot(tmp_path):
     turn = int((t + 650) / 1000 * 44100) * 2
     assert a[:turn - 2000] == b[:turn - 2000] and a[turn + 2000:turn + 40000] != b[turn + 2000:turn + 40000]   # heard
     (log2, _) = run_host(script(tmp_path, "save2", [f"100 btn {BTN['PLAY']}"], 1000), env={"HOST_FLASH": flash})
-    assert (64 + 19, new[-1]) in at(log2, 100), "the saved sound comes back after a power cycle"
+    back = at(log2, 100)
+    assert (64 + 19, new[-1]) in back, "the saved sound comes back after a power cycle"
+    assert (64 + 2 * 19, "M") in back and (64 + 3 * 19, "M") not in back, "so does the mute"
 
 
 def test_8_4_mute_solo_and_home(tmp_path):
@@ -124,3 +130,35 @@ def test_8_5_mashing_and_deleting_the_playing_piece(tmp_path):
     assert rms(f, (t + 600) / 1000, (t + 1400) / 1000) > 300  # still playing from RAM
     s = at(log, t + 1500)
     assert (4, "1 PIECE") in s and (28, "> other") in s and all("doomed" not in txt for _, txt in s)
+
+
+def test_8_1_long_library_scrolls_with_the_cursor(tmp_path):
+    names = [f"p{k:02}" for k in range(11)]               # newest first on screen: p10 .. p00
+    (log, _), t = library_with(tmp_path, names, [(50, f"enc {ENC['SELECT']} 9")], 600)
+    s = screen_full(log)
+    rows = [(y, txt) for ms, y, x, c, txt in s if ms >= t + 50 and x == 4]
+    assert (28 + 8 * 20, "> p01") in rows and (28, "  p09") in rows, rows   # scrolled one row
+    amber = [txt for ms, y, x, c, txt in s if ms >= t + 50 and x == 4 and c == AMBER]
+    assert amber == ["> p01"], amber                                    # only the cursor row is lit
+    assert all(y < 28 + 9 * 20 for ms, y, x, c, txt in s if x == 4 and y >= 28), "nine rows, clear of the footer"
+
+
+def test_8_2_fewer_channels_draw_fewer_strips(tmp_path):
+    lines, t = push(100, piece("trio", nch=3))
+    log, _ = run_host(script(tmp_path, "trio", lines + [f"{t + 50} btn {BTN['PLAY']}"], t + 400))
+    ys = {y for y, txt in at(log, t + 50) if txt}
+    assert 64 + 2 * 19 in ys and not ys & {64 + c * 19 for c in range(3, 8)}
+
+
+def test_8_1_audio_has_no_gaps(tmp_path):
+    from fm1c.piece import Piece, Channel, Note, encode
+    pad = encode(Piece("pad", 1200, 384 * 4, [Channel("pad", [Note(0, 60, 384 * 4 - 1, 100)])]))
+    lines, t = push(100, pad)
+    _, wav = run_host(script(tmp_path, "gaps", lines + [f"{t + 20} btn {BTN['PLAY']}"], t + 1500))
+    f = wav_frames(wav)
+    left = f[int((t + 300) / 1000 * 44100) * 2:int((t + 1400) / 1000 * 44100) * 2:2]
+    run = best = 0
+    for v in left:
+        run = run + 1 if v == 0 else 0
+        best = max(best, run)
+    assert best < 8, best                                   # a held pad: no silent blocks

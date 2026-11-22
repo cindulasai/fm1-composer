@@ -47,6 +47,9 @@ def hostile_cases(tmp):
         f.truncate(10 * 1024 * 1024)
     (tmp / "dir.mid").mkdir()
     (tmp / "exists.f1p").write_bytes(b"keep")
+    noexec = tmp / "t2m-noexec"
+    noexec.write_text("#!/bin/sh\n")
+    noexec.chmod(0o644)
     return {
         "missing file": (["convert", tmp / "missing.mid"], "no such file"),
         "directory": (["convert", tmp / "dir.mid"], "is a folder"),
@@ -61,12 +64,13 @@ def hostile_cases(tmp):
         "bad poly": (["convert", good, "--poly", "0"], "invalid choice"),
         "t2m-cli missing": (["compose", BRIEF, "--t2m", tmp / "no-t2m"], "t2m-cli not found"),
         "brief missing": (["compose", tmp / "nobrief.json", "--t2m", "/bin/sh"], "no such brief"),
+        "t2m-cli not runnable": (["compose", BRIEF, "--t2m", noexec], "t2m-cli not found"),
     }
 
 
 @pytest.mark.parametrize("case", list(hostile_cases(Path("/tmp")).keys()) if False else [
     "missing file", "directory", "corrupt MIDI", "empty MIDI", "10 MB MIDI", "output exists", "output folder missing",
-    "unknown flag", "missing arg", "no command", "bad poly", "t2m-cli missing", "brief missing"])
+    "unknown flag", "missing arg", "no command", "bad poly", "t2m-cli missing", "brief missing", "t2m-cli not runnable"])
 def test_3_4_hostile_inputs_exit_2_cleanly(case, tmp_path):
     args, msg = hostile_cases(tmp_path)[case]
     before = sorted(p.name for p in tmp_path.iterdir())
@@ -126,3 +130,10 @@ def test_3_4_compose_reports_text2midi_failure(tmp_path):
     r = fm1c("compose", brief, "--t2m", fake_t2m(tmp_path, fail=True), "-o", tmp_path / "x.f1p")
     assert r.returncode == 2 and "text2midi could not compose" in r.stderr and "brief is broken" in r.stderr
     assert not (tmp_path / "x.f1p").exists()
+
+
+def test_3_2_compose_names_the_output_after_the_brief(tmp_path):
+    brief = tmp_path / "night drive.json"; brief.write_text("{}")
+    r = fm1c("compose", brief, "--t2m", fake_t2m(tmp_path), cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert decode((tmp_path / "night drive.f1p").read_bytes())

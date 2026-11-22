@@ -1,0 +1,11 @@
+COMMAND: sh prove mutants US-8
+SURVIVED app/firmware/src/composer.c:40  " <= " -> " < "  | _Static_assert(sizeof prefs <= SECTOR_MAX, "prefs fit a blob");
+SURVIVED app/firmware/src/composer.c:74  " <= " -> " < "  | for (i = 0; i + CTL <= n; i += CTL) {
+SURVIVED app/firmware/src/composer.c:120  " < " -> " <= "  | if (pf && pf->sound[ch] < sound_count) s = pf->sound[ch];
+SURVIVED app/firmware/src/composer.c:145  " < " -> " <= "  | for (ch = 0; ch < PIECE_MAX_CH; ch++) p->sound[ch] = snd[ch];
+SURVIVED app/firmware/src/composer.c:179  " < " -> " <= "  | for (k = 0; k < 8u; k++) {
+SURVIVED app/firmware/src/ui.c:61  " >= " -> " > "  | if (cur >= *top + LIB_ROWS) *top = cur - LIB_ROWS + 1u;
+SURVIVED app/firmware/src/ui.c:72  " == " -> " != "  | ui_text(4, y, 190, &FONT_S, b, *top + i == cur ? C_ACC : C_WHITE, 0);
+SURVIVED app/firmware/src/ui.c:110  " >= " -> " > "  | if (ch >= p->nch) { lcd_fill(0, y, 240, 19, C_BLACK); continue; }
+MUTANTS: 11 tried, 3 killed, 8 survived (of 63 candidates in US-8)
+EXIT_CODE: 1

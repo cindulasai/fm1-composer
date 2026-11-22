@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-7
+SURVIVED app/tools/fm1c/link.py:92  " or " -> " and "  | raise PortError(f"no MIDI port matching '{want}' (ports: {', '.join(names) or 'none'}); "
+SURVIVED app/tools/fm1c/link.py:196  "False" -> "True"  | rc, d = self._ask(0x05, answers={0x45, 0x4F}, retry=False)
+MUTANTS: 12 tried, 10 killed, 2 survived (of 173 candidates in US-7)
+EXIT_CODE: 1

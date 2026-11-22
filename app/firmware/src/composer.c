@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* COMPOSER: an FM-1 firmware that keeps a library of up to 8-channel pieces composed on a computer
- * (fm1c pushes them over USB-MIDI), plays them, and lets you pick each channel's sound.
- * Built on Dinghy (zvenson) / Felucca (Leo Kuroshita, Hugelton Instruments) / SLOOP (isod89): platform.c and below.
+ * (fm1c pushes them over USB-MIDI), plays them, lets you pick each channel's sound.
+ * Built on Dinghy (zvenson) / Felucca (Leo Kuroshita, Hugelton Instruments) / SLOOP (isod89): platform.c, everything below it.
  * Sound engines: Felucca-Engines (MIT), app/engines. The chip's rules: docs/RULES.md.
  *
- * LIBRARY: SELECT turns, PLAY opens the piece and plays it.
+ * LIBRARY: SELECT turns, PLAY opens the piece, playing it.
  * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound, KNOB2 the tempo; white keys
- * F3..F4 (1..8) mute a channel, SEL + key solos it; SAVE keeps the sounds, mutes and tempo for this piece; HOME
+ * F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes, tempo for this piece; HOME
  * goes back to the library (and stops). */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
@@ -114,14 +114,13 @@ static int open_piece(uint32_t i)
     }
     loaded_id = e->id;
     pf = pref_find(e->id);
-    for (ch = 0; ch < PIECE_MAX_CH; ch++) {
-        uint32_t s = ch < pl_v.nch ? pl_v.ch[ch].sound : 255u;
-        role[ch] = ch < pl_v.nch ? pl_v.ch[ch].role : ROLE_OTHER;
-        if (pf && pf->sound[ch] < sound_count) s = pf->sound[ch];
+    post(SC_ALL_OFF, 0, 0, 0);
+    for (ch = 0; ch < PIECE_MAX_CH; ch++) {      /* (piece_view: unused channels are OTHER, default sound, volume 0) */
+        uint32_t s = pf ? pf->sound[ch] : pl_v.ch[ch].sound;
+        role[ch] = pl_v.ch[ch].role;
         snd[ch] = (uint8_t)(s < sound_count ? s : sound_default(role[ch]));
-        post(SC_ALL_OFF, 0, 0, 0);
         post(SC_SOUND, ch, snd[ch], 0);
-        if (ch < pl_v.nch) post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
+        post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
     }
     mute = pf ? pf->mute : 0u;
     solo = 0;
@@ -219,7 +218,7 @@ static void app_main(void)
             dirty |= scr ? 0u : D_LIST;
         }
         pressed = fm1_input_edges(&rel);
-        keys = fm1_input_note_edges() | (fm1_in.notes & ~held);   /* (a press shorter than a pass, or one seen held) */
+        keys = fm1_input_note_edges() | (fm1_in.notes & ~held);   /* (also a press shorter than a pass) */
         held = fm1_in.notes;
         if (scr == 0) {
             fm1_enc_take(ENC_KNOB1); fm1_enc_take(ENC_PRESETS); fm1_enc_take(ENC_KNOB2);

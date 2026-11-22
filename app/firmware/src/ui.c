@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* ui.c: COMPOSER's screens, drawn only where something changed (240 x 240, FONT_S rows).
- *   LIBRARY  the pieces, newest first; SELECT moves, PLAY opens one and plays it
+ *   LIBRARY  the pieces, newest first; SELECT moves, PLAY opens one, playing it
  *   PLAYER   the piece: name, tempo, bar:beat, then a strip per channel (role, sound, M / S) */
 #define C_ACC RGB(255, 165, 0)                  /* amber */
 #define C_GREY RGB(120, 120, 120)
@@ -42,7 +42,7 @@ static void ui_text(uint32_t x, uint32_t y, uint32_t w, const felucca_font_t *f,
 {
     draw_text_box(x, y, w, f, s, c, align);
 #ifdef DINGHY_HOST
-    printf("%6u ms  SCREEN %u %u %s\n", fm1_ms, y, x, s);
+    printf("%6u ms  SCREEN %u %u %04X %s\n", fm1_ms, y, x, c, s);
 #endif
 }
 
@@ -110,7 +110,7 @@ static void ui_player(uint32_t dirty, const ui_player_t *p)
             if (ch >= p->nch) { lcd_fill(0, y, 240, 19, C_BLACK); continue; }
             ui_fmt(b, sizeof b, "%s%u", ch == p->sel ? ">" : " ", ch + 1u);
             ui_text(0, y, 24, &FONT_S, b, c, 0);
-            ui_text(26, y, 70, &FONT_S, ROLE_NAME[p->role[ch] < ROLE_COUNT ? p->role[ch] : ROLE_OTHER], c, 0);
+            ui_text(26, y, 70, &FONT_S, ROLE_NAME[p->role[ch]], c, 0);
             ui_text(98, y, 108, &FONT_S, sound_name(p->sound[ch]), c, 0);
             ui_text(206, y, 30, &FONT_S, p->solo >> ch & 1u ? "S" : p->mute >> ch & 1u ? "M" : "", c, 2);
         }
