@@ -52,7 +52,7 @@ static void sounds_init(void)
         }
 }
 
-static int str_eq(const char *a, const char *b)
+static int snd_eq(const char *a, const char *b)
 {
     while (*a && *a == *b) a++, b++;
     return *a == *b;
@@ -63,7 +63,7 @@ static uint32_t sound_find(const char *engine, const char *preset)
 {
     uint32_t i;
     for (i = 0; i < sound_count; i++)
-        if (str_eq(sounds[i].e->name, engine) && str_eq(sounds[i].pr->name, preset)) return i;
+        if (snd_eq(sounds[i].e->name, engine) && snd_eq(sounds[i].pr->name, preset)) return i;
     return sound_count;
 }
 
