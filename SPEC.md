@@ -28,10 +28,10 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, I type "slow melancholic lo-fi 
 | F8 | UI: LIBRARY, PLAYER (8 strips; sound turned in place with PRESETS); per-piece sounds, mutes, tempo saved | v1 | shipped |
 | F9 | Emulator e2e: real `.fwsc` in fm1-live — push over emulated USB, navigate, play, audio, flash cut, strict CPU | v1 | shipped |
 | F10 | Note edit core: insert / delete / change notes of a piece in RAM; piece valid after every op; undo log | v2 | shipped |
-| F12 | Pieces over the MIDI-in jack: SysEx on the TRS input reaches the same transfer as USB | v3 | planned |
-| F13 | Studio engine (WASM): text2midi's composer (copied, pinned) + fit + .f1p encode in Rust, byte-identical to `fm1c compose` | v3 | planned |
-| F14 | Studio page: an idea in plain English → AI (from the browser, user's key) → brief → piece; key in a git-ignored local file or the page's settings | v3 | planned |
-| F15 | Side by side: fm1-emu's browser build (MIT, pinned) runs COMPOSER on the same page; the piece is pushed over the emulated MIDI jack, appears in LIBRARY, plays | v3 | planned |
+| F12 | Pieces over the MIDI-in jack: SysEx on the TRS input reaches the same transfer as USB | v3 | shipped |
+| F13 | Studio engine (WASM): text2midi's composer (copied, pinned) + fit + .f1p encode in Rust, byte-identical to `fm1c compose` | v3 | shipped |
+| F14 | Studio page: an idea in plain English → AI (from the browser, user's key) → brief → piece; key in a git-ignored local file or the page's settings | v3 | shipped |
+| F15 | Side by side: fm1-emu's browser build (MIT, pinned) runs COMPOSER on the same page; the piece is pushed over the emulated MIDI jack, appears in LIBRARY, plays | v3 | shipped |
 | F11 | EDIT screen: piano roll per channel; keys toggle notes at the cursor; grid, length, velocity, octave; play from the cursor's bar; SAVE replaces the piece | v2 | shipped |
 
 ## Design
@@ -92,6 +92,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 "16 voices" → narrowed to the measured number in README.
 
 ## Backlog
+- Versus SLOOP (isod89/sloop-fm1, a mature live groovebox): COMPOSER wins on AI arrangements from plain English, an 8-part arrangement player, and Studio in the browser. To close the gaps, most valuable first: one-click install from the browser; more sounds and engines (FM6 / DX7 patches, physical models); a setlist that chains pieces; piano-roll editing in Studio before pushing; per-channel filter and effects; MIDI out of the playing piece
 - Public Studio page: free / demo AI keys or an in-browser model (no key); public repo or other free static host — user decides
 - Desktop app (Studio packaged)
 - Studio: Web MIDI push to a real FM-1 over USB; audio preview before pushing

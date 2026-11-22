@@ -5,9 +5,12 @@ arrangements made on your computer. You keep a library of pieces on the FM-1, pi
 the sound of each of its up to 8 channels on the device. Mute and solo channels as it plays and set the tempo.
 Your choices are saved with the piece.
 
-On the computer, `fm1c` turns a MIDI file into a piece and pushes it over USB. It can also have
-[text2midi](https://github.com/cindulasai/text2midi_v2) compose one from a brief. Every reduction made to fit the
-FM-1 is reported.
+**COMPOSER Studio** writes those pieces with you, in your browser. Describe the music in plain English, and an AI
+writes a brief. [text2midi](https://github.com/cindulasai/text2midi_v2)'s composer, running in the page, turns it into
+a full arrangement, and one click pushes it to the FM-1 beside it, where you play it and hear it. On the computer,
+`fm1c` also turns any MIDI file into a piece and pushes it over USB. Every reduction made to fit the FM-1 is reported.
+
+![COMPOSER Studio: an idea on the left becomes a piece, which plays on the FM-1 emulator on the right](docs/studio.png)
 
 It is inspired by [SLOOP](https://github.com/isod89/sloop-fm1). It is a different instrument, a library player
 rather than a live groovebox, and is built on the same community platform (Dinghy / Felucca).
@@ -21,7 +24,7 @@ rather than a live groovebox, and is built on the same community platform (Dingh
 From the `app` folder of this repository (macOS on Apple silicon, or Linux; Python 3.11+):
 
 ```sh
-python3 -m venv ../.venv && ../.venv/bin/pip install -q -r tools/requirements.txt
+python3 -m venv ../.venv && ../.venv/bin/pip install -q -r tools/requirements.txt && ../.venv/bin/python -m playwright install chromium-headless-shell
 ```
 
 Then:
@@ -36,6 +39,35 @@ gh run download -n composer-fwsc -D build                   # the firmware CI bu
 
 `fm1c emu` keeps the emulated FM-1's library in `~/.fm1c/emu-flash.bin`, so it is still there next time
 (`--flash FILE` picks another).
+
+## COMPOSER Studio
+
+One page, two sides. On the left you write the idea; on the right is an FM-1 running COMPOSER, the emulator
+[fm1-emu](https://github.com/joakimeriksson/fm1-emu) built for the browser. Everything runs in the page: the AI is
+called straight from it with your own key, and the composer is text2midi's, compiled to WebAssembly.
+
+1. Type an idea ("slow melancholic lo-fi in D minor, 70 bpm, dusty piano") and press **Generate**. The brief appears:
+   style, tempo, key, parts, and anything the AI had to assume.
+2. The piece appears with its size ("4 channels, 811 notes, 32 bars"). **Another take** composes the same brief again
+   with a new seed. **Open a MIDI file** fits any MIDI file instead.
+3. **Start the FM-1**, then **Push to the FM-1**. The piece goes in over the emulator's MIDI jack, and Studio reads it
+   back from the emulated flash before it says "on the FM-1".
+4. Play it with the panel under the screen or the keyboard: space PLAY, Esc HOME, arrows SELECT. The library is kept
+   in this browser, so it is still there after a reload. **Download .f1p / .mid** saves the piece.
+
+To run it, from `app` (after the Quick start's first line):
+
+```sh
+sh tools/get_web_emu.sh             # fm1-emu's browser build, pinned (needs Rust, see "Building and checking")
+gh run download -n composer-fwsc -D build                   # the firmware CI built
+sh tools/studio_key.sh              # optional: your MiniMax key into a git-ignored file
+./fm1c studio                       # opens http://127.0.0.1:8714/
+```
+
+**Settings** takes a key for MiniMax, DeepSeek, Anthropic or any OpenAI-compatible service instead. The key stays
+on your computer: `tools/studio_key.sh` writes `studio/web/local/ai.json` (git-ignored, readable only by you), a key
+typed in Settings stays in the browser, and the page sends it only to the provider you picked. `fm1c studio` serves
+the page to this computer only (127.0.0.1).
 
 ## Playing
 
@@ -77,6 +109,7 @@ fm1c compose BRIEF.json [--seed N] [-o OUT.f1p] [--t2m PATH]     text2midi's t2m
 fm1c push FILES... [--no-wait]                                     each piece read back to verify
 fm1c list | delete ID | pull ID [-o OUT]
 fm1c emu [--fwsc FILE] [--flash FILE]
+fm1c studio [--port N] [--no-open]                                 COMPOSER Studio in your browser
 ```
 
 By default fm1c finds the FM-1 by its USB name ("Felucca", as with every Felucca-based firmware), else
@@ -100,7 +133,10 @@ playback stops. `fm1c` says "staged" and then "saved" (or exits at once with `--
 ## Building and checking
 
 CI (GitHub Actions) builds the `.fwsc` with JieLi's toolchain (`sh build.sh`, Linux x86-64). Everything else runs
-on your computer:
+on your computer. Studio's engine and the browser emulator are Rust compiled to WebAssembly, so checking needs
+[Rust](https://rustup.rs) with `rustup target add wasm32-unknown-unknown` and
+`cargo install wasm-bindgen-cli --version 0.2.130`, plus a headless Chromium for the page tests
+(`../.venv/bin/python -m playwright install chromium-headless-shell`). Then:
 
 ```sh
 sh check.sh
@@ -110,6 +146,9 @@ The gate runs, in order:
 - C unit tests under the sanitizers.
 - pytest: unit, property and hostile tests, plus end-to-end tests through host mode (the firmware compiled
   for this computer, driven by scripted keys and SysEx, checked by the screen text and the WAV it makes).
+- Studio: the engine against `fm1c` (the same bytes for every suite brief and for 300 random MIDI files), and the
+  page in headless Chromium with the AI faked: generating, errors, pushing into the browser emulator, and its screen
+  compared pixel for pixel with host mode.
 - The CI-built firmware in fm1-emu (`tests/emu_e2e.sh`): screens pixel-identical to host mode, pushes over
   emulated USB, USB audio, a power cut at every flash write, and on-chip timing. Without the emulator or a
   `build/composer.fwsc`, this step prints one `emu e2e: SKIP` line saying which is missing.
@@ -121,6 +160,7 @@ GPL-3.0-only, see `../LICENSING.md`. COMPOSER is built on these:
 - Felucca (Leo Kuroshita, Hügelton Instruments)
 - SLOOP (isod89)
 - Felucca-Engines (MIT)
-- fm1-emu (Joakim Eriksson, MIT), used for testing
+- fm1-emu (Joakim Eriksson, MIT): used for testing, and Studio's FM-1 on the page
+- text2midi (the composer crates in `studio/engine`, copied unchanged; see `studio/engine/PROVENANCE.md`)
 
 "M-VAVE" and "FM-1" belong to their owners; COMPOSER is not made or endorsed by them.
