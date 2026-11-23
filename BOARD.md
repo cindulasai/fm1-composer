@@ -22,7 +22,7 @@
 | US-19 | SLOOP's FM6 engine + DX7 patches | 1 | proven | 0 |
 | US-20 | PHYS, DIGITAL, VOICE engines | 1 | todo | 0 |
 | US-21 | 32 synthesized drum kits | 1 | proven | 0 |
-| US-22 | text2midi's instruments, roles, mix | 1 | todo | 0 |
+| US-22 | text2midi's instruments, roles, mix | 1 | proven | 0 |
 
 ## Impediments
 - US-14, US-15: done-self: v3 Adversary FAILs were on criteria replaced by v4 (US-16, US-17, done); their remaining criteria (14.4 key file, 14.5 server, 15.5 emulator pin) were not re-reviewed fresh
