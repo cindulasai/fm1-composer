@@ -1,0 +1,4 @@
+COMMAND: cd app && FM1_EMU_RUN=1 FM1_LIVE=/Users/bot/Claude/Projects/fm1-composer/vendor/fm1-emu/fm1-live FM1_FWSC=/Users/bot/Claude/Projects/fm1-composer/app/build/ci-v5f/composer.fwsc PYTHONPATH=tools /Users/bot/Claude/Projects/fm1-composer/.venv/bin/python -m pytest -q -p no:cacheprovider tools/tests/test_emu.py -k 19_6
+.                                                                        [100%]
+1 passed, 9 deselected in 33.05s
+EXIT_CODE: 0
