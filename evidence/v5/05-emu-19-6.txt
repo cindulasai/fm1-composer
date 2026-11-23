@@ -1,0 +1,66 @@
+COMMAND: cd app && FM1_EMU_RUN=1 FM1_LIVE=/Users/bot/Claude/Projects/fm1-composer/vendor/fm1-emu/fm1-live FM1_FWSC=build/ci-v5f/composer.fwsc PYTHONPATH=tools /Users/bot/Claude/Projects/fm1-composer/.venv/bin/python -m pytest -q -p no:cacheprovider tools/tests/test_emu.py -k 19_6
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________ test_19_6_strict_timing_sixteen_fm6_voices __________________
+
+tmp_path = PosixPath('/private/var/folders/9k/ry2jpry5791d4vht2ctjslj40000gp/T/pytest-of-bot/pytest-1545/test_19_6_strict_timing_sixtee0')
+
+    @emu_only
+    def test_19_6_strict_timing_sixteen_fm6_voices(tmp_path):
+        d, chans = fm6_sixteen()
+        assert len(chans) == 3 == int(re.search(r"#define ENG_FM6_MAX (\d+)u", (APP / "firmware/src/sloop_glue.c").read_text())[1])
+        ends = sorted((n.tick, n.tick + n.dur) for ch in chans for n in ch.notes)
+        t = 384 * 2                                               # (from bar 3: every 16th holds 18 sounding FM6 notes)
+        assert all(sum(a <= x < b for a, b in ends) >= 16 for x in range(t, ends[-1][0], 24)), "16 FM6 voices busy"
+>       empty, under, level = strict_densest(tmp_path, d)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tools/tests/test_emu.py:215: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tools/tests/test_emu.py:184: in strict_densest
+    report, _, s = emu(tmp_path, t + 10500, usb=usb, keys=f"{t + 200}:PLAY,{t + 250}:PLAY^", strict=True, wav=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp = PosixPath('/private/var/folders/9k/ry2jpry5791d4vht2ctjslj40000gp/T/pytest-of-bot/pytest-1545/test_19_6_strict_timing_sixtee0')
+ms = 19640
+usb = '1500:f07d46310311647900002c5a790023f7;1560:f07d46310400000000004631500031010300007805006000001b000066006d367831360000...64000040003d08640000400040640400004000436400020040004664000051400049640802210f1d2b773729f7;8880:f07d4631050000000000f7'
+keys = '9340:PLAY,9390:PLAY^', flash = None, cut = None, strict = True
+wav = True
+
+    def emu(tmp, ms, usb=None, keys=None, flash=None, cut=None, strict=False, wav=False):
+        """one headless fm1-live run; (report text, LCD as RGB565 bytes, USB audio samples or None)"""
+        work = tmp / "run"
+        (work / "work").mkdir(parents=True, exist_ok=True)
+        env = {**os.environ}
+        for k in ("FM1_USB_SEND", "FM1_BENCH_KEYS", "FM1_FLASH_CUT", "FM1_STRICT", "FM1_USB_WAV"):
+            env.pop(k, None)
+        env["FM1_NO_PLAY"] = "1"                                 # (--shot presses PLAY by itself otherwise)
+        args = [LIVE, "--fwsc", FWSC, "--shot", str(ms), "--lcd-only"]
+        if usb:
+            (work / "usb.txt").write_text(usb)
+            env["FM1_USB_SEND"] = "@" + str(work / "usb.txt")
+        if usb or wav:
+            args.append("--usb")
+        if keys:
+            env["FM1_BENCH_KEYS"] = keys
+        if flash:
+            args += ["--flash", str(flash)]
+        if cut:
+            env["FM1_FLASH_CUT"] = str(cut)
+        if strict:
+            env["FM1_STRICT"] = "1"
+        if wav:
+            env["FM1_USB_WAV"] = str(work / "usb.raw")
+        r = subprocess.run(args, cwd=work, env=env, capture_output=True, text=True, timeout=600)
+>       assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+E       AssertionError: cannot read work/felucca_xip.bin: No such file or directory (os error 2)
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/Users/bot/Claude/Projects/fm1-composer/vendor/fm1-emu/fm1-live', '--fwsc', 'build/ci-v5f/comp...'--usb'], returncode=1, stdout='', stderr='cannot read work/felucca_xip.bin: No such file or directory (os error 2)\n').returncode
+
+tools/tests/test_emu.py:81: AssertionError
+=========================== short test summary info ============================
+FAILED tools/tests/test_emu.py::test_19_6_strict_timing_sixteen_fm6_voices - ...
+1 failed, 10 deselected in 0.15s
+EXIT_CODE: 1
