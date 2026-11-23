@@ -120,3 +120,98 @@ static const engine_t ENG_KIT = {
     .render = dk_render,
     .amp = dk_amp,
 };
+
+/* ------------------------------------------------ SLOOP's synthesised kits --- */
+/* COMPOSER glue (US-21): SLOOP 2.8.5's 32 synthesised drum kits (drum_synth.c, felucca_drumkits.h from
+ * tools/gen_drumkits.py, copied unchanged: SLOOP-PROVENANCE.md) as a second drum engine, appended to the sound
+ * catalog after every other sound (the three kits above keep their ids and their sound). Its presets are the kits,
+ * in SLOOP's order; GM notes 35..82 map as SLOOP maps them (DS_MAP: 36 kick, 38 snare, 42 closed hat, 46 open hat,
+ * 49 crash, ...), any other note is silent.
+ * Each voice's SLOOP state (dsv_t) lives beside the voice: dsyn_v[part][voice]. SLOOP's voice makes its own
+ * envelopes and velocity; the synth's amplitude path only fades a stolen / stopped voice (v->s[0], halved each
+ * block in stage 4), ramped over the block. EDIT: E0 tune (64 = as designed, +-4 semitones), E1 decay (SLOOP's
+ * DECAY -4..+3, 64 = as designed); E2 holds the kit (the preset's, not shown). */
+#include "drum_tables.h"                        /* DECAY_K (SLOOP's gen_tables.py; Felucca-Engines' tables lack it) */
+static uint32_t dsyn_rng_state = 0x2545F491u;   /* SLOOP seeds each hit's noise from its rng(): our own here */
+static uint32_t dsyn_rng(void)
+{
+    dsyn_rng_state ^= dsyn_rng_state << 13;
+    dsyn_rng_state ^= dsyn_rng_state >> 17;
+    dsyn_rng_state ^= dsyn_rng_state << 5;
+    return dsyn_rng_state;
+}
+#define rng dsyn_rng
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"           /* (its user-kit bank and editor helpers: unused here) */
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
+#include "drum_synth.c"
+#pragma GCC diagnostic pop
+#undef rng
+
+#define DSYN_NOTE_LO 35u                        /* DS_MAP's notes; outside them, silence */
+#define DSYN_NOTE_HI 82u
+static dsv_t dsyn_v[NPART][NVOICE];
+
+static dsv_t *dsyn_of(struct track *t, voice_t *v) { return &dsyn_v[t - trk][v - t->v]; }
+
+static void dsyn_note_on(struct track *t, voice_t *v)
+{
+    const int16_t *p = t->p;
+    uint32_t kit = (uint32_t)clamp(p[P_E2], 0, (int32_t)DS_NKITS - 1);
+    if (v->note < DSYN_NOTE_LO || v->note > DSYN_NOTE_HI) {   /* outside the map: no voice */
+        v->active = 0; v->stage = 0; v->gate = 0;
+        return;
+    }
+    ds_on(dsyn_of(t, v), DS_KITS[kit].s, DS_KITS[kit].crush, v->note, v->vel, clamp(p[P_E0], 0, 127) - 64,
+          (uint32_t)clamp(p[P_E1], 0, 127) >> 4);
+    v->s[0] = v->s[1] = 32767;                  /* the fade: now, and at the end of the last block */
+}
+
+static int32_t dsyn_amp(struct track *t, voice_t *v, int32_t adsr)
+{
+    (void)t; (void)adsr;
+    if (v->s[0] < 8) { v->active = 0; v->stage = 0; v->gate = 0; return 0; }
+    return v->s[0];
+}
+
+static void dsyn_render(struct track *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+{
+    int32_t buf[CTL], f0 = v->s[1], f1 = v->s[0];
+    uint32_t i;
+    int alive;
+    (void)m;
+    if (n > CTL) n = CTL;
+    alive = ds_render(dsyn_of(t, v), buf, n);
+    v->s[1] = f1;
+    if (f0 == 32767 && f1 == 32767)
+        for (i = 0; i < n; i++) out[i] += buf[i];
+    else
+        for (i = 0; i < n; i++)
+            out[i] += (int32_t)((int64_t)buf[i] * (f0 + ((f1 - f0) * (int32_t)(i + 1u) >> CTL_LOG2)) >> 15);
+    if (!alive) { v->active = 0; v->stage = 0; v->gate = 0; }
+}
+
+#define DSYN_KIT(name, k) {name, {64, 64, k, 0, 0, 0, 0, 0}, {0, 0, 127, 0}, 0, 0, FX(0, 0, 0, 0), PAT(0)}
+static const preset_t DSYN_PRESETS[] = {        /* SLOOP's kits: its order, its names (DS_KITS; test 21.1) */
+    DSYN_KIT("808", 0), DSYN_KIT("909", 1), DSYN_KIT("606", 2), DSYN_KIT("80S", 3), DSYN_KIT("VINTAGE", 4),
+    DSYN_KIT("TRAP", 5), DSYN_KIT("DRILL", 6), DSYN_KIT("BOOMBAP", 7), DSYN_KIT("LO-FI", 8), DSYN_KIT("PHONK", 9),
+    DSYN_KIT("HOUSE", 10), DSYN_KIT("D.HOUSE", 11), DSYN_KIT("TECHNO", 12), DSYN_KIT("MINIMAL", 13),
+    DSYN_KIT("ELECTRO", 14), DSYN_KIT("DISCO", 15), DSYN_KIT("GARAGE", 16), DSYN_KIT("JUNGLE", 17),
+    DSYN_KIT("DUBSTEP", 18), DSYN_KIT("DEMBOW", 19), DSYN_KIT("AMAPIANO", 20), DSYN_KIT("AFRO", 21),
+    DSYN_KIT("LATIN", 22), DSYN_KIT("TRIBAL", 23), DSYN_KIT("SYNTHWV", 24), DSYN_KIT("CHIP", 25),
+    DSYN_KIT("ARCADE", 26), DSYN_KIT("GLITCH", 27), DSYN_KIT("INDUSTR", 28), DSYN_KIT("HYPER", 29),
+    DSYN_KIT("AMBIENT", 30), DSYN_KIT("JAZZ", 31),
+};
+_Static_assert(NELEM(DSYN_PRESETS) == DS_NKITS, "a preset per SLOOP kit");
+
+static const engine_t ENG_DSYN = {
+    .name = "KIT",                              /* (the drum engine, to the player: KIT, like the three above) */
+    .page_title = {"KIT", "KIT"},
+    .edit = {{"TUNE", F_INT, 0, 127, 64, 0, 0}, {"DECAY", F_INT, 0, 127, 64, 0, 0}},
+    .presets = DSYN_PRESETS,
+    .npresets = NELEM(DSYN_PRESETS),
+    .oneshot = 1,
+    .note_on = dsyn_note_on,
+    .render = dsyn_render,
+    .amp = dsyn_amp,
+};

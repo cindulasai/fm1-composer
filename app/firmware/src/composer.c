@@ -5,9 +5,9 @@
  * Sound engines: Felucca-Engines (MIT), app/engines. The chip's rules: docs/RULES.md.
  *
  * LIBRARY: SELECT turns, PLAY opens the piece, playing it.
- * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound, KNOB2 the tempo; white keys
- * F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes, tempo for this piece; HOME
- * goes back to the library (and stops). */
+ * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound (a drum channel: the 35 kits),
+ * KNOB2 the tempo; white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
+ * tempo for this piece; HOME goes back to the library (and stops). */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
 #include <stdint.h>
@@ -77,6 +77,18 @@ static void set_status(const char *s) { status = s; dirty |= D_FOOT; }
 static void post(uint32_t op, uint32_t ch, uint32_t a, uint32_t b)
 {
     while (synth_post(op, ch, a, b)) platform_poll();   /* (the audio interrupt drains it within 6 ms) */
+}
+
+/* PRESETS turned d clicks on channel ch: the next sound; a drum channel (DRUMS, PERC) turns through the kits only */
+static uint32_t sound_turn(uint32_t ch, int32_t d)
+{
+    int32_t s = snd[ch], n = (int32_t)sound_count, step;
+    if (role[ch] != ROLE_DRUMS && role[ch] != ROLE_PERC) return (uint32_t)((s + d) % n + n) % n;
+    for (; d; d -= step) {
+        step = d > 0 ? 1 : -1;
+        do s = (s + step + n) % n; while (!sounds[s].e->oneshot);
+    }
+    return (uint32_t)s;
 }
 
 /* open library entry i: copy it to RAM, check it, load the player, apply the saved choices */
@@ -167,7 +179,7 @@ static void player_input(uint32_t pressed, uint32_t keys)
         dirty |= D_STRIPS;
     }
     if ((d = fm1_enc_take(ENC_PRESETS))) {
-        snd[sel] = (uint8_t)(((int32_t)snd[sel] + d) % (int32_t)sound_count + (int32_t)sound_count) % sound_count;
+        snd[sel] = (uint8_t)sound_turn(sel, d);
         post(SC_SOUND, sel, snd[sel], 0);
         dirty |= D_STRIPS;
     }
@@ -235,7 +247,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
         dirty |= D_ROLL;
     }
     if ((d = fm1_enc_take(ENC_PRESETS))) {
-        snd[sel] = (uint8_t)(((int32_t)snd[sel] + d) % (int32_t)sound_count + (int32_t)sound_count) % sound_count;
+        snd[sel] = (uint8_t)sound_turn(sel, d);
         post(SC_SOUND, sel, snd[sel], 0);
     }
     for (k = 0; k < ROLL_KEYS; k++)             /* a preview ends with its key */

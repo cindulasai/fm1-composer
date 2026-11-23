@@ -34,7 +34,8 @@ static track_t trk[NPART];
 #include "piece.h"
 
 /* ---------------------------------------------------------------- the sounds --- */
-static const engine_t *const ENGINES[] = {&ENG_KIT, &ENG_ANALOG, &ENG_PHASE, &ENG_TRIO, &ENG_WHEEL, &ENG_LOFI, &ENG_NOISE};
+static const engine_t *const ENGINES[] = {&ENG_KIT, &ENG_ANALOG, &ENG_PHASE, &ENG_TRIO, &ENG_WHEEL, &ENG_LOFI, &ENG_NOISE,
+                                          &ENG_DSYN};   /* (new engines after the others: sound ids never move) */
 #define SOUND_MAX 128u
 typedef struct { const engine_t *e; const preset_t *pr; } sound_t;
 static sound_t sounds[SOUND_MAX];
@@ -355,9 +356,9 @@ static void synth_render(int32_t *out, uint32_t n)
             any = 1;
         }
         if (!any) continue;
-        for (i = 0; i < n; i++) {
-            mixl[i] += buf[i] * c->gl >> 15;
-            mixr[i] += buf[i] * c->gr >> 15;
+        for (i = 0; i < n; i++) {               /* (64-bit products: a loud part, many hits, past 2^31) */
+            mixl[i] += (int32_t)((int64_t)buf[i] * c->gl >> 15);
+            mixr[i] += (int32_t)((int64_t)buf[i] * c->gr >> 15);
         }
     }
     for (i = 0; i < n; i++) {                   /* headroom for 16 voices, then a soft knee, then the hard limit */

@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* US-4: synth.c through its interface: voice budget and stealing, every sound audible and silent after release,
- * role defaults, hostile calls ignored, render cost. */
+ * role defaults, hostile calls ignored, render cost. US-21: SLOOP's 32 synthesised kits (21.1, 21.2, 21.4, 21.5). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 #define VCHK(k) ((k) < NVOICE ? (k) : (abort(), 0u))   /* every voice index in range */
 #include "synth.c"
 
@@ -81,7 +82,7 @@ static void test_4_2_every_sound_sounds_and_ends(void)
     uint32_t id;
     synth_init();
     for (id = 0; id < sound_count; id++) {
-        uint32_t note = sounds[id].e == &ENG_KIT ? 38u : 60u;
+        uint32_t note = sounds[id].e->oneshot ? 38u : 60u;
         synth_init();
         synth_sound(0, id);
         synth_level(0, 127, 64);
@@ -126,7 +127,7 @@ static void test_4_3_role_defaults(void)
     }
     CHECK(sound_default(ROLE_DRUMS) == find("KIT", "STD KIT"), "drums get the kit");
     CHECK(sound_default(200) == sound_default(ROLE_OTHER), "unknown role: other's sound");
-    CHECK(sound_count == 40 && sound_count <= SOUND_MAX, "catalog size %u", sound_count);
+    CHECK(sound_count == 72 && sound_count <= SOUND_MAX, "catalog size %u", sound_count);
     CHECK(snd_eq(sound_name(sound_count), "?") && snd_eq(sound_engine(9999), "?"), "out of range names");
 }
 
@@ -467,6 +468,212 @@ static void test_4_4_render_before_init_is_silent(void)
     for (i = 0; i < 2 * CTL; i++) CHECK(out[i] == 7, "untouched before init");
 }
 
+/* ------------------------------------------------ US-21: SLOOP's synthesised kits --- */
+static uint32_t dsyn_first(void)                        /* the first SLOOP kit's sound id */
+{
+    uint32_t id;
+    for (id = 0; id < sound_count && sounds[id].e != &ENG_DSYN; id++) {}
+    return id;
+}
+
+/* one hit on channel 0 (full level, centre) of sound id: the left channel's first n samples */
+static void hit(uint32_t id, uint32_t note, uint32_t vel, int32_t *mono, uint32_t n)
+{
+    int32_t out[2 * CTL];
+    uint32_t i, b;
+    synth_init();
+    synth_sound(0, id);
+    synth_level(0, 100, 64);
+    synth_on(0, note, vel);
+    for (b = 0; b * CTL < n; b++) {
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+        for (i = 0; i < CTL && b * CTL + i < n; i++) mono[b * CTL + i] = out[2 * i];
+    }
+}
+
+#define CN 1024u                                        /* 23 ms from the hit */
+/* spectral centroid, Hz: of the power spectrum (Hann window, DFT), where the sound's energy sits. (Of the magnitude
+ * spectrum, a snare's high-passed white noise reads higher than a band-passed 9 kHz hat: 11 vs 9 kHz) */
+static double centroid(const int32_t *x)
+{
+    static double c[CN], s[CN], w[CN];
+    double num = 0, den = 0;
+    uint32_t k, i;
+    if (w[1] == 0)
+        for (i = 0; i < CN; i++) {
+            c[i] = cos(2 * M_PI * i / CN); s[i] = sin(2 * M_PI * i / CN); w[i] = 0.5 - 0.5 * c[i];
+        }
+    for (k = 1; k < CN / 2; k++) {
+        double re = 0, im = 0, pw;
+        for (i = 0; i < CN; i++) { re += x[i] * w[i] * c[(k * i) % CN]; im -= x[i] * w[i] * s[(k * i) % CN]; }
+        pw = re * re + im * im;
+        num += pw * k * 44100.0 / CN;
+        den += pw;
+    }
+    return den > 0 ? num / den : 0;
+}
+
+static void test_21_1_every_kit_sounds_its_gm_notes_kick_darker_than_snare_than_hat(void)
+{
+    static const uint8_t GM[5] = {36, 38, 42, 46, 49};   /* kick, snare, closed hat, open hat, crash */
+    static int32_t x[4096];
+    uint32_t id0 = dsyn_first(), k, j, i;
+    CHECK(id0 + DS_NKITS == sound_count && DS_NKITS == 32u, "32 kits at the end of the catalog: %u + %u of %u", id0,
+          DS_NKITS, sound_count);
+    for (k = 0; k < DS_NKITS && id0 + k < sound_count; k++) {
+        uint32_t id = id0 + k;
+        double cen[3];
+        CHECK(sounds[id].e == &ENG_DSYN && snd_eq(sound_name(id), DS_KITS[k].name) && snd_eq(sound_engine(id), "KIT"),
+              "kit %u is SLOOP's %s (%s)", k, DS_KITS[k].name, sound_name(id));
+        CHECK(sound_find("KIT", DS_KITS[k].name) == id, "kit %s found by name", DS_KITS[k].name);
+        for (j = 0; j < 5; j++) {
+            int32_t pk = 0;
+            hit(id, GM[j], 110, x, 4096);
+            for (i = 0; i < 4096; i++) pk = x[i] > pk ? x[i] : -x[i] > pk ? -x[i] : pk;
+            CHECK(pk > 300, "%s note %u silent (peak %d)", sound_name(id), GM[j], pk);
+            if (j < 3) cen[j] = centroid(x);
+        }
+        CHECK(cen[0] < cen[1] && cen[1] < cen[2], "%s: kick %.0f Hz < snare %.0f Hz < hat %.0f Hz", sound_name(id), cen[0],
+              cen[1], cen[2]);
+    }
+    printf("21.1 %u kits: GM 36 38 42 46 49 sound; kick < snare < closed hat (spectral centroid)\n", DS_NKITS);
+}
+
+/* a kit's render as a CRC-32: every GM drum note 35..81 and the edges 0 / 127 at three velocities, one hit every 3
+ * blocks, overlapping, on channel 2; then 1 s of tails; again with the kit's EDIT moved */
+static uint32_t crc32_upd(uint32_t c, const void *p, size_t n)
+{
+    const uint8_t *b = p;
+    size_t i;
+    int j;
+    c = ~c;
+    for (i = 0; i < n; i++) { c ^= b[i]; for (j = 0; j < 8; j++) c = c >> 1 ^ (0xEDB88320u & -(c & 1u)); }
+    return ~c;
+}
+
+static uint32_t kit_crc(uint32_t id)
+{
+    static const uint8_t VEL[3] = {127, 90, 30};
+    int32_t out[2 * CTL];
+    uint32_t crc = 0, pass, note, b, v;
+    for (pass = 0; pass < 2; pass++) {
+        synth_init();
+        synth_sound(2, id);
+        synth_level(2, 90, 64);
+        if (pass) { trk[2].p[P_E0] = 20; trk[2].p[P_E1] = 110; trk[2].p[P_E2] = 10; trk[2].p[P_E3] = 90; }
+        for (v = 0; v < 3; v++)
+            for (note = 34; note <= 82; note++) {
+                synth_on(2, note == 34 ? 0 : note == 82 ? 127 : note, VEL[v]);
+                for (b = 0; b < 3; b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+            }
+        for (b = 0; b < 44100 / CTL; b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+    }
+    return crc;
+}
+
+static void test_21_2_composer_kits_keep_ids_and_render_bit_identical(void)
+{
+    /* captured from v4's synth (3615169), before the SLOOP kits were added */
+    static const struct { const char *name; uint32_t crc; } V4[3] = {
+        {"STD KIT", 0xEB9AFAC1u}, {"TIGHT KIT", 0x02B5F725u}, {"BOOM KIT", 0xB6D8327Eu}};
+    uint32_t k;
+    synth_init();
+    for (k = 0; k < 3; k++) {
+        uint32_t crc;
+        CHECK(sounds[k].e == &ENG_KIT && snd_eq(sound_name(k), V4[k].name), "id %u is %s (%s)", k, V4[k].name, sound_name(k));
+        crc = kit_crc(k);
+        CHECK(crc == V4[k].crc, "%s renders as in v4: %08X, v4 %08X", V4[k].name, crc, V4[k].crc);
+    }
+    CHECK(sound_find("ANALOG", "SAW LEAD") == 3 && sound_find("NOISE", "RAIN") < 40, "the other sounds keep their ids");
+    printf("21.2 STD / TIGHT / BOOM KIT: ids 0..2, renders bit-identical to v4\n");
+}
+
+static void test_21_4_notes_outside_the_map_silent_six_hits_on_a_tick_all_sound(void)
+{
+    static const uint8_t SIX[6] = {36, 38, 42, 46, 49, 39};
+    static const uint8_t OFF[4] = {0, 34, 83, 127};
+    int32_t out[2 * CTL];
+    uint32_t id0 = dsyn_first(), k, j, i, b;
+    for (k = 0; k < DS_NKITS; k++) {
+        synth_init();
+        synth_sound(0, id0 + k);
+        synth_level(0, 127, 64);
+        for (j = 0; j < 4; j++) synth_on(0, OFF[j], 127);
+        CHECK(synth_count(0) == 0, "%s: notes outside the map take no voice (%u)", sound_name(id0 + k), synth_count(0));
+        peak = 0;
+        run(SEC(0.1), 1u << 30);
+        CHECK(peak == 0, "%s: notes 0 34 83 127 silent (peak %d)", sound_name(id0 + k), peak);
+        for (j = 0; j < 6; j++) synth_on(0, SIX[j], 127);   /* one tick */
+        for (b = 0; b < 2; b++) {
+            memset(out, 0, sizeof out);
+            synth_render(out, CTL);
+        }
+        CHECK(synth_count(0) == 6, "%s: 6 hits, 6 voices (%u)", sound_name(id0 + k), synth_count(0));
+        for (i = 0; i < NVOICE; i++) {                  /* each of the six: its own lane, and sound in its next block */
+            voice_t *v = &trk[0].v[i];
+            dsv_t copy = dsyn_v[0][i];
+            int32_t one[CTL], pk = 0;
+            int32_t semi;
+            if (!v->active) continue;
+            CHECK(dsyn_v[0][i].d == &DS_KITS[k].s[ds_lane(v->note, &semi)], "%s: hit %u on its lane", sound_name(id0 + k), v->note);
+            ds_render(&copy, one, CTL);
+            for (b = 0; b < CTL; b++) pk = one[b] > pk ? one[b] : -one[b] > pk ? -one[b] : pk;
+            CHECK(pk > 30, "%s: hit %u sounds among the six (peak %d)", sound_name(id0 + k), v->note, pk);
+        }
+    }
+    {                                                   /* every note, every velocity: no crash, nothing past full scale */
+        synth_init();
+        synth_sound(0, id0 + 28);                       /* (INDUSTR: the most drive) */
+        synth_level(0, 127, 64);
+        for (j = 0; j < 128; j++) { synth_on(0, j, (j * 37u) % 127u + 1u); run(1, 1u << 30); }
+        run(SEC(3), 1u << 30);
+        CHECK(synth_active() == 0, "every hit ends");
+    }
+    printf("21.4 notes 0 34 83 127 silent on every kit; 6 hits on one tick: 6 voices sounding\n");
+}
+
+/* the densest piece of the suite (test_emu.py dense(): 8 channels of 16th-note pairs at 140 BPM), its drum channel on
+ * a SLOOP kit: microseconds per 256 frames on this host */
+static double dense_us(uint32_t kit_id, uint32_t secs)
+{
+    static const uint8_t ROLES[8] = {ROLE_LEAD, ROLE_BASS, ROLE_DRUMS, ROLE_PAD, ROLE_CHORDS, ROLE_COUNTER, ROLE_ARP, ROLE_FX};
+    int32_t out[2 * CTL];
+    uint32_t ch, fr, s = 0, total = secs * 44100u / CTL * CTL, k;
+    struct timespec t0, t1;
+    synth_init();
+    for (ch = 0; ch < 8; ch++) { synth_sound(ch, ch == 2 ? kit_id : sound_default(ROLES[ch])); synth_level(ch, 100, 64); }
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (fr = 0; fr < total; fr += CTL) {
+        if (fr >= s * 4725u) {                          /* a 16th at 140 BPM: 4725 frames */
+            for (ch = 0; ch < 8; ch++) {
+                if (s) for (k = 0; k < 2; k++) synth_off(ch, (ch == 2 ? 38 : 40 + ch * 5) + k * 7 + (s - 1) % 5);
+                for (k = 0; k < 2; k++) synth_on(ch, (ch == 2 ? 38 : 40 + ch * 5) + k * 7 + s % 5, 100);
+            }
+            s++;
+        }
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    return ((t1.tv_sec - t0.tv_sec) * 1e6 + (t1.tv_nsec - t0.tv_nsec) / 1e3) / (total / 256.0);
+}
+
+static void test_21_5_densest_drum_pattern_on_a_sloop_kit_well_under_budget(void)
+{
+    uint32_t id0 = dsyn_first(), k, worst = id0;
+    double w = 0, us, us_std;
+    for (k = 0; k < DS_NKITS; k++) {
+        double t = dense_us(id0 + k, 1);
+        if (t > w) { w = t; worst = id0 + k; }
+    }
+    us = dense_us(worst, 5);
+    us_std = dense_us(0, 5);
+    printf("21.5 densest piece, drums on %s: %.0f us per 256 frames on this host (STD KIT %.0f; budget 3000)\n",
+           sound_name(worst), us, us_std);
+    CHECK(us < 1500.0, "densest piece on %s: %.0f us per 256 frames", sound_name(worst), us);
+}
+
 int main(void)
 {
     test_4_4_render_before_init_is_silent();
@@ -490,6 +697,10 @@ int main(void)
     test_4_2_drum_voices();
     test_4_4_hush_silences_everything();
     test_4_5_render_cost();
+    test_21_1_every_kit_sounds_its_gm_notes_kick_darker_than_snare_than_hat();
+    test_21_2_composer_kits_keep_ids_and_render_bit_identical();
+    test_21_4_notes_outside_the_map_silent_six_hits_on_a_tick_all_sound();
+    test_21_5_densest_drum_pattern_on_a_sloop_kit_well_under_budget();
     printf("%s (%u sounds)\n", fails ? "FAILED" : "ok", sound_count);
     return fails ? 1 : 0;
 }
