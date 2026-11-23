@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 import mido
 
 from . import sounds
-from .piece import (DEFAULT_SOUND, ROLES, Channel, Note, Piece, PieceError, MAX_BYTES, MAX_CH, MAX_TICKS, PPQ,
-                    clean_name, encode)
+from .piece import (DEFAULT_SOUND, ROLES, Channel, Note, Piece, PieceError, Section, MAX_BYTES, MAX_CH, MAX_SECT,
+                    MAX_TICKS, PPQ, clean_name, encode, section_name)
 
 MAX_INPUT = 8 * 1024 * 1024
 LOW, HIGH = 24, 96                       # C1 .. C7
@@ -88,10 +88,10 @@ def _read(path: str) -> mido.MidiFile:
         raise FitError(f"{path}: not a readable MIDI file ({e})") from None
 
 
-def _parts(mid: mido.MidiFile) -> tuple[list[_Part], int, bool]:
-    """Notes per (track, channel); the first tempo; whether pitch bends were seen."""
+def _parts(mid: mido.MidiFile) -> tuple[list[_Part], int, bool, list[tuple[int, str]]]:
+    """Notes per (track, channel); the first tempo; whether pitch bends were seen; the markers (tick, text)."""
     parts: dict[tuple[int, int], _Part] = {}
-    tempo, bends = None, False
+    tempo, bends, markers = None, False, []
     for ti, tr in enumerate(mid.tracks):
         name, t = "", 0
         held: dict[tuple[int, int], list[tuple[int, int]]] = {}
@@ -101,6 +101,8 @@ def _parts(mid: mido.MidiFile) -> tuple[list[_Part], int, bool]:
             t += m.time
             if m.type == "track_name" and not name:
                 name = _utf8(m.name)
+            elif m.type == "marker":
+                markers.append((t, _utf8(m.text)))
             elif m.type == "set_tempo" and tempo is None:
                 tempo = m.tempo
             elif m.type == "pitchwheel" and m.pitch:
@@ -127,7 +129,29 @@ def _parts(mid: mido.MidiFile) -> tuple[list[_Part], int, bool]:
                 p.vol = cc.get(ch, {}).get(7, 100)
                 p.pan = cc.get(ch, {}).get(10, 64)
                 p.program = prog.get(ch)
-    return [p for p in parts.values() if p.notes], tempo or 500000, bends
+    return [p for p in parts.values() if p.notes], tempo or 500000, bends, markers
+
+
+def _sections(markers: list[tuple[int, str]], scale, length: int, rep: Report) -> list[Section]:
+    """text2midi's form (a marker at each section's start) as the sections table: in time order, the first of a
+    tick kept, inside the piece, at most MAX_SECT."""
+    out: list[Section] = []
+    same = late = 0
+    for t, text in sorted(markers, key=lambda m: m[0]):
+        s = scale(t)
+        if s >= length:
+            late += 1
+        elif out and out[-1].tick == s:
+            same += 1
+        else:
+            out.append(Section(s, section_name(text)))
+    if same:
+        rep.add(f"{same} section markers dropped (at the tick of the one before)")
+    if late:
+        rep.add(f"{late} section markers past the end dropped")
+    if len(out) > MAX_SECT:
+        rep.add(f"{len(out) - MAX_SECT} sections after the {MAX_SECT}th dropped (the FM-1 keeps {MAX_SECT})")
+    return out[:MAX_SECT]
 
 
 def _cap_poly(notes: list[Note], cap: int) -> tuple[list[Note], int]:
@@ -147,7 +171,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
     limits = limits or Limits()
     rep = Report()
     mid = _read(path)
-    parts, tempo_us, bends = _parts(mid)
+    parts, tempo_us, bends, markers = _parts(mid)
     if not parts:
         raise FitError(f"{path}: has no notes")
     if bends:
@@ -213,7 +237,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
     if tempo_x10 != round(600_000_000 / tempo_us):
         rep.add(f"tempo {60_000_000 / tempo_us:.1f} BPM clamped to {tempo_x10 / 10:g}")
     piece = Piece(clean_name(name if name is not None else os.path.splitext(os.path.basename(path))[0]),
-                  tempo_x10, length, chans)
+                  tempo_x10, length, chans, _sections(markers, scale, length, rep))
     # too big: cut at a bar boundary until it fits
     while True:
         try:
@@ -225,6 +249,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
             piece.len_ticks -= bar
             for c in piece.channels:
                 c.notes = [n for n in c.notes if n.tick < piece.len_ticks]
+            piece.sections = [s for s in piece.sections if s.tick < piece.len_ticks]
     if piece.len_ticks < length:
         rep.add(f"cut to {piece.len_ticks // bar} bars to fit the FM-1's {MAX_BYTES // 1024} KB per piece")
     return piece, rep

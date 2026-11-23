@@ -1,13 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* ui.c: COMPOSER's screens, drawn only where something changed (240 x 240, FONT_S rows).
  *   LIBRARY  the pieces, newest first; SELECT moves, PLAY opens one, playing it
- *   PLAYER   the piece: name, tempo, bar:beat, then a strip per channel (role, sound, M / S)
+ *   PLAYER   the piece: name, tempo, bar:beat (in a section: its name and the bar:beat in it), then a strip per channel
+ *            (role, sound, M / S); a piece with sections: the sections strip under them (playing amber, queued white)
  *   EDIT     one channel as a piano roll: 16 grid steps across, the 27 note keys' pitches down, the cursor's step lit */
 #define C_ACC RGB(255, 165, 0)                  /* amber */
 #define C_GREY RGB(120, 120, 120)
 #define C_MUTE RGB(70, 70, 70)
 #define LIB_ROWS 9u
-enum { D_ALL = 1, D_LIST = 2, D_HEAD = 4, D_POS = 8, D_FOOT = 16, D_STRIPS = 32, D_ROLL = 64 };
+enum { D_ALL = 1, D_LIST = 2, D_HEAD = 4, D_POS = 8, D_FOOT = 16, D_STRIPS = 32, D_ROLL = 64, D_SECT = 128 };
 #define C_ROW RGB(24, 24, 24)                   /* the roll: black-key rows, beat lines, the cursor's step */
 #define C_BEAT RGB(48, 48, 48)
 #define C_CUR RGB(60, 50, 20)
@@ -95,12 +96,32 @@ typedef struct {
     const char *name, *status;
     uint32_t nch, sel, mute, solo, tempo_x10, pos;
     const uint8_t *role, *sound;
+    const piece_view_t *v;                      /* its sections */
+    uint32_t sec, queued, sloop;                /* playing, queued (PL_NONE: none), section loop on */
 } ui_player_t;
+
+/* the sections strip: from the one before the playing one, as many as fit: "N NAME"; LOOP first when it is on */
+static void ui_sections(const ui_player_t *p, uint32_t y)
+{
+    char b[16], n[PIECE_SNAME + 1];
+    uint32_t i = p->sec != PL_NONE && p->sec ? p->sec - 1u : 0u, x = 0;
+    lcd_fill(0, y, 240, 18, C_BLACK);
+    if (p->sloop) { ui_text(0, y, 44, &FONT_S, "LOOP", C_ACC, 0); x = 48; }
+    for (; i < p->v->nsect; i++) {
+        uint32_t w;
+        piece_sect_name(p->v, i, n);
+        ui_fmt(b, sizeof b, "%u %s", i + 1u, n);
+        w = (uint32_t)text_w(&FONT_S, b);
+        if (x + w > 240u) break;
+        ui_text(x, y, w, &FONT_S, b, i == p->sec ? C_ACC : i == p->queued ? C_WHITE : C_GREY, 0);
+        x += w + 10u;
+    }
+}
 
 static void ui_player(uint32_t dirty, const ui_player_t *p)
 {
     char b[40];
-    uint32_t ch;
+    uint32_t ch, pitch = p->v->nsect ? 17u : 19u;   /* (with sections, the strips make room for theirs) */
     if (dirty & D_ALL) lcd_fill(0, 0, 240, 240, C_BLACK);
     if (dirty & (D_ALL | D_HEAD)) {
         ui_text(8, 4, 150, &FONT_S, p->name, C_ACC, 0);
@@ -108,16 +129,23 @@ static void ui_player(uint32_t dirty, const ui_player_t *p)
         else ui_fmt(b, sizeof b, "%u BPM", p->tempo_x10 / 10u);
         ui_text(158, 4, 76, &FONT_S, b, C_WHITE, 2);
     }
-    if (dirty & (D_ALL | D_POS)) {
-        ui_fmt(b, sizeof b, "%u:%u", p->pos / (4u * PIECE_PPQ) + 1u, p->pos / PIECE_PPQ % 4u + 1u);
+    if (dirty & (D_ALL | D_POS | D_SECT)) {
+        if (p->sec != PL_NONE && p->sec < p->v->nsect) {
+            char n[PIECE_SNAME + 1];
+            uint32_t t = p->pos - piece_sect_start(p->v, p->sec);
+            piece_sect_name(p->v, p->sec, n);
+            ui_fmt(b, sizeof b, "%s %u:%u", n, t / (4u * PIECE_PPQ) + 1u, t / PIECE_PPQ % 4u + 1u);
+        } else {
+            ui_fmt(b, sizeof b, "%u:%u", p->pos / (4u * PIECE_PPQ) + 1u, p->pos / PIECE_PPQ % 4u + 1u);
+        }
         ui_text(0, 26, 240, &FONT_L, b, C_WHITE, 1);
     }
     if (dirty & (D_ALL | D_STRIPS)) {
         for (ch = 0; ch < PIECE_MAX_CH; ch++) {
-            uint32_t y = 64u + ch * 19u;
+            uint32_t y = 64u + ch * pitch;
             int heard = p->solo ? (int)(p->solo >> ch & 1u) : !(p->mute >> ch & 1u);
             uint16_t c = ch == p->sel ? C_ACC : heard ? C_WHITE : C_MUTE;
-            if (ch >= p->nch) { lcd_fill(0, y, 240, 19, C_BLACK); continue; }
+            if (ch >= p->nch) { lcd_fill(0, y, 240, pitch, C_BLACK); continue; }
             ui_fmt(b, sizeof b, "%s%u", ch == p->sel ? ">" : " ", ch + 1u);
             ui_text(0, y, 24, &FONT_S, b, c, 0);
             ui_text(26, y, 70, &FONT_S, ROLE_NAME[p->role[ch]], c, 0);
@@ -125,6 +153,7 @@ static void ui_player(uint32_t dirty, const ui_player_t *p)
             ui_text(206, y, 30, &FONT_S, p->solo >> ch & 1u ? "S" : p->mute >> ch & 1u ? "M" : "", c, 2);
         }
     }
+    if (p->v->nsect && (dirty & (D_ALL | D_SECT))) ui_sections(p, 202);
     if (dirty & (D_ALL | D_FOOT)) ui_text(0, 222, 240, &FONT_S, p->status, C_GREY, 1);
 }
 

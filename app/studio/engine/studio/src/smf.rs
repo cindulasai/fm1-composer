@@ -17,7 +17,8 @@ pub struct Part {
     pub role: &'static str,
 }
 
-pub struct Parsed { pub parts: Vec<Part>, pub tempo_us: i128, pub bends: bool, pub tpq: i128 }
+/// markers: every FF 06 (tick in source ticks, text), in track order
+pub struct Parsed { pub parts: Vec<Part>, pub tempo_us: i128, pub bends: bool, pub tpq: i128, pub markers: Vec<(i128, String)> }
 
 struct R<'a> { d: &'a [u8], at: usize }
 
@@ -96,6 +97,7 @@ pub fn parse(d: &[u8]) -> Result<Parsed, String> {
     let mut parts: Vec<Part> = Vec::new();
     let mut part_ix: HashMap<(usize, u8), usize> = HashMap::new();
     let (mut tempo, mut bends) = (None::<i128>, false);
+    let mut markers = Vec::new();
     for ti in 0..ntracks.max(0) as usize {
         let (cname, size) = r.chunk()?;
         if cname != b"MTrk" { return Err("no MTrk header at start of track".into()); }
@@ -130,6 +132,7 @@ pub fn parse(d: &[u8]) -> Result<Parsed, String> {
                 let md = r.take(n)?;
                 meta_ok(mt, md)?;
                 if mt == 0x03 && name.is_empty() { name = text(md); }
+                if mt == 0x06 { markers.push((t, text(md))); }
                 if mt == 0x51 && tempo.is_none() { tempo = Some(((md[0] as i128) << 16) | ((md[1] as i128) << 8) | md[2] as i128); }
                 continue;
             }
@@ -184,5 +187,5 @@ pub fn parse(d: &[u8]) -> Result<Parsed, String> {
         }
     }
     let tempo_us = match tempo { Some(0) | None => 500_000, Some(v) => v };
-    Ok(Parsed { parts, tempo_us, bends, tpq })
+    Ok(Parsed { parts, tempo_us, bends, tpq, markers })
 }

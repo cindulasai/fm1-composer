@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-23
+SURVIVED app/firmware/src/composer.c:133  " + " -> " - "  | post(SC_SOUND, ch, snd[ch], role[ch] + 1u);
+MUTANTS: 12 tried, 11 killed, 1 survived (of 431 candidates in US-23)
+EXIT_CODE: 1

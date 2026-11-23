@@ -7,7 +7,8 @@
  * LIBRARY: SELECT turns, PLAY opens the piece, playing it.
  * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound (a drum channel: the 35 kits),
  * KNOB2 the tempo; white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
- * tempo for this piece; HOME goes back to the library (and stops). */
+ * tempo for this piece; HOME goes back to the library (and stops). A piece with sections: the keys above F4 (F#4..G5)
+ * launch section 1..14 (OCT+ 15..24), at the next bar line; SEQ loops the playing section. */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
 #include <stdint.h>
@@ -50,6 +51,10 @@ static int32_t ed_octs;
 static uint8_t role[PIECE_MAX_CH], snd[PIECE_MAX_CH];
 static uint8_t fxv[PIECE_MAX_CH][FX_N];          /* FX: each channel's effects; the row picked */
 static uint32_t fxrow;
+static uint32_t sloop, spage;                   /* PLAYER: section loop on; the sections the keys launch (14 a page) */
+static char snext[24];                          /* "NEXT VERSE1" */
+#define SECT_KEY0 13u                           /* F#4: the first key above the mute keys */
+#define SECT_KEYS 14u
 static const char *status = "";
 static char title[PIECE_NAME + 1];
 
@@ -139,6 +144,8 @@ static int open_piece(uint32_t i)
     }
     mute = pf ? pf->mute : 0u;
     solo = 0;
+    sloop = spage = 0;
+    player_section_loop(0);
     tempo_x10 = pf && pf->tempo_x10 ? pf->tempo_x10 : pl_v.tempo_x10;
     for (ch = 0; ch < PIECE_MAX_CH; ch++) player_mute(ch, (int)(mute >> ch & 1u));
     set_tempo(tempo_x10);
@@ -214,6 +221,26 @@ static void player_input(uint32_t pressed, uint32_t keys)
         tempo_x10 = (uint32_t)(t < 300 ? 300 : t > 3000 ? 3000 : t);
         set_tempo(tempo_x10);
         dirty |= D_HEAD;
+    }
+    if (pressed & 1u << BTN_SEQ) {
+        if (!pl_v.nsect) set_status("NO SECTIONS");
+        else { sloop ^= 1u; player_section_loop((int)sloop); set_status(sloop ? "SECTION LOOP ON" : "SECTION LOOP OFF"); }
+        dirty |= D_SECT;
+    }
+    if ((pressed & (1u << BTN_OCT_DOWN | 1u << BTN_OCT_UP)) && pl_v.nsect > SECT_KEYS) {
+        spage = pressed & 1u << BTN_OCT_UP ? 1u : 0u;
+        set_status(spage ? "KEYS: SECTIONS 15-24" : "KEYS: SECTIONS 1-14");
+    }
+    for (k = 0; k < SECT_KEYS; k++) {           /* launch: at the next bar line; stopped, it plays from its start */
+        uint32_t s = spage * SECT_KEYS + k;
+        char n[PIECE_SNAME + 1];
+        if (!(keys >> (SECT_KEY0 + k) & 1u) || s >= pl_v.nsect) continue;
+        player_launch(s);
+        piece_sect_name(&pl_v, s, n);
+        ui_fmt(snext, sizeof snext, "%s %s", player_playing() ? "NEXT" : "PLAYING", n);
+        if (!player_playing()) player_play();
+        set_status(snext);
+        dirty |= D_SECT;
     }
     for (k = 0; k < 8u; k++) {
         if (!(keys >> WHITE_KEY[k] & 1u) || k >= pl_v.nch) continue;
@@ -371,7 +398,7 @@ static void library_input(uint32_t pressed)
 
 static void app_main(void)
 {
-    uint32_t last_pos = 0xFFFFFFFFu, last_beat = 0xFFFFFFFFu, was_playing = 0, held = 0;
+    uint32_t last_pos = 0xFFFFFFFFu, last_beat = 0xFFFFFFFFu, was_playing = 0, held = 0, last_sect = 0;
     synth_init();
     lib_mount();
     if (blob_load(0, &prefs, sizeof prefs) || prefs.magic != PREF_MAGIC) prefs_reset();
@@ -424,6 +451,10 @@ static void app_main(void)
             else if (scr) set_status("STOPPED");
         }
         was_playing = playing;
+        if (scr == 1u && (player_section() | player_queued() << 8) != last_sect) {   /* a section began, or was queued */
+            last_sect = player_section() | player_queued() << 8;
+            dirty |= D_SECT;
+        }
         if (scr && playing) {
             uint32_t pos = player_pos(), beat = pos / PIECE_PPQ;
             if (beat != last_beat) { last_beat = beat; last_pos = pos; dirty |= D_POS; }
@@ -443,7 +474,8 @@ static void app_main(void)
                 ui_fx_t f = {status, sel, role[sel], snd[sel], fxrow, fxv[sel]};
                 ui_fx(dirty, &f);
             } else {
-                ui_player_t p = {title, status, pl_v.nch, sel, mute, solo, tempo_x10, player_pos(), role, snd};
+                ui_player_t p = {title, status, pl_v.nch, sel, mute, solo, tempo_x10, player_pos(), role, snd,
+                                 &pl_v, player_section(), player_queued(), sloop};
                 ui_player(dirty, &p);
             }
             idle_ok = 0;

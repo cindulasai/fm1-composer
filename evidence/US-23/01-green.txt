@@ -1,0 +1,6 @@
+COMMAND: cd app && FM1_LIVE=/nonexistent sh check.sh
+................                                                         [100%]
+280 passed, 24 skipped in 133.99s (0:02:13)
+studio emu e2e: SKIP (needs build/composer.fwsc from CI and studio/web/emu: sh tools/get_web_emu.sh)
+emu e2e: SKIP (no fm1-live at /nonexistent: sh tools/get_emu.sh)
+EXIT_CODE: 0

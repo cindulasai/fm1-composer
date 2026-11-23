@@ -18,6 +18,8 @@ static void t_hush(void) { nhush++; synth_hush(); }
 #define PL_NOTE_OFF t_off
 #define PL_CH_OFF t_choff
 #define PL_HUSH t_hush
+static uint32_t steps;                          /* cursor steps taken (pl_jump, pl_seek) */
+#define PL_STEP() (steps++)
 #include "player.c"
 
 static int fails;
@@ -28,11 +30,20 @@ typedef struct { uint32_t tick, dur; uint8_t pitch, vel; } tn_t;
 static uint8_t pb[PIECE_MAX_BYTES];
 static void put16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
 static void put32(uint8_t *p, uint32_t v) { put16(p, v & 0xFFFFu); put16(p + 2, v >> 16); }
+static uint32_t bs_n, bs_t[32];                 /* sections for the next build (v2 when bs_n): starts; names S1.. */
 static uint32_t build(uint32_t tempo, uint32_t len, uint32_t nch, const tn_t *const *notes, const uint32_t *counts)
 {
     uint32_t off = PIECE_HDR + nch * PIECE_CHREC, ch, i, n;
     memset(pb, 0, sizeof pb);
-    memcpy(pb, "F1P1", 4); pb[4] = 1; pb[5] = (uint8_t)nch; put16(pb + 8, tempo); put16(pb + 10, 96); put32(pb + 12, len);
+    if (bs_n) {
+        pb[off] = (uint8_t)bs_n;
+        for (i = 0; i < bs_n; i++) {
+            put32(pb + off + 4 + i * 12, bs_t[i]);
+            snprintf((char *)pb + off + 8 + i * 12, 9, "S%u", i + 1);
+        }
+        off += 4 + bs_n * 12;
+    }
+    memcpy(pb, "F1P1", 4); pb[4] = bs_n ? 2 : 1; pb[5] = (uint8_t)nch; put16(pb + 8, tempo); put16(pb + 10, 96); put32(pb + 12, len);
     memcpy(pb + 16, "test", 4);
     for (ch = 0; ch < nch; ch++) {
         uint8_t *c = pb + PIECE_HDR + ch * PIECE_CHREC;
@@ -67,7 +78,11 @@ static void play_frames(uint32_t frames)
     }
 }
 
-static void reset(void) { synth_init(); nrec = nchoff = nhush = 0; now = 0; pl_want_run = 0; pl_state = 0; pl_running = 0; pl_loop = 1; }
+static void reset(void)
+{
+    synth_init(); nrec = nchoff = nhush = 0; now = 0; pl_want_run = 0; pl_state = 0; pl_running = 0; pl_loop = 1;
+    bs_n = 0; pl_sloop = 0; steps = 0;
+}
 
 static void timing(uint32_t tempo)
 {
@@ -287,8 +302,209 @@ static void test_11_5_play_from_a_tick(void)
     CHECK(nrec && rec[0].pitch == 70, "player_refresh reads the edited bytes, got %u", nrec ? rec[0].pitch : 0);
 }
 
+/* ---- US-23: sections ---- */
+static uint32_t frame_of(uint32_t ticks, uint32_t tempo) { return (uint32_t)((uint64_t)ticks * PL_TICK_UNITS / (tempo * 96u)); }
+static int near_frame(uint32_t frame, uint32_t exact) { int64_t d = (int64_t)frame - (int64_t)exact; return d <= 0 && d > -(int64_t)CTL; }
+
+/* 8 bars, a note each beat, pitch 40 + its bar; sections at the given bars */
+static tn_t sb[64];
+static uint32_t sect_piece(uint32_t n, const uint32_t *bars, uint32_t dur)
+{
+    const tn_t *nl[1] = {sb};
+    uint32_t cnt[1] = {32}, i;
+    for (i = 0; i < 32; i++) sb[i] = (tn_t){i * 96, dur, (uint8_t)(40 + i / 4), 100};
+    bs_n = n;
+    for (i = 0; i < n; i++) bs_t[i] = bars[i] * 384;
+    return build(1200, 8 * 384, 1, nl, cnt);
+}
+
+static uint32_t ons(void) { uint32_t i, k = 0; for (i = 0; i < nrec; i++) k += rec[i].on; return k; }
+static uint32_t offs(void) { uint32_t i, k = 0; for (i = 0; i < nrec; i++) k += !rec[i].on; return k; }
+static int32_t first_on(uint32_t pitch) { uint32_t i; for (i = 0; i < nrec; i++) if (rec[i].on && rec[i].pitch == pitch) return (int32_t)i; return -1; }
+
+static void test_23_1_v1_and_v2_play_the_same_without_launches(void)
+{
+    static rec_t a[400];
+    uint32_t na, i, n;
+    const uint32_t bars[3] = {0, 2, 5};
+    reset();
+    n = sect_piece(0, bars, 90);
+    CHECK(pb[4] == 1 && piece_check(pb, n) == PE_OK, "v1");
+    player_load(pb); player_play(); play_frames(44100 * 9);
+    CHECK(player_section() == PL_NONE && player_queued() == PL_NONE, "v1: no section");
+    na = nrec; memcpy(a, rec, sizeof a);
+    player_stop(); play_frames(CTL);
+    reset();
+    n = sect_piece(3, bars, 90);
+    CHECK(pb[4] == 2 && piece_check(pb, n) == PE_OK, "v2");
+    player_load(pb); player_play(); play_frames(44100 * 9);
+    CHECK(nrec == na && na > 30 && !memcmp(a, rec, na * sizeof *rec), "same notes at the same frames: %u vs %u", nrec, na);
+    for (i = 0; i < 3; i++) CHECK(piece_sect_start(&pl_v, i) == bars[i] * 384, "start %u", i);
+    CHECK(piece_sect_end(&pl_v, 2) == 8 * 384 && piece_sect_end(&pl_v, 0) == 2 * 384, "ends");
+    player_stop(); play_frames(CTL);
+}
+
+static void test_23_3_a_queued_section_starts_at_the_next_bar_line(void)
+{
+    const uint32_t bars[2] = {0, 4};
+    int32_t k;
+    reset();
+    sect_piece(2, bars, 120);                   /* (bar 2's last note sounds over the bar line) */
+    player_load(pb); player_play();
+    play_frames(frame_of(500, 1200));           /* in bar 2 */
+    CHECK(player_section() == 0, "section 1 playing: %u", player_section());
+    player_launch(1);
+    CHECK(player_queued() == 1, "queued");
+    play_frames(44100 * 2);
+    k = first_on(44);
+    CHECK(k >= 0 && near_frame(rec[k].frame, frame_of(768, 1200)), "bar 5's note at bar 3's line: frame %d want %u",
+          k >= 0 ? (int)rec[k].frame : -1, frame_of(768, 1200));
+    CHECK(first_on(42) < 0, "bar 3 never played");
+    CHECK(k >= 1 && rec[k - 1].on == 0 && rec[k - 1].pitch == 41 && rec[k - 1].frame == rec[k].frame, "bar 2's note let go at the jump");
+    CHECK(player_section() == 1 && player_queued() == PL_NONE && player_pos() > 4 * 384, "now in section 2 at %u", player_pos());
+    player_stop(); play_frames(CTL);
+    CHECK(ons() == offs(), "every note let go: %u on, %u off", ons(), offs());
+}
+
+static void test_23_3_loop_repeats_the_section_without_gap_or_stuck_note(void)
+{
+    const uint32_t bars[3] = {0, 4, 6};
+    uint32_t i, k = 0, held = 0;
+    reset();
+    sect_piece(3, bars, 90);
+    sb[31].dur = 300;                           /* the section's last note crosses its end */
+    { const tn_t *nl[1] = {sb}; uint32_t cnt[1] = {32}; build(1200, 8 * 384, 1, nl, cnt); }
+    player_load(pb);
+    player_section_loop(1);
+    player_launch(2);                           /* stopped: PLAY plays it from its start */
+    player_play();
+    play_frames(frame_of(3 * 768, 1200) + 1000);   /* three passes of 2 bars */
+    for (i = 0; i < nrec; i++) {
+        uint32_t beat = k % 8, pass = k / 8;
+        if (!rec[i].on) continue;
+        CHECK(rec[i].pitch == 46 + beat / 4 && near_frame(rec[i].frame, frame_of(pass * 768 + beat * 96, 1200)),
+              "note %u: pitch %u frame %u", k, rec[i].pitch, rec[i].frame);
+        k++;
+    }
+    CHECK(k == 25, "3 passes x 8 notes, then the 4th starts: %u", k);
+    for (i = 0; i < nrec; i++)                  /* the crossing note let go at each jump back */
+        if (!rec[i].on && rec[i].pitch == 47 && rec[i].frame > frame_of(767, 1200) && rec[i].frame <= frame_of(768, 1200)) held++;
+    CHECK(held == 1, "the long note ends at the first loop point: %u", held);
+    CHECK(player_section() == 2, "still section 3");
+    player_section_loop(0);                     /* loop off: it plays on into the next pass's end, then wraps to the start */
+    play_frames(frame_of(768 + 384, 1200));
+    CHECK(player_section() == 0 || player_section() == PL_NONE || player_pos() < 384, "past the end, from the start: %u", player_pos());
+    player_stop(); play_frames(CTL);
+    CHECK(ons() == offs() && synth_active() == 0, "nothing stuck: %u on, %u off", ons(), offs());
+}
+
+static void test_23_3_a_jump_back_is_o1_cursor_snapshots(void)
+{
+    static tn_t d[8][500];
+    const tn_t *nl[8];
+    uint32_t cnt[8], ch, i, n, worst = 0, jumps = 0, s;
+    for (ch = 0; ch < 8; ch++) {
+        for (i = 0; i < 500; i++) d[ch][i] = (tn_t){i * 24, 12, (uint8_t)(30 + ch * 8 + i % 8), 90};
+        nl[ch] = d[ch]; cnt[ch] = 500;
+    }
+    reset();
+    bs_n = 4; bs_t[0] = 0; bs_t[1] = 384 * 8; bs_t[2] = 384 * 16; bs_t[3] = 384 * 30;
+    n = build(3000, 500 * 24, 8, nl, cnt);
+    CHECK(n <= PIECE_MAX_BYTES && piece_check(pb, n) == PE_OK, "dense v2 piece");
+    player_load(pb);
+    for (s = 0; s < 4; s++)                     /* each snapshot: the first note at or after the start */
+        for (ch = 0; ch < 8; ch++) {
+            piece_cur_t c = pl_snap[s][ch];
+            piece_note_t no;
+            CHECK(piece_next(&c, &no) && no.tick == bs_t[s] && no.pitch == 30 + ch * 8 + (bs_t[s] / 24) % 8, "snap %u ch %u", s, ch);
+        }
+    player_section_loop(1);
+    player_launch(3);
+    player_play();
+    for (i = 0; i < 44100 * 4 / CTL; i++) {     /* 4 s at 300 BPM: section 4 (480 ticks) loops 4 times */
+        uint32_t before = steps, p0 = pl_tick;
+        play_frames(CTL);
+        if (steps - before > worst) worst = steps - before;
+        if (pl_tick < p0) jumps++;
+    }
+    CHECK(jumps >= 1 && worst == 8, "a jump back: one cursor copy per channel (%u jumps, worst %u steps)", jumps, worst);
+    CHECK(ons() > 500, "it played: %u", ons());
+    player_stop(); play_frames(CTL);
+    steps = 0;
+    player_play_from(384 * 29);                 /* (the counter sees a scan: play from a tick walks the events) */
+    play_frames(CTL);
+    CHECK(steps > 1000, "a scan counts: %u", steps);
+    player_stop(); play_frames(CTL);
+}
+
+static void test_23_5_hostile_sections(void)
+{
+    const uint32_t bars[2] = {0, 4};
+    uint32_t n, i, before;
+    static const uint32_t bad[][4] = {           /* {count, start1, start2, what}: PE_SECT each */
+        {2, 0, 8 * 384, 0}, {2, 384, 384, 0}, {2, 768, 384, 0}, {25, 0, 0, 0}, {0, 0, 0, 0}};
+    reset();                                    /* 0 sections (v1): launching does nothing */
+    sect_piece(0, bars, 90);
+    player_load(pb); player_launch(0); player_play(); play_frames(44100);
+    CHECK(player_queued() == PL_NONE && player_section() == PL_NONE && ons() >= 2, "v1 plays on");
+    player_stop(); play_frames(CTL);
+    for (i = 0; i < 5; i++) {                   /* past the end, a 0-length (same start), unsorted, 25, 0 */
+        uint32_t k;
+        reset();
+        sect_piece(0, bars, 90);
+        bs_n = bad[i][0] ? bad[i][0] : 1;
+        for (k = 0; k < bs_n; k++) bs_t[k] = k * 10;
+        if (bad[i][0] == 2) { bs_t[0] = bad[i][1]; bs_t[1] = bad[i][2]; }
+        { const tn_t *nl[1] = {sb}; uint32_t cnt[1] = {32}; n = build(1200, 8 * 384, 1, nl, cnt); }
+        if (!bad[i][0]) { pb[PIECE_HDR + PIECE_CHREC] = 0; put32(pb + n - 4, piece_crc32(pb, n - 4)); }
+        CHECK(piece_check(pb, n) == PE_SECT, "bad table %u: %d", i, piece_check(pb, n));
+    }
+    {                                           /* reserved bytes, an empty name, a control character, short */
+        static const uint32_t at[4] = {1, 8, 9, 0};
+        for (i = 0; i < 4; i++) {
+            reset();
+            n = sect_piece(2, bars, 90);
+            if (i == 3) { put32(pb + 40, PIECE_HDR + PIECE_CHREC + 8); n = PIECE_HDR + PIECE_CHREC + 8; }
+            else pb[PIECE_HDR + PIECE_CHREC + at[i]] = i == 1 ? 0 : 7;
+            put32(pb + n - 4, piece_crc32(pb, n - 4));
+            CHECK(piece_check(pb, n) == PE_SECT, "bad byte %u: %d", i, piece_check(pb, n));
+        }
+    }
+    reset();                                    /* 24 sections, one a bar... the piece is 8 bars: 24 at 128 ticks */
+    bs_n = 24;
+    for (i = 0; i < 24; i++) bs_t[i] = i * 128;
+    { const tn_t *nl[1] = {sb}; uint32_t cnt[1] = {32}; for (i = 0; i < 32; i++) sb[i] = (tn_t){i * 96, 90, (uint8_t)(40 + i / 4), 100};
+      n = build(1200, 8 * 384, 1, nl, cnt); }
+    CHECK(piece_check(pb, n) == PE_OK, "24 sections");
+    player_load(pb);
+    player_launch(24); player_launch(200);      /* out of range: ignored */
+    CHECK(player_queued() == PL_NONE, "no such section");
+    player_launch(23); player_play(); play_frames(CTL);   /* launch while stopped: from its start at once */
+    play_frames(frame_of(40, 1200));
+    CHECK(player_section() == 23 && first_on(47) == 0, "from section 24's start (%u)", player_section());
+    for (i = 0; i < 20; i++) player_launch(i);  /* 20 launches before its end: the last wins, one jump */
+    before = pl_tick;
+    for (n = 0, i = 0; i < frame_of(200, 1200) / CTL; i++) { uint32_t t0 = pl_tick; play_frames(CTL); n += pl_tick < t0; }
+    CHECK(n == 1 && player_queued() == PL_NONE && before >= 2944, "one jump: %u", n);
+    CHECK(first_on(46) >= 0, "section 20 played (bar 7)");
+    player_stop(); play_frames(CTL);
+    CHECK(ons() == offs() && synth_active() == 0, "nothing stuck: %u on, %u off", ons(), offs());
+    player_launch(5); player_stop(); play_frames(CTL);  /* launched, then stopped: stays queued for PLAY */
+    player_play(); play_frames(CTL);
+    CHECK(player_section() == 5, "PLAY after a launch while stopped: %u", player_section());
+    player_launch(9); player_stop(); play_frames(CTL);   /* a launch pending at the stop is forgotten */
+    player_play(); play_frames(CTL);
+    CHECK(player_section() == 0 && player_queued() == PL_NONE, "stop forgets a launch: %u", player_section());
+    player_stop(); play_frames(CTL);
+}
+
 int main(void)
 {
+    test_23_1_v1_and_v2_play_the_same_without_launches();
+    test_23_3_a_queued_section_starts_at_the_next_bar_line();
+    test_23_3_loop_repeats_the_section_without_gap_or_stuck_note();
+    test_23_3_a_jump_back_is_o1_cursor_snapshots();
+    test_23_5_hostile_sections();
     test_11_5_play_from_a_tick();
     test_5_1_timing_without_drift();
     test_5_2_tempo_change_keeps_position_and_loop_wraps();

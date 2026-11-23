@@ -23,6 +23,11 @@ int main(int argc, char **argv)
         if (e) { printf("ERR %d\n", e); continue; }
         piece_view(buf, &v);
         printf("piece %s|%u|%u|%u\n", v.name, v.tempo_x10, v.len_ticks, v.nch);
+        for (i = 0; i < v.nsect; i++) {
+            char sn[PIECE_SNAME + 1];
+            piece_sect_name(&v, i, sn);
+            printf("s %u %u %s\n", piece_sect_start(&v, i), piece_sect_end(&v, i), sn);
+        }
         for (i = 0; i < v.nch; i++) {
             piece_cur_t c;
             piece_note_t no;

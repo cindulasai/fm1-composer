@@ -1,5 +1,5 @@
 //! A MIDI file fitted to what COMPOSER plays, exactly as app/tools/fm1c/fit.py does it (same piece, same report).
-use crate::f1p::{self, Channel, EncodeError, Note, Piece, MAX_BYTES, MAX_CH, MAX_TICKS, PPQ};
+use crate::f1p::{self, Channel, EncodeError, Note, Piece, Section, MAX_BYTES, MAX_CH, MAX_SECT, MAX_TICKS, PPQ};
 use crate::smf;
 use crate::sounds;
 
@@ -68,7 +68,7 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
     if bytes.len() > MAX_INPUT {
         return Err(format!("{} KB is larger than the 8 MB this tool reads", bytes.len() / 1024));
     }
-    let smf::Parsed { mut parts, tempo_us, bends, tpq } = smf::parse(bytes).map_err(|e| format!("not a readable MIDI file ({e})"))?;
+    let smf::Parsed { mut parts, tempo_us, bends, tpq, mut markers } = smf::parse(bytes).map_err(|e| format!("not a readable MIDI file ({e})"))?;
     if parts.is_empty() { return Err("has no notes".into()); }
     let mut rep = Vec::new();
     if bends { rep.push("pitch bends ignored (notes play at the nearest key)".to_string()); }
@@ -153,7 +153,26 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
     if tempo_x10 as i128 != exact {
         rep.push(format!("tempo {}.{} BPM clamped to {}", exact / 10, exact % 10, bpm(tempo_x10)));
     }
-    let mut piece = Piece { name: f1p::clean_name(name), tempo_x10, len_ticks: length as u32, channels };
+    // text2midi's form (a marker at each section's start) as the sections table, as fit.py's _sections
+    markers.sort_by_key(|m| m.0);
+    let (mut sections, mut same, mut late) = (Vec::<Section>::new(), 0, 0);
+    for (t, text) in &markers {
+        let s = scale(*t);
+        if s >= length {
+            late += 1;
+        } else if sections.last().is_some_and(|l| l.tick as i128 == s) {
+            same += 1;
+        } else {
+            sections.push(Section { tick: s as u32, name: f1p::section_name(text) });
+        }
+    }
+    if same > 0 { rep.push(format!("{same} section markers dropped (at the tick of the one before)")); }
+    if late > 0 { rep.push(format!("{late} section markers past the end dropped")); }
+    if sections.len() > MAX_SECT {
+        rep.push(format!("{} sections after the {MAX_SECT}th dropped (the FM-1 keeps {MAX_SECT})", sections.len() - MAX_SECT));
+        sections.truncate(MAX_SECT);
+    }
+    let mut piece = Piece { name: f1p::clean_name(name), tempo_x10, len_ticks: length as u32, channels, sections };
     let bytes = loop {                          // too big: cut at a bar boundary until it fits
         match f1p::encode(&piece) {
             Ok(b) => break b,
@@ -161,6 +180,7 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
                 piece.len_ticks -= BAR;
                 let len = piece.len_ticks;
                 for c in piece.channels.iter_mut() { c.notes.retain(|n| n.tick < len); }
+                piece.sections.retain(|s| s.tick < len);
             }
             Err(e) => return Err(e.to_string()),
         }

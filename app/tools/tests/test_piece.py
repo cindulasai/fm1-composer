@@ -90,7 +90,7 @@ def corrupt_cases():
         "truncated": (bytes(base[:-7]), SHORT),
         "crc flipped": (bytes(flipped), BAD_CRC),
         "wrong magic": (with_byte(0, ord("X")), BAD_MAGIC),
-        "version 2": (with_byte(4, 2), BAD_VERSION),
+        "version 3": (with_byte(4, 3), BAD_VERSION),
         "nch 9": (with_byte(5, 9), BAD_NCH),
         "nch 0": (with_byte(5, 0), BAD_NCH),
         "empty name": (with_byte(16, 0), BAD_HEADER),

@@ -1,4 +1,5 @@
-"""The .f1p piece format v1 (firmware/src/piece.h is the reader; the layout is documented there)."""
+"""The .f1p piece format: v1, and v2 = v1 + a sections table, written only when a piece has sections
+(firmware/src/piece.h is the reader; the layout is documented there)."""
 from __future__ import annotations
 
 import struct
@@ -8,6 +9,9 @@ from dataclasses import dataclass, field
 
 MAGIC = b"F1P1"
 VERSION = 1
+VERSION_SECT = 2
+MAX_SECT = 24
+SECT_NAME = 8
 PPQ = 96
 MAX_BYTES = 32768
 MAX_CH = 8
@@ -18,7 +22,7 @@ ROLES = ("lead", "counter", "chords", "pad", "bass", "drums", "percussion", "arp
 DEFAULT_SOUND = 255
 
 # error codes, as piece.h
-SHORT, BAD_MAGIC, BAD_VERSION, BAD_CRC, BAD_NCH, BAD_HEADER, BAD_TABLE, BAD_EVENT, TOO_BIG = range(1, 10)
+SHORT, BAD_MAGIC, BAD_VERSION, BAD_CRC, BAD_NCH, BAD_HEADER, BAD_TABLE, BAD_EVENT, TOO_BIG, BAD_SECT = range(1, 11)
 
 
 class PieceError(ValueError):
@@ -45,12 +49,19 @@ class Channel:
     src: int = 0
 
 
+@dataclass(frozen=True)
+class Section:
+    tick: int                            # its start; it ends where the next starts (the last at the piece's end)
+    name: str
+
+
 @dataclass
 class Piece:
     name: str
     tempo_x10: int
     len_ticks: int
     channels: list[Channel]
+    sections: list[Section] = field(default_factory=list)
 
 
 def clean_name(s: str) -> str:
@@ -58,6 +69,11 @@ def clean_name(s: str) -> str:
     folded = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
     out = " ".join("".join(c if 32 <= ord(c) <= 126 else " " for c in folded).split())
     return out[:NAME_LEN].rstrip() or "untitled"
+
+
+def section_name(s: str) -> str:
+    """A section's name as the FM-1 shows it: clean_name's characters, upper case, at most 8."""
+    return clean_name(s).upper()[:SECT_NAME].rstrip()
 
 
 def _sorted_notes(ch: Channel) -> list[Note]:
@@ -81,6 +97,14 @@ def _validate(p: Piece) -> None:
         for n in c.notes:
             if not (0 <= n.tick < p.len_ticks and 0 <= n.pitch <= 127 and 1 <= n.vel <= 127 and 1 <= n.dur <= 65535):
                 raise PieceError(BAD_EVENT, f"channel {i + 1}: note out of range: {n}")
+    if len(p.sections) > MAX_SECT:
+        raise PieceError(BAD_SECT, f"a piece has at most {MAX_SECT} sections, not {len(p.sections)}")
+    prev = -1
+    for s in p.sections:
+        if not (prev < s.tick < p.len_ticks) or not 1 <= len(s.name) <= SECT_NAME or any(not 32 <= ord(c) <= 126 for c in s.name):
+            raise PieceError(BAD_SECT, f"section {s.name!r} at {s.tick}: starts must rise inside the piece, "
+                                       f"names 1 to {SECT_NAME} printable characters")
+        prev = s.tick
 
 
 def _events(ch: Channel) -> bytes:
@@ -99,7 +123,11 @@ def _events(ch: Channel) -> bytes:
 def encode(p: Piece) -> bytes:
     _validate(p)
     evs = [_events(c) for c in p.channels]
-    off = 48 + 16 * len(p.channels)
+    sect = b""
+    if p.sections:
+        sect = struct.pack("<B3x", len(p.sections)) + b"".join(
+            struct.pack("<I", s.tick) + s.name.encode("ascii").ljust(SECT_NAME, b"\0") for s in p.sections)
+    off = 48 + 16 * len(p.channels) + len(sect)
     table = bytearray()
     for c, e in zip(p.channels, evs):
         table += struct.pack("<BBBBB3xII", ROLES.index(c.role), c.sound, c.vol, c.pan, c.src, len(e) // 6, off)
@@ -107,9 +135,9 @@ def encode(p: Piece) -> bytes:
     total = off + 4
     if total > MAX_BYTES:
         raise PieceError(TOO_BIG, f"piece is {total} bytes; the FM-1 takes at most {MAX_BYTES}")
-    hdr = MAGIC + struct.pack("<BBHHHI", VERSION, len(p.channels), 0, p.tempo_x10, PPQ, p.len_ticks)
+    hdr = MAGIC + struct.pack("<BBHHHI", VERSION_SECT if p.sections else VERSION, len(p.channels), 0, p.tempo_x10, PPQ, p.len_ticks)
     hdr += p.name.encode("ascii").ljust(NAME_LEN, b"\0") + struct.pack("<II", total, 0)
-    body = hdr + bytes(table) + b"".join(evs)
+    body = hdr + bytes(table) + sect + b"".join(evs)
     return body + struct.pack("<I", zlib.crc32(body) & 0xFFFFFFFF)
 
 
@@ -122,8 +150,8 @@ def decode(b: bytes) -> Piece:
         raise PieceError(SHORT, "too short to be a piece")
     if b[:4] != MAGIC:
         raise PieceError(BAD_MAGIC, "not a .f1p piece")
-    if b[4] != VERSION:
-        raise PieceError(BAD_VERSION, f"piece version {b[4]}; this fm1c reads version {VERSION}")
+    if b[4] not in (VERSION, VERSION_SECT):
+        raise PieceError(BAD_VERSION, f"piece version {b[4]}; this fm1c reads versions {VERSION} and {VERSION_SECT}")
     _, _, nch, flags, tempo, ppq, length = struct.unpack_from("<4sBBHHHI", b, 0)
     total, reserved = struct.unpack_from("<II", b, 40)
     if total != n:
@@ -140,6 +168,21 @@ def decode(b: bytes) -> Piece:
     end = 48 + 16 * nch
     if end + 4 > n:
         raise PieceError(SHORT, "channel table truncated")
+    sections = []
+    if b[4] == VERSION_SECT:
+        ns = b[end]
+        if end + 8 > n or not 1 <= ns <= MAX_SECT or any(b[end + 1:end + 4]) or end + 8 + 12 * ns > n:
+            raise PieceError(BAD_SECT, "bad sections table")
+        prev = -1
+        for i in range(ns):
+            t, = struct.unpack_from("<I", b, end + 4 + 12 * i)
+            raw_s = b[end + 8 + 12 * i:end + 16 + 12 * i]
+            nm = raw_s.split(b"\0", 1)[0]
+            if not prev < t < length or not nm or any(not 32 <= c <= 126 for c in nm) or any(raw_s[len(nm):]):
+                raise PieceError(BAD_SECT, f"section {i + 1}: bad start or name")
+            sections.append(Section(t, nm.decode("ascii")))
+            prev = t
+        end += 4 + 12 * ns
     chans = []
     for i in range(nch):
         role, sound, vol, pan, src, r0, r1, r2, nev, off = struct.unpack_from("<BBBBBBBBII", b, 48 + 16 * i)
@@ -162,12 +205,14 @@ def decode(b: bytes) -> Piece:
         end = off + 6 * nev
     if end + 4 != n:
         raise PieceError(BAD_TABLE, "trailing bytes after the events")
-    return Piece(name.decode("ascii"), tempo, length, chans)
+    return Piece(name.decode("ascii"), tempo, length, chans, sections)
 
 
 def dump(p: Piece) -> str:
     """Canonical text, identical to tests/piece_dump.c for the same piece."""
     lines = [f"piece {p.name}|{p.tempo_x10}|{p.len_ticks}|{len(p.channels)}"]
+    ends = [s.tick for s in p.sections[1:]] + [p.len_ticks]
+    lines += [f"s {s.tick} {e} {s.name}" for s, e in zip(p.sections, ends)]
     for i, c in enumerate(p.channels):
         lines.append(f"ch {i} {ROLES.index(c.role)} {c.sound} {c.vol} {c.pan} {c.src}")
         lines += [f"n {n.tick} {n.dur} {n.pitch} {n.vel}" for n in _sorted_notes(c)]
