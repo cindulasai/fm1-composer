@@ -158,7 +158,7 @@ if [ "${1:-}" = "mutants" ]; then
   done
   total=$(wc -l < "$cands" | tr -d ' ')
   if [ "$total" -eq 0 ]; then echo "MUTANTS: 0 candidates in $story's non-test files — nothing to mutate"; exit 0; fi
-  cp -R "$app" "$work/app"
+  cp -Rc "$app" "$work/app" 2>/dev/null || { rm -rf "$work/app"; cp -R "$app" "$work/app"; }   # (APFS: copy-on-write clones, no space until written)
   start=$(date +%s)
   if ! ( cd "$work/app" && sh -c "$gate" ) > "$work/base.log" 2>&1 < /dev/null; then
     tail -n 5 "$work/base.log"; echo "MUTANTS: the gate is red before any mutation — fix that first"; exit 2
