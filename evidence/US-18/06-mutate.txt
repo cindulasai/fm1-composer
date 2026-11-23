@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-18
+SURVIVED app/firmware/src/fx.c:274  " + " -> " - "  | c[B1 + fx.line_i[1]] = (int16_t)clamp(fx.line_lp[1] - a, -32768, 32767);
+SURVIVED app/firmware/src/ui.c:169  " + " -> " - "  | uint32_t ch, role, tick, grid, gi, low;     /* cursor tick, grid ticks + its name's index, the lowest row's pitch */
+MUTANTS: 12 tried, 10 killed, 2 survived (of 318 candidates in US-18)
+EXIT_CODE: 1

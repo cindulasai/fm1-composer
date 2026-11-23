@@ -96,6 +96,7 @@ typedef struct {
 } chan_t;
 static chan_t chs[NPART];
 static int32_t vlast[NPART][NVOICE];            /* each voice's amplitude at the end of its last block (Q15) */
+#include "fx.c"                                 /* SLOOP's effects: per channel, the buses, the limiter */
 static uint32_t vage;
 
 static void chan_gains(chan_t *c)
@@ -131,6 +132,13 @@ static void synth_level(uint32_t ch, uint32_t vol, uint32_t pan)
     chan_gains(&chs[ch]);
 }
 
+/* a channel's effect (FX_REV .. FX_DRIVE), clamped to its range */
+static void synth_fx(uint32_t ch, uint32_t par, uint32_t v)
+{
+    if (ch < NPART && par < FX_N) fxp[ch][par] = (uint8_t)fx_clamp(par, v);
+}
+static void synth_tempo(uint32_t x10) { fx_tempo_x10 = x10 < 300u ? 300u : x10 > 3000u ? 3000u : x10; }   /* the delay */
+
 static void synth_init(void)
 {
     uint32_t ch;
@@ -140,6 +148,7 @@ static void synth_init(void)
         synth_sound(ch, sound_default(ROLE_OTHER));
         synth_level(ch, 100, 64);
     }
+    fx_reset();
 }
 
 /* voices that count against the budget: starting or held or releasing (a stolen voice, stage 4, does not) */
@@ -271,6 +280,7 @@ static void synth_ch_off(uint32_t ch)           /* release every held note of a 
 
 static void synth_hush(void)                    /* every voice fades out within a few ms (stop) */
 {
+    fx_kill = 1;
     uint32_t ch, k;
     for (ch = 0; ch < NPART; ch++)
         for (k = 0; k < NVOICE; k++)
@@ -314,10 +324,10 @@ static int32_t env_tick(uint32_t ch, voice_t *v)
 /* add n (<= CTL) stereo frames to out (L R L R ...) */
 static void synth_render(int32_t *out, uint32_t n)
 {
-    static int32_t mixl[CTL], mixr[CTL], buf[CTL];
-    uint32_t ch, k, i;
+    static int32_t mixl[CTL], mixr[CTL], buf[CTL], sc[CTL], sd[CTL], sr[CTL], wl[CTL], wr[CTL];
+    uint32_t ch, k, i, anyv = 0;
     if (n > CTL) n = CTL;
-    for (i = 0; i < n; i++) mixl[i] = mixr[i] = 0;
+    for (i = 0; i < n; i++) mixl[i] = mixr[i] = sc[i] = sd[i] = sr[i] = 0;
     for (ch = 0; ch < NPART; ch++) {
         track_t *t = &trk[ch];
         const chan_t *c = &chs[ch];
@@ -355,20 +365,45 @@ static void synth_render(int32_t *out, uint32_t n)
             any = 1;
         }
         if (!any) continue;
-        for (i = 0; i < n; i++) {
-            mixl[i] += buf[i] * c->gl >> 15;
-            mixr[i] += buf[i] * c->gr >> 15;
+        anyv = 1;
+        fx_channel(ch, buf, n);                 /* DRIVE, FILTER */
+        {
+            const uint8_t *p = fxp[ch];
+            int32_t cg = p[FX_CHO] * 258, dg = p[FX_DLY] * 258, rg = p[FX_REV] * 258, vg = VOL_Q15[c->vol];
+            for (i = 0; i < n; i++) {
+                int32_t xs = clamp(buf[i] * vg >> 15, -65535, 65535);   /* (the sends: mulq15 stays in 32 bits) */
+                mixl[i] += buf[i] * c->gl >> 15;
+                mixr[i] += buf[i] * c->gr >> 15;
+                sc[i] += mulq15(xs, cg);
+                sd[i] += mulq15(xs, dg);
+                sr[i] += mulq15(xs, rg);
+            }
         }
     }
-    for (i = 0; i < n; i++) {                   /* headroom for 16 voices, then a soft knee, then the hard limit */
-        int32_t l = out[2 * i] + softclip(mixl[i] >> 1), r = out[2 * i + 1] + softclip(mixr[i] >> 1);
+    fx_buses(sc, sd, sr, wl, wr, n);            /* chorus, delay, reverb: back in stereo */
+    if (fx_kill) {                              /* (stop) the return fades out over the first block, then stays shut and the
+                                                 * lines empty while the stopped voices fade (they would refill them) */
+        for (i = 0; i < n; i++) {
+            wl[i] = fx_kill == 1u ? wl[i] * (int32_t)(n - 1u - i) / (int32_t)n : 0;
+            wr[i] = fx_kill == 1u ? wr[i] * (int32_t)(n - 1u - i) / (int32_t)n : 0;
+        }
+        fx_clear();
+        fx_kill = anyv ? 2u : 0u;
+    }
+    for (i = 0; i < n; i++) {                   /* headroom for 16 voices, the DC blocker */
+        mixl[i] = dc_block((mixl[i] + wl[i]) >> 1, &dc_l, &dce_l);
+        mixr[i] = dc_block((mixr[i] + wr[i]) >> 1, &dc_r, &dce_r);
+    }
+    lim_block(&lim_dac, mixl, mixr, n);         /* SLOOP's look-ahead limiter (the mix one block late) */
+    for (i = 0; i < n; i++) {                   /* then the soft knee, then the hard limit */
+        int32_t l = out[2 * i] + softclip(mixl[i]), r = out[2 * i + 1] + softclip(mixr[i]);
         out[2 * i] = clamp(l, -32767, 32767);
         out[2 * i + 1] = clamp(r, -32767, 32767);
     }
 }
 
 /* ---------------------------------------------- the main loop's changes --- */
-enum { SC_SOUND, SC_LEVEL, SC_CH_OFF, SC_ALL_OFF, SC_NOTE_ON, SC_NOTE_OFF };
+enum { SC_SOUND, SC_LEVEL, SC_CH_OFF, SC_ALL_OFF, SC_NOTE_ON, SC_NOTE_OFF, SC_FX, SC_TEMPO };
 typedef struct { uint8_t op, ch, a, b; } synth_cmd_t;
 static synth_cmd_t sq[32];
 static volatile uint32_t sq_w, sq_r;            /* one writer each: main loop sq_w, audio sq_r */
@@ -382,8 +417,20 @@ static int synth_post(uint32_t op, uint32_t ch, uint32_t a, uint32_t b)   /* 0 =
     return 0;
 }
 
+/* (main loop) a channel's six effects in one queued change: the values wait in fx_stage, the next render takes them
+ * (a change made again before then: the render may take some of each, every one a valid value). 0 = queued */
+static volatile uint8_t fx_stage[NPART][FX_N];
+static int synth_fx_post(uint32_t ch, const uint8_t *v)
+{
+    uint32_t k;
+    if (ch >= NPART) return 0;
+    for (k = 0; k < FX_N; k++) fx_stage[ch][k] = v[k];
+    return synth_post(SC_FX, ch, 0, 0);
+}
+
 static void synth_apply(void)                   /* in the audio interrupt, before rendering */
 {
+    uint32_t k;
     while (sq_r != sq_w) {
         const synth_cmd_t *c = &sq[sq_r % 32u];
         switch (c->op) {
@@ -393,6 +440,8 @@ static void synth_apply(void)                   /* in the audio interrupt, befor
         case SC_ALL_OFF: synth_all_off(); break;
         case SC_NOTE_ON: synth_on(c->ch, c->a, c->b); break;
         case SC_NOTE_OFF: synth_off(c->ch, c->a); break;
+        case SC_FX: if (c->ch < NPART) for (k = 0; k < FX_N; k++) synth_fx(c->ch, k, fx_stage[c->ch][k]); break;
+        case SC_TEMPO: synth_tempo((uint32_t)c->a | (uint32_t)c->b << 8); break;
         default: break;
         }
         sq_r++;

@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-18
+SURVIVED app/firmware/src/fx.c:151  " + " -> " - "  | w = (w + 1u) & (CTL - 1u);
+SURVIVED app/firmware/src/fx.c:272  " - " -> " + "  | fx.line_lp[2] = HALF0(s0 - s1), fx.line_lp[3] = HALF0(d0 - d1);
+MUTANTS: 12 tried, 10 killed, 2 survived (of 320 candidates in US-18)
+EXIT_CODE: 1

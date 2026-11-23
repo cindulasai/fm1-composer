@@ -215,3 +215,56 @@ def test_7_3_default_port_is_the_fm1s_usb_name(monkeypatch):
     fake_rtmidi(monkeypatch, ["other"], ["other"])
     with pytest.raises(link.PortError, match="FM-1"):
         link.open_port(None)
+
+
+ENC_SELECT, ENC_KNOB1, ENC_KNOB2 = 0, 2, 3                  # fm1-emu's matrix encoders (FM-1 order: platform.c)
+
+
+def fx_all_up(t):
+    """encoder turns (emulator FM1_BENCH_KEYS, host lines) setting REVERB, DELAY, CHORUS, DRIVE to 127 on all 8
+    channels from the FX screen; each turn played out before the next (fm1-emu moves a contact every 2 ms: a detent
+    takes 8 ms, so 128 detents ~1 s, and a SELECT turned earlier would move the row under KNOB1's last detents)"""
+    emu_k, host_k, at, row = [], [], t, 0
+    for ch in range(8):
+        for want in (0, 1, 2, 5):                                 # REVERB, DELAY, CHORUS, DRIVE
+            if want != row:
+                emu_k.append(f"{at}:e{ENC_SELECT}:{want - row}")
+                host_k.append(f"{at} enc 0 {want - row}")
+                at += 8 * abs(want - row) + 40
+                row = want
+            emu_k.append(f"{at}:e{ENC_KNOB1}:127")
+            host_k.append(f"{at} enc 2 127")         # (127: host mode takes a turn as a signed byte)
+            at += 8 * 127 + 40
+        emu_k.append(f"{at}:e{ENC_SELECT}:{-row}")
+        host_k.append(f"{at} enc 0 {-row}")
+        at += 8 * row + 40
+        emu_k.append(f"{at}:e{ENC_KNOB2}:1")
+        host_k.append(f"{at} enc 3 1")
+        row, at = 0, at + 50
+    return emu_k, host_k, at
+
+
+@emu_only
+def test_18_9_strict_timing_densest_piece_every_effect(tmp_path):
+    """the densest piece with REVERB, DELAY, CHORUS and DRIVE at 127 on all 8 channels: no empty audio half; the FX
+    screen at the end is host mode's, pixel for pixel (every value really set)"""
+    d = dense()
+    usb, t = usb_script([d], gap=60)
+    emu_k, _, at = fx_all_up(t + 600)
+    keys = [f"{t + 200}:PLAY", f"{t + 250}:PLAY^", f"{t + 400}:FX", f"{t + 450}:FX^"] + emu_k
+    report, lcd, s = emu(tmp_path, at + 10500, usb=usb, keys=",".join(keys), strict=True, wav=True)
+    m = re.search(r"usb audio: .*\((\d+) empty, (\d+) of them underruns\)", report)
+    assert m and m[1] == "0" and m[2] == "0", report[-800:]
+    assert rms(s, len(s) // 2 - 5 * 44100) > 300, "the densest piece, every effect on, heard"
+    lines, h = [], 100
+    for f in frames(d):
+        lines.append(f"{h} sysex {f.hex()}")
+        h += 2
+    _, host_k, h2 = fx_all_up(h + 600)
+    lines += [f"{h + 200} btn 12", f"{h + 400} btn 2"] + host_k + [f"{h2 + 500} shot", f"{h2 + 600} end"]
+    p = tmp_path / "fxref.txt"
+    p.write_text("\n".join(lines) + "\n")
+    log, _ = run_host(p)
+    last = {int(m[1]): m[2] for m in re.finditer(r"SCREEN (40|68|96|180) \d+ [0-9A-F]{4} (\d+)$", log, re.M)}
+    assert last == {40: "127", 68: "127", 96: "127", 180: "127"}, f"host: REVERB, DELAY, CHORUS, DRIVE at 127: {last}"
+    assert lcd == rgb565(APP / f"build/host/fxref-{h2 + 500}.ppm"), "the emulator's FX screen: every effect at 127"

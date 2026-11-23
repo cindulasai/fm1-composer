@@ -1,0 +1,9 @@
+COMMAND: sh prove mutants US-18
+SURVIVED app/firmware/src/fx.c:46  " + " -> " - "  | ((((x) >> (k)) * (g) + ((((x) & ((1 << (k)) - 1)) * (g) + (1 << ((k) - 1))) >> (k)) + (1 << (11 - (k)))) >> (12 - (k)))
+SURVIVED app/firmware/src/fx.c:151  " + " -> " - "  | w = (w + 1u) & (CTL - 1u);
+SURVIVED app/firmware/src/fx.c:272  " - " -> " + "  | fx.line_lp[2] = HALF0(s0 - s1), fx.line_lp[3] = HALF0(d0 - d1);
+SURVIVED app/firmware/src/fx.c:408  " + " -> " - "  | if (djf_block(&fxf[ch], v, &fc, 40 + (int32_t)p[FX_RESO] * 7))   /* (SLOOP's tflt_reso) */
+SURVIVED app/firmware/src/synth.c:443  " < " -> " <= "  | case SC_FX: if (c->ch < NPART) for (k = 0; k < FX_N; k++) synth_fx(c->ch, k, fx_stage[c->ch][k]); break;
+SURVIVED app/firmware/src/ui.c:153  " == " -> " != "  | uint16_t c = k == f->row ? C_ACC : C_WHITE;
+MUTANTS: 12 tried, 6 killed, 6 survived (of 320 candidates in US-18)
+EXIT_CODE: 1

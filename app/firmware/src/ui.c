@@ -128,6 +128,38 @@ static void ui_player(uint32_t dirty, const ui_player_t *p)
     if (dirty & (D_ALL | D_FOOT)) ui_text(0, 222, 240, &FONT_S, p->status, C_GREY, 1);
 }
 
+/* FX: one channel's effects, a row each; the picked row in amber */
+typedef struct {
+    const char *status;
+    uint32_t ch, role, sound, row;
+    const uint8_t *v;
+} ui_fx_t;
+#define UI_FX 6u                                /* rows: fx.c FX_N */
+static const char *const FX_NAME[UI_FX] = {"REVERB", "DELAY", "CHORUS", "FILTER", "RESO", "DRIVE"};
+
+static void ui_fx(uint32_t dirty, const ui_fx_t *f)
+{
+    char b[40];
+    uint32_t k;
+    if (dirty & D_ALL) lcd_fill(0, 0, 240, 240, C_BLACK);
+    if (dirty & (D_ALL | D_HEAD)) {
+        ui_fmt(b, sizeof b, "FX %u %s", f->ch + 1u, ROLE_NAME[f->role < ROLE_COUNT ? f->role : ROLE_OTHER]);
+        ui_text(8, 4, 120, &FONT_S, b, C_ACC, 0);
+        ui_text(128, 4, 106, &FONT_S, sound_name(f->sound), C_WHITE, 2);
+    }
+    if (dirty & (D_ALL | D_STRIPS)) {
+        for (k = 0; k < UI_FX; k++) {
+            uint32_t y = 40u + k * 28u;
+            uint16_t c = k == f->row ? C_ACC : C_WHITE;
+            ui_fmt(b, sizeof b, "%s%s", k == f->row ? ">" : " ", FX_NAME[k]);
+            ui_text(16, y, 130, &FONT_S, b, c, 0);
+            ui_fmt(b, sizeof b, "%u", f->v[k]);
+            ui_text(150, y, 74, &FONT_S, b, c, 2);
+        }
+    }
+    if (dirty & (D_ALL | D_FOOT)) ui_text(0, 222, 240, &FONT_S, f->status, C_GREY, 1);
+}
+
 static const char *const NOTE_NAME[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const GRID_NAME[4] = {"1/32", "1/16", "1/8", "1/4"};
 

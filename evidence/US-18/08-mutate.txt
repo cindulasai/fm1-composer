@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-18
+SURVIVED app/firmware/src/composer.c:314  " < " -> " <= "  | for (k = 0; k < ROLL_KEYS; k++) {       /* a key: its note in the step goes, else a new one starts here */
+MUTANTS: 12 tried, 11 killed, 1 survived (of 310 candidates in US-18)
+EXIT_CODE: 1

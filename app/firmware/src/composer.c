@@ -35,6 +35,8 @@ static int app_sysex(const uint8_t *p, uint32_t n);
 
 #include "prefs.c"                              /* each piece's choices, in blob 0 */
 _Static_assert(sizeof prefs <= SECTOR_MAX, "prefs fit a blob");
+_Static_assert(sizeof fxprefs <= SECTOR_MAX, "the effects fit a blob");
+_Static_assert(PREF_FX == FX_N && UI_FX == FX_N, "prefs keep and FX shows every effect");
 
 /* ---- state ---- */
 static uint8_t play_buf[PIECE_MAX_BYTES] POOL;  /* the piece being played, copied out of flash */
@@ -46,6 +48,8 @@ static const uint16_t GRID[4] = {12, 24, 48, 96};
 static uint32_t ed_tick, ed_gi = 1, ed_len = 24, ed_vel = 100, edited, discard, preview;
 static int32_t ed_octs;
 static uint8_t role[PIECE_MAX_CH], snd[PIECE_MAX_CH];
+static uint8_t fxv[PIECE_MAX_CH][FX_N];          /* FX: each channel's effects; the row picked */
+static uint32_t fxrow;
 static const char *status = "";
 static char title[PIECE_NAME + 1];
 
@@ -79,6 +83,12 @@ static void post(uint32_t op, uint32_t ch, uint32_t a, uint32_t b)
     while (synth_post(op, ch, a, b)) platform_poll();   /* (the audio interrupt drains it within 6 ms) */
 }
 
+static void set_tempo(uint32_t x10)               /* the player's and the delay's */
+{
+    player_tempo(x10);
+    post(SC_TEMPO, 0, x10 & 255u, x10 >> 8);
+}
+
 /* open library entry i: copy it to RAM, check it, load the player, apply the saved choices */
 static int open_piece(uint32_t i)
 {
@@ -106,11 +116,20 @@ static int open_piece(uint32_t i)
         post(SC_SOUND, ch, snd[ch], 0);
         post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
     }
+    {
+        const fxpref_t *fp = fxpref_find(e->id);
+        uint32_t k;
+        for (ch = 0; ch < PIECE_MAX_CH; ch++) {
+            if (fp) for (k = 0; k < FX_N; k++) fxv[ch][k] = (uint8_t)fx_clamp(k, fp->v[ch][k]);
+            else fx_defaults(role[ch], fxv[ch]);
+            while (synth_fx_post(ch, fxv[ch])) platform_poll();
+        }
+    }
     mute = pf ? pf->mute : 0u;
     solo = 0;
     tempo_x10 = pf && pf->tempo_x10 ? pf->tempo_x10 : pl_v.tempo_x10;
     for (ch = 0; ch < PIECE_MAX_CH; ch++) player_mute(ch, (int)(mute >> ch & 1u));
-    player_tempo(tempo_x10);
+    set_tempo(tempo_x10);
     for (ch = 0; ch < PIECE_NAME + 1u; ch++) title[ch] = pl_v.name[ch];
     sel = 0;
     return 0;
@@ -119,7 +138,8 @@ static int open_piece(uint32_t i)
 static void save_prefs(void)
 {
     pref_put(loaded_id, tempo_x10, snd, mute);
-    set_status(blob_save(0, &prefs, sizeof prefs) ? "SAVE FAILED" : "SAVED");
+    fxpref_put(loaded_id, (const uint8_t (*)[FX_N])fxv);
+    set_status(blob_save(0, &prefs, sizeof prefs) || blob_save(1, &fxprefs, sizeof fxprefs) ? "SAVE FAILED" : "SAVED");
 }
 
 /* SAVE: an edited piece first (a new entry, then the old one deleted: a power cut between keeps both), then the
@@ -161,6 +181,12 @@ static void player_input(uint32_t pressed, uint32_t keys)
         set_status(player_playing() ? "STOP TO EDIT" : "");
         return;
     }
+    if (pressed & 1u << BTN_FX) {               /* the selected channel's effects */
+        scr = 3;
+        fxrow = 0;
+        dirty = D_ALL;
+        return;
+    }
     fm1_enc_take(ENC_KNOB3);                    /* (EDIT's: not kept for it) */
     if ((d = fm1_enc_take(ENC_KNOB1) + fm1_enc_take(ENC_SELECT))) {
         sel = (uint32_t)(((int32_t)sel + d) % (int32_t)pl_v.nch + (int32_t)pl_v.nch) % pl_v.nch;
@@ -174,13 +200,43 @@ static void player_input(uint32_t pressed, uint32_t keys)
     if ((d = fm1_enc_take(ENC_KNOB2))) {
         int32_t t = (int32_t)tempo_x10 + d * 10;
         tempo_x10 = (uint32_t)(t < 300 ? 300 : t > 3000 ? 3000 : t);
-        player_tempo(tempo_x10);
+        set_tempo(tempo_x10);
         dirty |= D_HEAD;
     }
     for (k = 0; k < 8u; k++) {
         if (!(keys >> WHITE_KEY[k] & 1u) || k >= pl_v.nch) continue;
         if (fm1_in.buttons & 1u << BTN_SEL) { solo ^= 1u << k; player_solo(k, (int)(solo >> k & 1u)); }
         else { mute ^= 1u << k; player_mute(k, (int)(mute >> k & 1u)); }
+        dirty |= D_STRIPS;
+    }
+}
+
+/* FX: SELECT picks the row, KNOB1 sets it (heard at once), KNOB2 the channel; PLAY and SAVE as in PLAYER */
+static void fx_input(uint32_t pressed)
+{
+    int32_t d;
+    if (pressed & 1u << BTN_PLAY) {
+        if (player_playing()) { player_stop(); set_status("STOPPED"); }
+        else { player_play(); set_status("PLAYING"); }
+    }
+    if (pressed & 1u << BTN_SAVE) {
+        if (player_playing()) { save_pending = 1; set_status("SAVES WHEN STOPPED"); }
+        else save_all();
+    }
+    fm1_enc_take(ENC_PRESETS);
+    fm1_enc_take(ENC_KNOB3);
+    if ((d = fm1_enc_take(ENC_SELECT))) {
+        fxrow = (uint32_t)(((int32_t)fxrow + d) % (int32_t)FX_N + (int32_t)FX_N) % FX_N;
+        dirty |= D_STRIPS;
+    }
+    if ((d = fm1_enc_take(ENC_KNOB2))) {
+        sel = (uint32_t)(((int32_t)sel + d) % (int32_t)pl_v.nch + (int32_t)pl_v.nch) % pl_v.nch;
+        dirty = D_ALL;
+    }
+    if ((d = fm1_enc_take(ENC_KNOB1))) {
+        int32_t v = (int32_t)fxv[sel][fxrow] + d;
+        fxv[sel][fxrow] = (uint8_t)fx_clamp(fxrow, (uint32_t)(v < 0 ? 0 : v));
+        while (synth_fx_post(sel, fxv[sel])) platform_poll();
         dirty |= D_STRIPS;
     }
 }
@@ -307,6 +363,7 @@ static void app_main(void)
     synth_init();
     lib_mount();
     if (blob_load(0, &prefs, sizeof prefs) || prefs.magic != PREF_MAGIC) prefs_reset();
+    if (blob_load(1, &fxprefs, sizeof fxprefs) || fxprefs.magic != FXP_MAGIC) fxprefs_reset();
     for (;;) {
         uint32_t rel, pressed, keys, playing;
         platform_poll();
@@ -335,6 +392,9 @@ static void app_main(void)
             if (scr == 2) {
                 if (pressed & 1u << BTN_HOME) { scr = 1; dirty = D_ALL; }
                 else edit_input(pressed, keys);
+            } else if (scr == 3) {
+                if (pressed & (1u << BTN_HOME | 1u << BTN_FX)) { scr = 1; dirty = D_ALL; }
+                else fx_input(pressed);
             } else if (pressed & 1u << BTN_HOME) {
                 if (edited && !discard) { discard = 1; set_status("UNSAVED EDITS: HOME AGAIN TO DISCARD"); }
                 else {
@@ -367,6 +427,9 @@ static void app_main(void)
                 ui_edit_t e = {status, play_buf, sel, role[sel], ed_tick, GRID[ed_gi], ed_gi, ed_low(),
                                n ? cn[0].dur : ed_len, n ? cn[0].vel : ed_vel, n, n ? cn[0].pitch : 0, edited};
                 ui_edit(dirty, &e);
+            } else if (scr == 3) {
+                ui_fx_t f = {status, sel, role[sel], snd[sel], fxrow, fxv[sel]};
+                ui_fx(dirty, &f);
             } else {
                 ui_player_t p = {title, status, pl_v.nch, sel, mute, solo, tempo_x10, player_pos(), role, snd};
                 ui_player(dirty, &p);

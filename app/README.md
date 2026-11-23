@@ -86,6 +86,12 @@ the page to this computer only (127.0.0.1).
 | | SAVE | keeps the sounds, mutes and tempo for this piece (when stopped; while playing it saves at the stop) |
 | | HOME | stops and goes back to the library |
 | | EDIT | opens the selected channel in EDIT |
+| | FX | opens the selected channel's effects |
+| FX | SELECT | picks the row: REVERB, DELAY, CHORUS, FILTER, RESO, DRIVE |
+| | KNOB1 | sets it (0 to 127; RESO 0 to 10), heard at once |
+| | KNOB2 | the next / previous channel |
+| | PLAY / SAVE | as in PLAYER (SAVE keeps the effects with the piece) |
+| | HOME (or FX) | back to PLAYER |
 | EDIT | SELECT | moves the cursor one grid step |
 | | a note key | adds that note at the cursor (you hear it), or removes it if it is already there |
 | | KNOB1 | grid: 1/32, 1/16, 1/8, 1/4 |
@@ -102,6 +108,11 @@ step lit, notes in amber (a note begun before the page in grey). `*` after the c
 The player shows each channel's role (LEAD, BASS, DRUMS…), its sound and M / S, with the position as
 bar:beat. There are 40 sounds from six Felucca engines plus COMPOSER's own drum kits. Each role starts with a
 fitting one.
+
+Every channel has SLOOP's effects: sends to a shared reverb (SLOOP's feedback delay network), a delay that follows
+the tempo (1/8 note) and a chorus, plus a low-pass FILTER with RESO and DRIVE (SLOOP's DIST). After them, SLOOP's
+look-ahead limiter keeps a loud mix clean. Each role starts with fitting effects (a pad wet, the bass and drums dry);
+the code is SLOOP's own, copied (`firmware/SLOOP-PROVENANCE.md`).
 
 ## fm1c
 
