@@ -41,7 +41,7 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F21 | SLOOP's 32 synthesized drum kits (drum_synth.c) beside COMPOSER's 3 | v5 | shipped |
 | F22 | text2midi's instruments, roles and mix reach the FM-1: each part gets a fitting sound and pan (fm1c and Studio, same bytes) | v5 | shipped |
 | F23 | Sections: a piece carries its sections (text2midi's form; MIDI markers); on the device launch one at the next bar, loop it, queue the next; the playhead names the section | v6 | planned |
-| F24 | Live keyboard: the keys play the selected channel's sound over the piece, locked to its key and scale, with auto-chords; MIDI IN notes do the same; 4 of the 16 voices kept for live play | v6 | planned |
+| F24 | Live keyboard: the keys play the selected channel's sound over the piece, locked to its key and scale (SLOOP's 16), with voice-led auto-chords; MIDI IN plays as sent, by MIDI channel to channels 1-8; 4 of the 16 voices kept for live play | v6 | planned |
 | F25 | Step sequencer on all 8 tracks: a track's notes as a step grid (16 a page, up to 64 steps), per-step velocity / length, chords of up to 4, ties, swing, a loop length per track (polymeter); it edits the piece itself | v6 | planned |
 | F26 | Record live play into a part: what you play (keys or MIDI IN) is written into the selected channel at the grid, overdub or replace, undoable | v6 | planned |
 
@@ -114,6 +114,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 38 | The step sequencer edits the piece itself (one format, one library); no separate pattern banks | user | yes |
 | 39 | Sequencer depth: core (≤ 64 steps, velocity, length, chords ≤ 4, ties, swing, per-track length); no p-locks / trig conditions / ratchets in v6 | user | yes |
 | 40 | v6 assumptions: emulator only; SLOOP's sequencer / scale / chord code reused where it fits, with provenance; 4 of 16 voices reserved while playing live; v4/v5 pieces play unchanged | user | yes |
+| 41 | v6 reconciled with SLOOP (craft-anything, `research/sloop-reconcile.md`): SLOOP's 16 scales, chord modifiers and voice leading copied for the live keyboard; MIDI IN plays as sent (no scale lock), routed by MIDI channel to channels 1-8; recording latency-compensated with a count-in; the lost-note-off fix (midi_in_lost) added | council | no |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -121,6 +122,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 
 ## Backlog
 - Sampled instruments (piano, strings, choir) in the ~430 KB of free code flash (decision 36), if a sound test shows the synthesized ones fall short
+- From the SLOOP reconciliation (research/sloop-reconcile.md §4): MONO / LEGATO voices with glide and SLIDE; transpose, shift and ×2 / ½ for a channel; the other gaps it ranks
 - After v6 (decision 37): send from Studio while playing (swap at the next bar), energy + swing macros, setlists chaining pieces, takes switched live
 - Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
 - Second core for more voices: after a real-device test (decision 28)

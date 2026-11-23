@@ -47,3 +47,21 @@ Rings, Copyright (c) 2015 Emilie Gillet; the fixed-point ports 2026 Leo Kuroshit
 2026 Leo Kuroshita; Apache License 2.0 (`app/engines/LICENSE-Apache-2.0-msfa.txt`). The GPL-3.0-only files are
 Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments. SLOOP's assets (logo, Hügelton art) are not
 copied.
+
+## Through Dinghy (found by the reconciliation, 2026-11-23)
+
+These came with Dinghy, the platform COMPOSER is built on (`app/firmware/src/platform.c` lines 2-3: "taken unchanged from
+SLOOP/Felucca/sloopDX"), not copied by a COMPOSER story, so they had no row. Compared with SLOOP at `bac9c05`
+(`research/sloop-reconcile.md` §1, craft-anything evidence in `research/craft/`). GPL-3.0-only like SLOOP. Dinghy's own
+commit for them is not pinned (open: the reconciliation's unknown `unk_9401bf5ed47ae93f`).
+
+| COMPOSER path | SLOOP path | relation |
+| --- | --- | --- |
+| app/firmware/src/libc.c | firmware/src/libc.c | identical |
+| app/firmware/src/uac_fir.h | firmware/src/uac_fir.h | identical |
+| app/tools/get_toolchain.sh | tools/get_toolchain.sh | identical |
+| app/tools/lz4blk.py | tools/lz4blk.py | identical |
+| app/firmware/src/midi_uart.c | firmware/src/midi_uart.c | changed: 15 lines (US-12 SysEx), marked `COMPOSER:`; lacks SLOOP 2.8.3's `midi_in_lost` (US-24) |
+| app/firmware/src/usb.c, lcd.c, gfx.c, ota.c, recovery.c, bootguard.h | firmware/src/ (same names) | derived: 6 to 186 lines differ (Dinghy's and COMPOSER's changes) |
+| app/tools/build.py, fm1_install.py, fm1pkg_make.py | tools/ (same names) | derived: differ |
+
