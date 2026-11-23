@@ -101,6 +101,8 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 29 | SLOOP 2.8.5 (isod89/sloop-fm1 @ bac9c05, GPL-3.0) code copied unchanged where possible, pinned + provenance; our glue only; its assets (logo, Hügelton art) not copied | user | yes |
 | 30 | Float: tested in the emulator before any float code; until then integer only (RULES.md) | user | no |
 | 31 | v4 pieces keep playing; every new sound plays the densest piece with 0 starved halves in fm1-emu's on-chip timing (FM1_STRICT) | user | yes |
+| 32 | Sound ids: v4's 0–39 unchanged, SLOOP's 32 kits 40–71, FM6 72–79; new engines always appended. PRESETS on DRUMS/PERC turns through kits only, elsewhere skips them | council | yes |
+| 33 | SLOOP's fm6_core.c kept byte for byte: sanitizers allow signed left shifts and wrap-around (as SLOOP's own test run); fm6_bank.c copied, not built (its flash bank: FM6 plays COMPOSER's 8 presets) | council | no |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
