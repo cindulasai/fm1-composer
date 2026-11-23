@@ -192,9 +192,26 @@ FM6_FIRST, KITS_FIRST = 72, 40                               # (v5 catalog: v4's
 
 
 @emu_only
-def test_19_6_strict_timing_densest_piece_all_fm6(tmp_path):
-    d = dense([FM6_FIRST + c for c in range(8)])              # every channel on FM6, 16 voices busy
-    assert len(d) > 30000
+def fm6_sixteen():
+    """the most FM6 the firmware plays: its 3 FM6 channels (ENG_FM6_MAX) each a 6-note chord a 16th, held a half
+    note, so 18 FM6 notes always want the 16 voices (the rest of the channels silent): as many notes as fit"""
+    best, bars = None, 1
+    while True:
+        chans = [Channel(r, [Note(s * 24, 48 + c * 4 + k * 3 + s % 3, 192, 100) for s in range(bars * 16) for k in range(6)],
+                         sound=FM6_FIRST + c) for c, r in enumerate(["lead", "pad", "chords"])]
+        try:
+            best, bars = (encode(Piece("fm6x16", 1400, bars * 384, chans)), chans), bars + 1
+        except PieceError:
+            return best
+
+
+@emu_only
+def test_19_6_strict_timing_sixteen_fm6_voices(tmp_path):
+    d, chans = fm6_sixteen()
+    assert len(chans) == 3 == int(re.search(r"#define ENG_FM6_MAX (\d+)u", (APP / "firmware/src/sloop_glue.c").read_text())[1])
+    ends = sorted((n.tick, n.tick + n.dur) for ch in chans for n in ch.notes)
+    t = 384 * 2                                               # (from bar 3: every 16th holds 18 sounding FM6 notes)
+    assert all(sum(a <= x < b for a, b in ends) >= 16 for x in range(t, ends[-1][0], 24)), "16 FM6 voices busy"
     empty, under, level = strict_densest(tmp_path, d)
     assert (empty, under) == ("0", "0") and level > 300
 
