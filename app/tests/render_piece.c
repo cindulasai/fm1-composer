@@ -32,6 +32,7 @@ int main(int argc, char **argv)
     player_load(buf);
     for (ch = 0; ch < pl_v.nch; ch++) {
         uint32_t s = pl_v.ch[ch].sound;
+        synth_role(ch, pl_v.ch[ch].role);
         synth_sound(ch, s < sound_count ? s : sound_default(pl_v.ch[ch].role));
         synth_level(ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
     }

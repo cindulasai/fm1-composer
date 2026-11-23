@@ -23,12 +23,14 @@ def piece(name, bars=4):
     return encode(Piece(name, 1200, bars * 384, chans))
 
 
-def dense():
-    """as many notes as a piece may hold: 8 channels of 16th-note pairs, near the 32 KB limit"""
+def dense(sounds=None):
+    """as many notes as a piece may hold: 8 channels of 16th-note pairs, near the 32 KB limit (sounds: one id a
+    channel, else each role's default)"""
     best, bars = None, 1
     while True:
         chans = [Channel(r, [Note(s * 24, (38 if r == "drums" else 40 + c * 5) + k * 7 + s % 5, 20, 100)
-                             for s in range(bars * 16) for k in range(2)]) for c, r in enumerate(ROLES)]
+                             for s in range(bars * 16) for k in range(2)], **({"sound": sounds[c]} if sounds else {}))
+                 for c, r in enumerate(ROLES)]
         try:
             best, bars = encode(Piece("dense", 1400, bars * 384, chans)), bars + 1
         except PieceError:                                   # (one bar more than fits)
@@ -174,6 +176,39 @@ def test_9_4_strict_timing_densest_piece_never_starves(tmp_path):
     m = re.search(r"usb audio: .*\((\d+) empty, (\d+) of them underruns\)", report)
     assert m and m[1] == "0" and m[2] == "0", report[-800:]
     assert rms(s, len(s) // 2 - 5 * 44100) > 300, "10 s of the densest piece, heard"
+
+
+def strict_densest(tmp_path, d):
+    """d pushed and played 10 s under on-chip timing: (empty halves, underruns, rms of the last 5 s)"""
+    usb, t = usb_script([d], gap=60)
+    report, _, s = emu(tmp_path, t + 10500, usb=usb, keys=f"{t + 200}:PLAY,{t + 250}:PLAY^", strict=True, wav=True)
+    assert replies(report)[-1] == 0x45, "saved under on-chip timing"
+    m = re.search(r"usb audio: .*\((\d+) empty, (\d+) of them underruns\)", report)
+    assert m, report[-800:]
+    return m[1], m[2], rms(s, len(s) // 2 - 5 * 44100)
+
+
+FM6_FIRST, KITS_FIRST = 72, 40                               # (v5 catalog: v4's 40, SLOOP's 32 kits, FM6's 8)
+
+
+@emu_only
+def test_19_6_strict_timing_densest_piece_all_fm6(tmp_path):
+    d = dense([FM6_FIRST + c for c in range(8)])              # every channel on FM6, 16 voices busy
+    assert len(d) > 30000
+    empty, under, level = strict_densest(tmp_path, d)
+    assert (empty, under) == ("0", "0") and level > 300
+
+
+@emu_only
+def test_21_5_strict_timing_densest_piece_on_sloop_kits(tmp_path):
+    names = re.findall(r'"([^"]+)"', re.search(r"#define DS_KIT_NAME_LIST (.*)",
+                                               (APP / "firmware/src/felucca_drumkits.h").read_text())[1])
+    glitch = KITS_FIRST + names.index("GLITCH")             # (the costliest kit on the host, synth_test 21.5)
+    for kit in (glitch, KITS_FIRST):
+        d = dense([kit if r == "drums" else FM6_FIRST + c for c, r in enumerate(ROLES)])
+        empty, under, level = strict_densest(tmp_path, d)
+        assert (empty, under) == ("0", "0"), f"kit {kit}"
+        assert level > 300, "heard"
 
 
 def test_9_5_missing_emulator_or_firmware_is_a_visible_skip(tmp_path):

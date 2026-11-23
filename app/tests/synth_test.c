@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* US-4: synth.c through its interface: voice budget and stealing, every sound audible and silent after release,
- * role defaults, hostile calls ignored, render cost. */
+ * role defaults, hostile calls ignored, render cost. US-21: SLOOP's 32 synthesised kits (21.1, 21.2, 21.4, 21.5).
+ * US-19: SLOOP's FM6 engine (sloop_glue.c) and the engine pool. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 #define VCHK(k) ((k) < NVOICE ? (k) : (abort(), 0u))   /* every voice index in range */
 #include "synth.c"
 
@@ -81,7 +83,7 @@ static void test_4_2_every_sound_sounds_and_ends(void)
     uint32_t id;
     synth_init();
     for (id = 0; id < sound_count; id++) {
-        uint32_t note = sounds[id].e == &ENG_KIT ? 38u : 60u;
+        uint32_t note = sounds[id].e->oneshot ? 38u : 60u;
         synth_init();
         synth_sound(0, id);
         synth_level(0, 127, 64);
@@ -126,7 +128,7 @@ static void test_4_3_role_defaults(void)
     }
     CHECK(sound_default(ROLE_DRUMS) == find("KIT", "STD KIT"), "drums get the kit");
     CHECK(sound_default(200) == sound_default(ROLE_OTHER), "unknown role: other's sound");
-    CHECK(sound_count == 40 && sound_count <= SOUND_MAX, "catalog size %u", sound_count);
+    CHECK(sound_count == 72u + ENG_FM6.npresets && sound_count <= SOUND_MAX, "catalog size %u", sound_count);   /* v4's 40, SLOOP's 32 kits, FM6 */
     CHECK(snd_eq(sound_name(sound_count), "?") && snd_eq(sound_engine(9999), "?"), "out of range names");
 }
 
@@ -467,6 +469,382 @@ static void test_4_4_render_before_init_is_silent(void)
     for (i = 0; i < 2 * CTL; i++) CHECK(out[i] == 7, "untouched before init");
 }
 
+/* ------------------------------------------------ US-21: SLOOP's synthesised kits --- */
+static uint32_t dsyn_first(void)                        /* the first SLOOP kit's sound id */
+{
+    uint32_t id;
+    for (id = 0; id < sound_count && sounds[id].e != &ENG_DSYN; id++) {}
+    return id;
+}
+
+/* one hit on channel 0 (full level, centre) of sound id: the left channel's first n samples */
+static void hit(uint32_t id, uint32_t note, uint32_t vel, int32_t *mono, uint32_t n)
+{
+    int32_t out[2 * CTL];
+    uint32_t i, b;
+    synth_init();
+    synth_sound(0, id);
+    synth_level(0, 100, 64);
+    synth_on(0, note, vel);
+    for (b = 0; b * CTL < n; b++) {
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+        for (i = 0; i < CTL && b * CTL + i < n; i++) mono[b * CTL + i] = out[2 * i];
+    }
+}
+
+#define CN 1024u                                        /* 23 ms from the hit */
+/* spectral centroid, Hz: of the power spectrum (Hann window, DFT), where the sound's energy sits. (Of the magnitude
+ * spectrum, a snare's high-passed white noise reads higher than a band-passed 9 kHz hat: 11 vs 9 kHz) */
+static double centroid(const int32_t *x)
+{
+    static double c[CN], s[CN], w[CN];
+    double num = 0, den = 0;
+    uint32_t k, i;
+    if (w[1] == 0)
+        for (i = 0; i < CN; i++) {
+            c[i] = cos(2 * M_PI * i / CN); s[i] = sin(2 * M_PI * i / CN); w[i] = 0.5 - 0.5 * c[i];
+        }
+    for (k = 1; k < CN / 2; k++) {
+        double re = 0, im = 0, pw;
+        for (i = 0; i < CN; i++) { re += x[i] * w[i] * c[(k * i) % CN]; im -= x[i] * w[i] * s[(k * i) % CN]; }
+        pw = re * re + im * im;
+        num += pw * k * 44100.0 / CN;
+        den += pw;
+    }
+    return den > 0 ? num / den : 0;
+}
+
+static void test_21_1_every_kit_sounds_its_gm_notes_kick_darker_than_snare_than_hat(void)
+{
+    static const uint8_t GM[5] = {36, 38, 42, 46, 49};   /* kick, snare, closed hat, open hat, crash */
+    static int32_t x[4096];
+    uint32_t id0 = dsyn_first(), k, j, i;
+    CHECK(id0 == 40u && DS_NKITS == 32u && sounds[id0 + DS_NKITS - 1u].e == &ENG_DSYN, "32 kits after v4's 40: %u + %u of %u",
+          id0, DS_NKITS, sound_count);
+    for (k = 0; k < DS_NKITS && id0 + k < sound_count; k++) {
+        uint32_t id = id0 + k;
+        double cen[3];
+        CHECK(sounds[id].e == &ENG_DSYN && snd_eq(sound_name(id), DS_KITS[k].name) && snd_eq(sound_engine(id), "KIT"),
+              "kit %u is SLOOP's %s (%s)", k, DS_KITS[k].name, sound_name(id));
+        CHECK(sound_find("KIT", DS_KITS[k].name) == id, "kit %s found by name", DS_KITS[k].name);
+        for (j = 0; j < 5; j++) {
+            int32_t pk = 0;
+            hit(id, GM[j], 110, x, 4096);
+            for (i = 0; i < 4096; i++) pk = x[i] > pk ? x[i] : -x[i] > pk ? -x[i] : pk;
+            CHECK(pk > 300, "%s note %u silent (peak %d)", sound_name(id), GM[j], pk);
+            if (j < 3) cen[j] = centroid(x);
+        }
+        CHECK(cen[0] < cen[1] && cen[1] < cen[2], "%s: kick %.0f Hz < snare %.0f Hz < hat %.0f Hz", sound_name(id), cen[0],
+              cen[1], cen[2]);
+    }
+    printf("21.1 %u kits: GM 36 38 42 46 49 sound; kick < snare < closed hat (spectral centroid)\n", DS_NKITS);
+}
+
+/* a kit's render as a CRC-32: every GM drum note 35..81 and the edges 0 / 127 at three velocities, one hit every 3
+ * blocks, overlapping, on channel 2; then 1 s of tails; again with the kit's EDIT moved */
+static uint32_t crc32_upd(uint32_t c, const void *p, size_t n)
+{
+    const uint8_t *b = p;
+    size_t i;
+    int j;
+    c = ~c;
+    for (i = 0; i < n; i++) { c ^= b[i]; for (j = 0; j < 8; j++) c = c >> 1 ^ (0xEDB88320u & -(c & 1u)); }
+    return ~c;
+}
+
+static uint32_t kit_crc(uint32_t id)
+{
+    static const uint8_t VEL[3] = {127, 90, 30};
+    int32_t out[2 * CTL];
+    uint32_t crc = 0, pass, note, b, v;
+    for (pass = 0; pass < 2; pass++) {
+        synth_init();
+        synth_sound(2, id);
+        synth_level(2, 90, 64);
+        if (pass) { trk[2].p[P_E0] = 20; trk[2].p[P_E1] = 110; trk[2].p[P_E2] = 10; trk[2].p[P_E3] = 90; }
+        for (v = 0; v < 3; v++)
+            for (note = 34; note <= 82; note++) {
+                synth_on(2, note == 34 ? 0 : note == 82 ? 127 : note, VEL[v]);
+                for (b = 0; b < 3; b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+            }
+        for (b = 0; b < 44100 / CTL; b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+    }
+    return crc;
+}
+
+static void test_21_2_composer_kits_keep_ids_and_render_bit_identical(void)
+{
+    /* captured from US-18's synth (ee8f389: v4's kits through SLOOP's limiter and DC filter), before the SLOOP kits
+     * were added (v4 itself, 3615169, before the effects: EB9AFAC1, 02B5F725, B6D8327E) */
+    static const struct { const char *name; uint32_t crc; } V4[3] = {
+        {"STD KIT", 0x889EF25Eu}, {"TIGHT KIT", 0x4DA0AA79u}, {"BOOM KIT", 0x0BDDD56Bu}};
+    uint32_t k;
+    synth_init();
+    for (k = 0; k < 3; k++) {
+        uint32_t crc;
+        CHECK(sounds[k].e == &ENG_KIT && snd_eq(sound_name(k), V4[k].name), "id %u is %s (%s)", k, V4[k].name, sound_name(k));
+        crc = kit_crc(k);
+        CHECK(crc == V4[k].crc, "%s renders as before the SLOOP kits: %08X, then %08X", V4[k].name, crc, V4[k].crc);
+    }
+    CHECK(sound_find("ANALOG", "SAW LEAD") == 3 && sound_find("NOISE", "RAIN") < 40, "the other sounds keep their ids");
+    printf("21.2 STD / TIGHT / BOOM KIT: ids 0..2, renders bit-identical to before the SLOOP kits\n");
+}
+
+static void test_21_4_notes_outside_the_map_silent_six_hits_on_a_tick_all_sound(void)
+{
+    static const uint8_t SIX[6] = {36, 38, 42, 46, 49, 39};
+    static const uint8_t OFF[4] = {0, 34, 83, 127};
+    int32_t out[2 * CTL];
+    uint32_t id0 = dsyn_first(), k, j, i, b;
+    for (k = 0; k < DS_NKITS; k++) {
+        synth_init();
+        synth_sound(0, id0 + k);
+        synth_level(0, 127, 64);
+        for (j = 0; j < 4; j++) synth_on(0, OFF[j], 127);
+        CHECK(synth_count(0) == 0, "%s: notes outside the map take no voice (%u)", sound_name(id0 + k), synth_count(0));
+        peak = 0;
+        run(SEC(0.1), 1u << 30);
+        CHECK(peak == 0, "%s: notes 0 34 83 127 silent (peak %d)", sound_name(id0 + k), peak);
+        for (j = 0; j < 6; j++) synth_on(0, SIX[j], 127);   /* one tick */
+        for (b = 0; b < 2; b++) {
+            memset(out, 0, sizeof out);
+            synth_render(out, CTL);
+        }
+        CHECK(synth_count(0) == 6, "%s: 6 hits, 6 voices (%u)", sound_name(id0 + k), synth_count(0));
+        for (i = 0; i < NVOICE; i++) {                  /* each of the six: its own lane, and sound in its next block */
+            voice_t *v = &trk[0].v[i];
+            dsv_t copy = dsyn_v[0][i];
+            int32_t one[CTL], pk = 0;
+            int32_t semi;
+            if (!v->active) continue;
+            CHECK(dsyn_v[0][i].d == &DS_KITS[k].s[ds_lane(v->note, &semi)], "%s: hit %u on its lane", sound_name(id0 + k), v->note);
+            ds_render(&copy, one, CTL);
+            for (b = 0; b < CTL; b++) pk = one[b] > pk ? one[b] : -one[b] > pk ? -one[b] : pk;
+            CHECK(pk > 30, "%s: hit %u sounds among the six (peak %d)", sound_name(id0 + k), v->note, pk);
+        }
+    }
+    {                                                   /* every note, every velocity: no crash, nothing past full scale */
+        synth_init();
+        synth_sound(0, id0 + 28);                       /* (INDUSTR: the most drive) */
+        synth_level(0, 127, 64);
+        for (j = 0; j < 128; j++) { synth_on(0, j, (j * 37u) % 127u + 1u); run(1, 1u << 30); }
+        run(SEC(3), 1u << 30);
+        CHECK(synth_active() == 0, "every hit ends");
+    }
+    printf("21.4 notes 0 34 83 127 silent on every kit; 6 hits on one tick: 6 voices sounding\n");
+}
+
+/* the densest piece of the suite (test_emu.py dense(): 8 channels of 16th-note pairs at 140 BPM), its drum channel on
+ * a SLOOP kit: microseconds per 256 frames on this host */
+static double dense_us(uint32_t kit_id, uint32_t secs)
+{
+    static const uint8_t ROLES[8] = {ROLE_LEAD, ROLE_BASS, ROLE_DRUMS, ROLE_PAD, ROLE_CHORDS, ROLE_COUNTER, ROLE_ARP, ROLE_FX};
+    int32_t out[2 * CTL];
+    uint32_t ch, fr, s = 0, total = secs * 44100u / CTL * CTL, k;
+    struct timespec t0, t1;
+    synth_init();
+    for (ch = 0; ch < 8; ch++) { synth_sound(ch, ch == 2 ? kit_id : sound_default(ROLES[ch])); synth_level(ch, 100, 64); }
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    for (fr = 0; fr < total; fr += CTL) {
+        if (fr >= s * 4725u) {                          /* a 16th at 140 BPM: 4725 frames */
+            for (ch = 0; ch < 8; ch++) {
+                if (s) for (k = 0; k < 2; k++) synth_off(ch, (ch == 2 ? 38 : 40 + ch * 5) + k * 7 + (s - 1) % 5);
+                for (k = 0; k < 2; k++) synth_on(ch, (ch == 2 ? 38 : 40 + ch * 5) + k * 7 + s % 5, 100);
+            }
+            s++;
+        }
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    return ((t1.tv_sec - t0.tv_sec) * 1e6 + (t1.tv_nsec - t0.tv_nsec) / 1e3) / (total / 256.0);
+}
+
+static void test_21_5_densest_drum_pattern_on_a_sloop_kit_well_under_budget(void)
+{
+    uint32_t id0 = dsyn_first(), k, worst = id0;
+    double w = 0, us, us_std;
+    for (k = 0; k < DS_NKITS; k++) {
+        double t = dense_us(id0 + k, 1);
+        if (t > w) { w = t; worst = id0 + k; }
+    }
+    us = dense_us(worst, 5);
+    us_std = dense_us(0, 5);
+    printf("21.5 densest piece, drums on %s: %.0f us per 256 frames on this host (STD KIT %.0f; budget 3000)\n",
+           sound_name(worst), us, us_std);
+    CHECK(us < 1500.0, "densest piece on %s: %.0f us per 256 frames", sound_name(worst), us);
+}
+
+/* ------------------------------------------------------------------ US-19 --- */
+static uint32_t fm6_first(void) { return find("FM6", FM6_PRESETS[0].name); }
+
+static void test_19_1_every_fm6_preset_on_any_channel(void)
+{
+    uint32_t k, ch;
+    for (k = 0; k < ENG_FM6.npresets; k++)
+        for (ch = 0; ch < NPART; ch++) {
+            uint32_t id = fm6_first() + k;
+            int before = fails;
+            synth_init();
+            synth_sound(ch, id);
+            synth_level(ch, 127, 64);
+            CHECK(chs[ch].e == &ENG_FM6 && chs[ch].sound == id, "19.1 ch %u plays FM6 %s", ch, sound_name(id));
+            peak = 0; last_peak = 0; tail_abs = 0; tail_n = 0;
+            synth_on(ch, 60, 110);
+            synth_on(ch, 67, 90);
+            run(SEC(1.5), 1u << 30);                    /* (run: no sample beyond +-32767) */
+            CHECK(peak > 300, "19.1 FM6 %s ch %u is silent (peak %d)", sound_name(id), ch, peak);
+            synth_off(ch, 60);
+            synth_off(ch, 67);
+            run(SEC(2.5), SEC(2.0));                    /* 2 s after the note-off */
+            CHECK(tail_abs / (tail_n ? tail_n : 1) < 200, "19.1 FM6 %s ch %u does not end (mean %lld)", sound_name(id), ch,
+                  (long long)(tail_abs / (tail_n ? tail_n : 1)));
+            run(SEC(2.0), 1u << 30);
+            CHECK(synth_active() == 0, "19.1 FM6 %s ch %u: a voice stuck", sound_name(id), ch);
+            if (fails != before) return;
+        }
+}
+
+static void test_19_3_v4_ids_keep_their_sounds(void)
+{
+    static const char *const V4[40][2] = {
+        {"KIT", "STD KIT"}, {"KIT", "TIGHT KIT"}, {"KIT", "BOOM KIT"}, {"ANALOG", "SAW LEAD"},
+        {"ANALOG", "SOFT PAD"}, {"ANALOG", "SQR BASS"}, {"ANALOG", "PWM STR"}, {"ANALOG", "ACID"},
+        {"ANALOG", "SINE KEY"}, {"ANALOG", "RAVE"}, {"ANALOG", "SUB BASS"}, {"ANALOG", "PLUCK"},
+        {"ANALOG", "BRASS"}, {"ANALOG", "WIND"}, {"ANALOG", "STRINGS"}, {"PHASE", "BRASS"}, {"PHASE", "ORGAN"},
+        {"PHASE", "STRING"}, {"PHASE", "RESO"}, {"PHASE", "BELL"}, {"PHASE", "WIRE"}, {"TRIO", "FAT BASS"},
+        {"TRIO", "ARP LEAD"}, {"TRIO", "SYNC LEAD"}, {"TRIO", "RING BELL"}, {"TRIO", "CHIP CHOIR"},
+        {"WHEEL", "FULL ORGAN"}, {"WHEEL", "JAZZ PERC"}, {"WHEEL", "GOSPEL"}, {"WHEEL", "SOFT FLUTE"},
+        {"WHEEL", "ROCK DRIVE"}, {"LOFI", "PULSE LD"}, {"LOFI", "WAVE BASS"}, {"LOFI", "ARP 8BIT"},
+        {"LOFI", "WAVE LEAD"}, {"LOFI", "STEP LEAD"}, {"NOISE", "WIND"}, {"NOISE", "RAIN"}, {"NOISE", "ARCADE"},
+        {"NOISE", "METAL"},
+    };
+    uint32_t i;
+    synth_init();
+    for (i = 0; i < 40u; i++)
+        CHECK(snd_eq(sound_engine(i), V4[i][0]) && snd_eq(sound_name(i), V4[i][1]), "19.3 id %u is %s %s, v4 had %s %s", i,
+              sound_engine(i), sound_name(i), V4[i][0], V4[i][1]);
+    for (i = 0; i < ENG_FM6.npresets; i++)
+        CHECK(sounds[72u + i].e == &ENG_FM6 && sounds[72u + i].pr == &FM6_PRESETS[i], "19.3 FM6 %u follows at %u", i, 72u + i);
+    CHECK(sound_count == 72u + ENG_FM6.npresets, "19.3 nothing else: %u", sound_count);   /* (40..71: SLOOP's kits) */
+    for (i = 0; i < ROLE_COUNT; i++)
+        CHECK(eng_id(sounds[sound_default(i)].e) == ENG_NONE, "19.3 role %u default needs no engine block", i);
+}
+
+/* the pool: ENG_POOL_N channels play FM6, the next gets its role's default; a channel that leaves frees its block */
+static void test_19_5_pool_full_gives_the_role_default(void)
+{
+    uint32_t ch, fm = fm6_first();
+    synth_init();
+    for (ch = 0; ch < NPART; ch++) synth_role(ch, ch == 4u ? ROLE_BASS : ROLE_PAD);
+    for (ch = 0; ch < NPART; ch++) synth_sound(ch, fm);
+    for (ch = 0; ch < NPART; ch++)
+        CHECK((ch < ENG_POOL_N) == (chs[ch].e == &ENG_FM6), "19.5 ch %u: FM6 only while the pool lasts", ch);
+    CHECK(chs[4].sound == sound_default(ROLE_BASS) && chs[5].sound == sound_default(ROLE_PAD), "19.5 refused: role default");
+    synth_post(SC_SOUND, 6, fm, ROLE_LEAD + 1u); run(1, 99);
+    CHECK(chs[6].sound == sound_default(ROLE_LEAD) && ch_role[6] == ROLE_LEAD, "19.5 posted role + 1 is kept");
+    synth_sound(1, find("ANALOG", "SAW LEAD"));          /* channel 1 gives its block back */
+    synth_sound(7, fm);
+    CHECK(chs[7].e == &ENG_FM6 && eng_arena_of(&trk[7], ENGI_FM6) && !eng_arena_of(&trk[1], ENGI_FM6), "19.5 freed block reused");
+    CHECK(!eng_arena_of(&trk[0], ENGI_FM6 + 1u), "19.5 no block for another engine");
+    for (ch = 0; ch < NPART; ch++) { synth_on(ch, 60, 100); synth_on(ch, 64, 100); }
+    peak = 0;
+    run(SEC(0.5), 1u << 30);
+    CHECK(peak > 300, "19.5 the mix still plays");
+    synth_role(0, 999);
+    CHECK(ch_role[0] == ROLE_OTHER, "19.5 a bad role is OTHER");
+}
+
+static void test_19_5_hostile_patch_bytes(void)
+{
+    static const uint8_t FILL[2] = {0xFF, 0x00};
+    uint8_t v[FP_SIZE + 1u];
+    uint32_t f, i, n;
+    for (f = 0; f < 2; f++) {
+        synth_init();
+        synth_sound(0, fm6_first());
+        synth_level(0, 127, 64);
+        memset(v, FILL[f], sizeof v);
+        fm6_set_patch(0, v);
+        for (i = 0; i < FP_SIZE; i++)
+            CHECK(fm6_patch[0][i] <= (i >= FP_NAME ? 126u : fm6_max(i)) && (i < FP_NAME || fm6_patch[0][i] >= 32u),
+                  "19.5 byte %u clamped: %u", i, fm6_patch[0][i]);
+        for (n = 0; n < 6u; n++) synth_on(0, 20u + n * 19u, n & 1u ? 1u : 127u);
+        peak = 0;
+        run(SEC(1.0), 1u << 30);                        /* (run: every sample within +-32767) */
+        for (n = 0; n < 6u; n++) synth_off(0, 20u + n * 19u);
+        tail_abs = 0; tail_n = 0;
+        run(SEC(5.0), SEC(4.5));                        /* a held release (L4 99) is cut after 4 s */
+        CHECK(synth_active() == 0, "19.5 fill %02X: a voice stuck", FILL[f]);
+        CHECK(tail_abs / (tail_n ? tail_n : 1) < 200, "19.5 fill %02X: still sounding", FILL[f]);
+    }
+    synth_init();                                       /* hostile macros and slot numbers */
+    synth_sound(0, fm6_first());
+    for (i = 0; i < 8u; i++) trk[0].p[P_E0 + i] = (int16_t)(i & 1u ? -32768 : 32767);
+    trk[0].p[P_E7] = 32767;
+    eng_loaded(&trk[0], &ENG_FM6);
+    CHECK(fm6_slot[0] == FM6_NSLOT - 1u, "19.5 PTCH clamped: %u", fm6_slot[0]);
+    synth_on(0, 60, 100); synth_on(0, 127, 127); synth_on(0, 0, 1);
+    run(SEC(1.0), 1u << 30);
+    synth_all_off();
+    run(SEC(5.0), 1u << 30);
+    CHECK(synth_active() == 0, "19.5 hostile macros: a voice stuck");
+    synth_sound(0, fm6_first());                        /* a bank slot (none in COMPOSER): the init voice */
+    trk[0].p[P_E7] = FM6_NFACTORY;
+    eng_loaded(&trk[0], &ENG_FM6);
+    CHECK(fm6_slot[0] == FM6_NFACTORY && !memcmp(&fm6_patch[0][FP_NAME], "INIT VOICE", 10), "19.5 empty bank slot: init voice");
+}
+
+static void test_19_5_steal_and_hush_end_fm6_voices(void)
+{
+    uint32_t ch, n, fm = fm6_first();
+    synth_init();
+    for (ch = 0; ch < 3u; ch++) synth_sound(ch, fm);
+    for (ch = 0; ch < 3u; ch++)
+        for (n = 0; n < 6u; n++) { synth_on(ch, 50 + n * 2 + ch, 100); run(1, 99); }
+    CHECK(synth_active() == VOICE_BUDGET, "19.5 FM6 voices count against the budget: %u", synth_active());
+    synth_hush();
+    peak = 0;
+    run(SEC(0.05), 99);
+    run(2, 0); peak = 0; run(2, 99);
+    CHECK(peak < 30 && synth_active() == 0, "19.5 hush ends FM6 voices (%d)", peak);
+}
+
+static void fm6_sixteen(uint32_t k)                     /* 16 voices on the channels the pool allows */
+{
+    uint32_t ch, n, v = 0;
+    synth_init();
+    for (ch = 0; ch < ENG_POOL_N; ch++) {
+        synth_sound(ch, fm6_first() + k);
+        for (n = 0; n < FM6_POLY && v < 16u; n++, v++) synth_on(ch, 40 + ch * 12 + n * 3, 100);
+    }
+}
+
+static void test_19_6_sixteen_fm6_voices_cost(void)
+{
+    uint32_t k, worst = 0, worst_k = 0;
+    double us_per_256;
+    clock_t t0;
+    for (k = 0; k < ENG_FM6.npresets; k++) {
+        clock_t c0, c;
+        if (FM6_PRESETS[k].mono) continue;              /* (a MONO patch: one voice a channel) */
+        c0 = clock();
+        fm6_sixteen(k);
+        CHECK(synth_active() == 16u, "19.6 16 FM6 voices sound: %u", synth_active());
+        run(SEC(1), 1u << 30);
+        c = clock() - c0;
+        if ((uint32_t)c > worst) { worst = (uint32_t)c; worst_k = k; }
+    }
+    fm6_sixteen(worst_k);
+    t0 = clock();
+    run(SEC(3), 1u << 30);
+    us_per_256 = (double)(clock() - t0) / CLOCKS_PER_SEC * 1e6 / (SEC(3) / 8.0);
+    printf("19.6 render cost: 16 FM6 voices (%s): %.0f us per 256 frames on this host (limit 3000)\n",
+           FM6_PRESETS[worst_k].name, us_per_256);
+    CHECK(us_per_256 < 3000.0, "19.6 host render too slow: %.0f us", us_per_256);
+}
+
 int main(void)
 {
     test_4_4_render_before_init_is_silent();
@@ -490,6 +868,16 @@ int main(void)
     test_4_2_drum_voices();
     test_4_4_hush_silences_everything();
     test_4_5_render_cost();
+    test_21_1_every_kit_sounds_its_gm_notes_kick_darker_than_snare_than_hat();
+    test_21_2_composer_kits_keep_ids_and_render_bit_identical();
+    test_21_4_notes_outside_the_map_silent_six_hits_on_a_tick_all_sound();
+    test_21_5_densest_drum_pattern_on_a_sloop_kit_well_under_budget();
+    test_19_1_every_fm6_preset_on_any_channel();
+    test_19_3_v4_ids_keep_their_sounds();
+    test_19_5_pool_full_gives_the_role_default();
+    test_19_5_hostile_patch_bytes();
+    test_19_5_steal_and_hush_end_fm6_voices();
+    test_19_6_sixteen_fm6_voices_cost();
     printf("%s (%u sounds)\n", fails ? "FAILED" : "ok", sound_count);
     return fails ? 1 : 0;
 }

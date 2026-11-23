@@ -195,12 +195,13 @@ def test_8_2_select_tempo_and_sound_turns_exactly(tmp_path):
     s = screen_full(log)
     assert [c for ms, y, x, c, txt in s if t + 200 <= ms < t + 300 and y == y3 and txt == ">3"] == [AMBER]
     assert (4, "123 BPM") in at(log, t + 300, t + 399)               # 1 BPM a click
-    assert (y3, names[(k + 1) % len(names)]) in at(log, t + 400, t + 499)
-    assert (y3, names[(k - 1) % len(names)]) in at(log, t + 500)
+    kits = names[:3] + names[40:72]                                   # (v5: a drum channel turns through the kits)
+    assert (y3, kits[(kits.index(names[k]) + 1) % len(kits)]) in at(log, t + 400, t + 499)
+    assert (y3, kits[(kits.index(names[k]) - 1) % len(kits)]) in at(log, t + 500)
 
 
 def test_8_2_a_sound_outside_the_catalog_falls_back_to_the_roles(tmp_path):
-    p = encode(Piece("odd", 1200, 384, [Channel("lead", [Note(0, 60, 80, 100)], sound=40),
+    p = encode(Piece("odd", 1200, 384, [Channel("lead", [Note(0, 60, 80, 100)], sound=200),
                                          Channel("bass", [Note(0, 40, 80, 100)], sound=254)]))
     lines, t = push(100, p)
     log, _ = run_host(script(tmp_path, "odd", lines + [f"{t + 50} btn {BTN['PLAY']}"], t + 300))

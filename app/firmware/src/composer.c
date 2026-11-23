@@ -5,9 +5,9 @@
  * Sound engines: Felucca-Engines (MIT), app/engines. The chip's rules: docs/RULES.md.
  *
  * LIBRARY: SELECT turns, PLAY opens the piece, playing it.
- * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound, KNOB2 the tempo; white keys
- * F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes, tempo for this piece; HOME
- * goes back to the library (and stops). */
+ * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound (a drum channel: the 35 kits),
+ * KNOB2 the tempo; white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
+ * tempo for this piece; HOME goes back to the library (and stops). */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
 #include <stdint.h>
@@ -89,6 +89,18 @@ static void set_tempo(uint32_t x10)               /* the player's and the delay'
     post(SC_TEMPO, 0, x10 & 255u, x10 >> 8);
 }
 
+/* PRESETS turned d clicks on channel ch: the next sound; a drum channel (DRUMS, PERC) turns through the kits only */
+static uint32_t sound_turn(uint32_t ch, int32_t d)
+{
+    int32_t s = snd[ch], n = (int32_t)sound_count, step;
+    uint32_t kit = role[ch] == ROLE_DRUMS || role[ch] == ROLE_PERC;   /* drums turn through kits, the rest skip them */
+    for (; d; d -= step) {
+        step = d > 0 ? 1 : -1;
+        do s = (s + step + n) % n; while ((uint32_t)!!sounds[s].e->oneshot != kit);
+    }
+    return (uint32_t)s;
+}
+
 /* open library entry i: copy it to RAM, check it, load the player, apply the saved choices */
 static int open_piece(uint32_t i)
 {
@@ -113,7 +125,7 @@ static int open_piece(uint32_t i)
         uint32_t s = pf ? pf->sound[ch] : pl_v.ch[ch].sound;
         role[ch] = pl_v.ch[ch].role;
         snd[ch] = (uint8_t)(s < sound_count ? s : sound_default(role[ch]));
-        post(SC_SOUND, ch, snd[ch], 0);
+        post(SC_SOUND, ch, snd[ch], role[ch] + 1u);
         post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
     }
     {
@@ -193,8 +205,8 @@ static void player_input(uint32_t pressed, uint32_t keys)
         dirty |= D_STRIPS;
     }
     if ((d = fm1_enc_take(ENC_PRESETS))) {
-        snd[sel] = (uint8_t)(((int32_t)snd[sel] + d) % (int32_t)sound_count + (int32_t)sound_count) % sound_count;
-        post(SC_SOUND, sel, snd[sel], 0);
+        snd[sel] = (uint8_t)sound_turn(sel, d);
+        post(SC_SOUND, sel, snd[sel], role[sel] + 1u);
         dirty |= D_STRIPS;
     }
     if ((d = fm1_enc_take(ENC_KNOB2))) {
@@ -291,8 +303,8 @@ static void edit_input(uint32_t pressed, uint32_t keys)
         dirty |= D_ROLL;
     }
     if ((d = fm1_enc_take(ENC_PRESETS))) {
-        snd[sel] = (uint8_t)(((int32_t)snd[sel] + d) % (int32_t)sound_count + (int32_t)sound_count) % sound_count;
-        post(SC_SOUND, sel, snd[sel], 0);
+        snd[sel] = (uint8_t)sound_turn(sel, d);
+        post(SC_SOUND, sel, snd[sel], role[sel] + 1u);
     }
     for (k = 0; k < ROLL_KEYS; k++)             /* a preview ends with its key */
         if ((preview >> k & 1u) && !(fm1_in.notes >> k & 1u)) { post(SC_NOTE_OFF, sel, ed_low() + k, 0); preview &= ~(1u << k); }
