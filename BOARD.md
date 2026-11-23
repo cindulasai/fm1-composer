@@ -19,7 +19,7 @@
 | US-16 | Left: text2midi's own interface | 1 | done | 0 |
 | US-17 | Right: fm1-emu's own page + MIDI cable | 1 | done | 0 |
 | US-18 | Effects from SLOOP | 1 | done | 0 |
-| US-19 | SLOOP's FM6 engine + DX7 patches | 1 | proven | 2 |
+| US-19 | SLOOP's FM6 engine + DX7 patches | 1 | done | 2 |
 | US-20 | PHYS, DIGITAL, VOICE engines | 1 | done | 0 |
 | US-21 | 32 synthesized drum kits | 1 | done | 0 |
 | US-22 | text2midi's instruments, roles, mix | 1 | done | 0 |

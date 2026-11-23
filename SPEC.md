@@ -35,11 +35,11 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F17 | Studio right = fm1-emu's own page (unchanged, pinned) booting COMPOSER via its ?package= link; Studio is a virtual MIDI input there ("COMPOSER Studio"); Send to FM-1 = text2midi's MIDI → fit → .f1p → SysEx over that input → LIBRARY, plays | v4 | shipped |
 | F15 | Side by side: fm1-emu's browser build (MIT, pinned) runs COMPOSER on the same page; the piece is pushed over the emulated MIDI jack, appears in LIBRARY, plays | v3 | shipped |
 | F11 | EDIT screen: piano roll per channel; keys toggle notes at the cursor; grid, length, velocity, octave; play from the cursor's bar; SAVE replaces the piece | v2 | shipped |
-| F18 | Effects from SLOOP (fx.c, pinned): per channel filter + drive, sends to reverb / delay / chorus, master limiter + DC block; set per channel on the device, saved with the piece | v5 | planned |
-| F19 | SLOOP's FM6 engine (6-op FM, DX7 patches) + its preset bank, copied unchanged where possible | v5 | planned |
-| F20 | SLOOP's PHYS (physical models), DIGITAL (4-op FM) and VOICE (formant) engines + presets | v5 | planned |
-| F21 | SLOOP's 32 synthesized drum kits (drum_synth.c) beside COMPOSER's 3 | v5 | planned |
-| F22 | text2midi's instruments, roles and mix reach the FM-1: each part gets a fitting sound and pan (fm1c and Studio, same bytes) | v5 | planned |
+| F18 | Effects from SLOOP (fx.c, pinned): per channel filter + drive, sends to reverb / delay / chorus, master limiter + DC block; set per channel on the device, saved with the piece | v5 | shipped |
+| F19 | SLOOP's FM6 engine (6-op FM, DX7 patches) + its preset bank, copied unchanged where possible | v5 | shipped |
+| F20 | SLOOP's PHYS (physical models), DIGITAL (4-op FM) and VOICE (formant) engines + presets | v5 | shipped |
+| F21 | SLOOP's 32 synthesized drum kits (drum_synth.c) beside COMPOSER's 3 | v5 | shipped |
+| F22 | text2midi's instruments, roles and mix reach the FM-1: each part gets a fitting sound and pan (fm1c and Studio, same bytes) | v5 | shipped |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -131,4 +131,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v2 — Phase 2: note editing on the device (US-10–US-11)
 - v3 — COMPOSER Studio in the browser, emulator side by side (US-12–US-15)
 - v4 — Studio = text2midi's UI + fm1-emu's page, reused unchanged, MIDI cable between (US-16–US-17)
-- v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22)
+- v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22) — verified
