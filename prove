@@ -98,7 +98,7 @@ if [ "${1:-}" = "close" ]; then
   app=${PROVE_APP:-app}; gate=${PROVE_GATE:-sh check.sh}
   sf=$(grep -l "^### $story " stories/*.md | head -n 1)
   [ -n "$sf" ] || { echo "CLOSE: $story not found in stories/"; exit 2; }
-  title=$(sed -n "s/^### $story[ \t]*[^A-Za-z0-9]*[ \t]*//p" "$sf" | head -n 1)
+  title=$(sed -n "s/^### $story[[:space:]]*[^A-Za-z0-9]*[[:space:]]*//p" "$sf" | head -n 1)
   files=$(awk -v S="$story" '/^### US-[0-9]+/ { on = ($2 == S) } on && /Files:/ { f = $0; sub(/.*Files:[ \t]*/, "", f); gsub(/,/, " ", f); print f }' "$sf")
   # every open criterion needs a test carrying its ID (2.1 -> test_2_1_... or "2.1 ...")
   miss=""
@@ -175,7 +175,7 @@ if [ "${1:-}" = "mutants" ]; then
     ( sleep "$limit"; kill -9 "$pid" 2>/dev/null ) > /dev/null 2>&1 &
     dog=$!
     if wait "$pid" 2>/dev/null; then
-      printf 'SURVIVED %s:%s  "%s" -> "%s"  | %s\n' "$f" "$line" "$from" "$to" "$(sed -n "${line}p" "$f" | sed 's/^[ \t]*//')" >> "$work/survivors"
+      printf 'SURVIVED %s:%s  "%s" -> "%s"  | %s\n' "$f" "$line" "$from" "$to" "$(sed -n "${line}p" "$f" | sed 's/^[[:space:]]*//')" >> "$work/survivors"
     else
       killed=$((killed + 1))
     fi
