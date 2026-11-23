@@ -68,11 +68,24 @@ def open_example(page, title="funk.classic suite 1"):
     return f
 
 
+def diag(page):
+    """what a failed Send leaves to look at (CI): both statuses (the emulator's has its load), its saved flash"""
+    try:
+        libs = page.evaluate("""async () => { const m = await import('./fm1link.js');
+            return (await m.savedLibraries()).map((l) => l.map((p) => [p.seq, p.name, p.bytes.length])); }""")
+    except Exception as e:                       # (diagnostics never hide the failure itself)
+        libs = f"unreadable: {e}"
+    return f"studio: {page.text_content('#status')!r}; emulator: {emu(page).text_content('#status')!r}; saved: {libs}"
+
+
 def send(page, secs=90):
     page.click("#send")
     page.wait_for_function("() => /^(On the FM-1|Sending stopped)/.test(document.querySelector('#status').textContent)",
                            timeout=secs * 1000)
-    return page.text_content("#status")
+    s = page.text_content("#status")
+    if not s.startswith("On the FM-1"):
+        print("SEND FAILED:", diag(page))
+    return s
 
 
 def test_17_1_fm1_emus_own_page_unchanged_boots_composer(studio, tmp_path, studio_url):
@@ -154,7 +167,7 @@ def test_17_4_send_before_start_twice_and_without_a_piece(studio):
     page.click("#send", force=True)                                  # more presses while sending do nothing
     page.click("#send", force=True)
     page.wait_for_function("() => /^(On the FM-1|Sending stopped)/.test(document.querySelector('#status').textContent)", timeout=90000)
-    assert page.text_content("#status").startswith("On the FM-1")
+    assert page.text_content("#status").startswith("On the FM-1"), diag(page)
     assert page.is_enabled("#send") and emu(page).evaluate("() => window.__puts") == 1           # one transfer (one PUT)
 
 
