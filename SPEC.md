@@ -104,6 +104,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 32 | Sound ids: v4's 0–39 unchanged, SLOOP's 32 kits 40–71, FM6 72–79; new engines always appended. PRESETS on DRUMS/PERC turns through kits only, elsewhere skips them | council | yes |
 | 33 | SLOOP's fm6_core.c kept byte for byte: sanitizers allow signed left shifts and wrap-around (as SLOOP's own test run); fm6_bank.c copied, not built (its flash bank: FM6 plays COMPOSER's 8 presets) | council | no |
 | 34 | Sound from text2midi's instrument, else the part's first GM program, else the role default (sounds.py = sounds.rs, one table). Only 3 FM6 channels at once (3 engine blocks): fit swaps a 4th+ FM6 part for a near non-FM6 sound and reports it | council | no |
+| 35 | Engine pool: 8 blocks of 8.6 KB (PHYS's state), so PHYS / DIGITAL / VOICE play on all 8 channels; FM6 stays capped at 3 (ENG_FM6_MAX). Pool section 319.5 KB of 344 KB (CI build): the rest of v5/v6 must fit in ~24 KB of pool. SLOOP's XP extras, sends and pattern hints of these presets are not played | council | yes |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
