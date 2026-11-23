@@ -221,7 +221,16 @@ def test_20_6_strict_timing_densest_piece_all_on_phys(tmp_path):
     d = dense([bowl] * 8)                                    # a voice, SLOOP's cpu_baseline.txt; every channel on it, 16 voices)
     assert len(d) > 30000
     empty, under, level = strict_densest(tmp_path, d)
-    assert (empty, under) == ("0", "0") and level > 300
+    assert (empty, under) == ("0", "0")
+    # (a bowed sound retriggered every 16th never swells: quiet on the host too. Heard as loud as the firmware's own
+    # code renders it on this computer, so no voice went missing under on-chip timing)
+    exe, f1p = tmp_path / "render_piece", tmp_path / "bowl.f1p"
+    subprocess.run(["cc", "-O1", "-Wno-unused-function", f"-I{APP}/firmware/src", f"-I{APP}/engines", "-o", str(exe),
+                    str(APP / "tests/render_piece.c"), "-lm"], check=True)
+    f1p.write_bytes(d)
+    r = subprocess.run([str(exe), str(f1p), str(tmp_path / "bowl.wav"), "10"], capture_output=True, text=True, check=True)
+    host = float(re.search(r"rms (\d+)", r.stdout)[1])
+    assert host > 20 and level > 0.5 * host, (level, host)
 
 
 def test_9_5_missing_emulator_or_firmware_is_a_visible_skip(tmp_path):
