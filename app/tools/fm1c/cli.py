@@ -56,8 +56,8 @@ def _write(out: str, data: bytes, force: bool) -> None:
         raise
 
 
-def _convert(mid: str, out: str, name: str | None, force: bool, poly: int) -> int:
-    piece, rep = fitmod.fit(mid, name, fitmod.Limits(poly=poly))
+def _convert(mid: str, out: str, name: str | None, force: bool, poly: int, key=None) -> int:
+    piece, rep = fitmod.fit(mid, name, fitmod.Limits(poly=poly), key)
     if not any(c.notes for c in piece.channels):
         raise UsageError(f"{mid}: no notes left to play after fitting it to the FM-1 ({'; '.join(rep.lines)})")
     data = encode(piece)
@@ -94,7 +94,12 @@ def cmd_compose(a) -> int:
         mid = os.path.join(tmp, "piece.mid")
         if not os.path.isfile(mid):
             raise UsageError(f"text2midi wrote no piece.mid for {a.brief}")
-        return _convert(mid, out, a.name or stem, a.force, a.poly)
+        try:
+            with open(a.brief, encoding="utf-8") as f:
+                key = fitmod.brief_key(json.load(f))
+        except (OSError, ValueError):
+            key = None                   # (text2midi composed it, so it is read; else the FM-1 guesses the key)
+        return _convert(mid, out, a.name or stem, a.force, a.poly, key)
 
 
 STUDIO_CABLE = '<script src="../cable.js"></script>\n'

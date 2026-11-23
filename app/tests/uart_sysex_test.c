@@ -7,6 +7,7 @@
 static uint32_t midi_in_q[64], mi_w, mi_r;
 #define MQ 64u
 #define RING_PUBLISH() do { } while (0)
+static volatile uint8_t midi_in_lost;           /* (the app's: composer.c) */
 #include "midi_uart.c"
 
 static int fails;

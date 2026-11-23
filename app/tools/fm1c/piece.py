@@ -1,5 +1,6 @@
-"""The .f1p piece format: v1, and v2 = v1 + a sections table, written only when a piece has sections
-(firmware/src/piece.h is the reader; the layout is documented there)."""
+"""The .f1p piece format: v1, and v2 = v1 + a sections table, written only when a piece has sections; the table also
+carries the piece's key (text2midi's, US-24) when it has one (firmware/src/piece.h is the reader; the layout is
+documented there)."""
 from __future__ import annotations
 
 import struct
@@ -62,6 +63,7 @@ class Piece:
     len_ticks: int
     channels: list[Channel]
     sections: list[Section] = field(default_factory=list)
+    key: tuple[int, int] | None = None   # (root 0..11 = C..B, SLOOP's scale 0..15); written only with sections
 
 
 def clean_name(s: str) -> str:
@@ -105,6 +107,8 @@ def _validate(p: Piece) -> None:
             raise PieceError(BAD_SECT, f"section {s.name!r} at {s.tick}: starts must rise inside the piece, "
                                        f"names 1 to {SECT_NAME} printable characters")
         prev = s.tick
+    if p.key is not None and not (len(p.key) == 2 and 0 <= p.key[0] <= 11 and 0 <= p.key[1] <= 15):
+        raise PieceError(BAD_SECT, f"key must be (root 0..11, scale 0..15), not {p.key!r}")
 
 
 def _events(ch: Channel) -> bytes:
@@ -125,7 +129,8 @@ def encode(p: Piece) -> bytes:
     evs = [_events(c) for c in p.channels]
     sect = b""
     if p.sections:
-        sect = struct.pack("<B3x", len(p.sections)) + b"".join(
+        root, scale = (p.key[0] + 1, p.key[1]) if p.key is not None else (0, 0)
+        sect = struct.pack("<BBBx", len(p.sections), root, scale) + b"".join(
             struct.pack("<I", s.tick) + s.name.encode("ascii").ljust(SECT_NAME, b"\0") for s in p.sections)
     off = 48 + 16 * len(p.channels) + len(sect)
     table = bytearray()
@@ -168,11 +173,14 @@ def decode(b: bytes) -> Piece:
     end = 48 + 16 * nch
     if end + 4 > n:
         raise PieceError(SHORT, "channel table truncated")
-    sections = []
+    sections, key = [], None
     if b[4] == VERSION_SECT:
         ns = b[end]
-        if end + 8 > n or not 1 <= ns <= MAX_SECT or any(b[end + 1:end + 4]) or end + 8 + 12 * ns > n:
+        if end + 8 > n or not 1 <= ns <= MAX_SECT or b[end + 3] or end + 8 + 12 * ns > n:
             raise PieceError(BAD_SECT, "bad sections table")
+        if b[end + 1] > 12 or b[end + 2] > 15 or (not b[end + 1] and b[end + 2]):
+            raise PieceError(BAD_SECT, "bad key in the sections table")
+        key = (b[end + 1] - 1, b[end + 2]) if b[end + 1] else None
         prev = -1
         for i in range(ns):
             t, = struct.unpack_from("<I", b, end + 4 + 12 * i)
@@ -205,7 +213,7 @@ def decode(b: bytes) -> Piece:
         end = off + 6 * nev
     if end + 4 != n:
         raise PieceError(BAD_TABLE, "trailing bytes after the events")
-    return Piece(name.decode("ascii"), tempo, length, chans, sections)
+    return Piece(name.decode("ascii"), tempo, length, chans, sections, key)
 
 
 def dump(p: Piece) -> str:
@@ -213,6 +221,8 @@ def dump(p: Piece) -> str:
     lines = [f"piece {p.name}|{p.tempo_x10}|{p.len_ticks}|{len(p.channels)}"]
     ends = [s.tick for s in p.sections[1:]] + [p.len_ticks]
     lines += [f"s {s.tick} {e} {s.name}" for s, e in zip(p.sections, ends)]
+    if p.sections and p.key is not None:
+        lines.append(f"k {p.key[0]} {p.key[1]}")
     for i, c in enumerate(p.channels):
         lines.append(f"ch {i} {ROLES.index(c.role)} {c.sound} {c.vol} {c.pan} {c.src}")
         lines += [f"n {n.tick} {n.dur} {n.pitch} {n.vel}" for n in _sorted_notes(c)]

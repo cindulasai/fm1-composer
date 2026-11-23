@@ -5,6 +5,8 @@
  * Built only with FELUCCA_UART=1. Channel messages, clock and transport (F8 FA FB FC) go into midi_in_q next to
  * USB, as USB-MIDI packets with cable 1 (CIN = status >> 4), so midi_get tells the jack from USB (2, not 1);
  * other realtime and system common are dropped; SysEx frames go to uart_sysex.c.
+ * COMPOSER: a note message lost to a full ring sets midi_in_lost (SLOOP 2.8.3; the app declares it, composer.c, and
+ * ends the MIDI notes held, live.c lk_midi_off).
  *
  * The ring is read by content, not by the DMA count: every slot the parser has
  * not yet been given holds UM_EMPTY, and the reader takes bytes until it meets
@@ -73,6 +75,8 @@ static void um_byte(uint32_t b)
             um.msgs++;
         } else {
             um.drops++;
+            if ((um.st & 0xE0u) == 0x80u)
+                midi_in_lost = 1;                  /* COMPOSER: SLOOP 2.8.3: a note lost (live.c lk_midi_off ends the MIDI notes held) */
         }
     }
 }

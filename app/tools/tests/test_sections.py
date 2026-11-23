@@ -232,7 +232,7 @@ def test_23_5_hostile_v2_bytes_same_verdict_in_c_and_python(tmp_path, cdump):
 
     def put(off, data):
         b = bytearray(good); b[off:off + len(data)] = data; return fix(b)
-    cases = {"count 0": put(64, b"\0"), "count 25": put(64, b"\x19"), "reserved": put(65, b"\1"),
+    cases = {"count 0": put(64, b"\0"), "count 25": put(64, b"\x19"), "reserved": put(67, b"\1"),   # (US-24: 65, 66 the key)
              "same start": put(80, struct.pack("<I", 0)), "unsorted": put(68, struct.pack("<I", 500)),
              "past the end": put(80, struct.pack("<I", 8 * 384)), "empty name": put(72, b"\0"),
              "NUL then a letter": put(73, b"\0Z"), "control": put(72, b"\x1f"), "version 3": put(4, b"\3"),

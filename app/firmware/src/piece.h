@@ -6,9 +6,10 @@
  *   40 total length (whole file, CRC included)   44 reserved (0)
  *   48 channels, 16 B each: role, sound (255 = the role's default), volume 0..127, pan 0..127, source MIDI
  *      channel 0..15, 3 reserved, event count u32, event offset u32
- *   v2 only, after the channels: sections: count 1..24, 3 reserved (0), then 12 B each: start tick u32 (rising,
+ *   v2 only, after the channels: sections: count 1..24, key (0: none, else its root + 1, 1..12 = C..B), scale
+ *      (SLOOP's 0..15, 0 when there is no key; US-24), 1 reserved (0), then 12 B each: start tick u32 (rising,
  *      < length; a section ends where the next starts, the last at the end), name[8] printable ASCII, NUL padded,
- *      not empty. Channel 1's events follow it.
+ *      not empty. Channel 1's events follow it. (Before US-24 key and scale were reserved, 0: such pieces read the same.)
  *   events, 6 B each, in time order per channel: delta ticks u16, duration u16 (>= 1), pitch, velocity 1..127;
  *      pitch 255 = a rest (only the delta counts: gaps longer than 65535 ticks)
  *   last 4 B: CRC-32 (IEEE) of everything before it
@@ -37,6 +38,7 @@ enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, RO
 typedef struct { uint8_t role, sound, vol, pan, src; uint32_t nev; const uint8_t *ev; } piece_ch_t;
 typedef struct {
     char name[PIECE_NAME + 1]; uint16_t tempo_x10; uint32_t len_ticks; uint8_t nch, nsect;
+    uint8_t key, scale;                         /* text2midi's key (v2): root + 1 (0: none), SLOOP's scale 0..15 */
     const uint8_t *sect;                        /* nsect records of PIECE_SECT bytes (v2), else 0 */
     piece_ch_t ch[PIECE_MAX_CH];
 } piece_view_t;
@@ -80,7 +82,8 @@ static int piece_check(const uint8_t *b, uint32_t len)
     if (end + 4u > len) return PE_SHORT;
     if (b[4] == 2u) {                           /* the sections table */
         uint32_t ns = b[end], prev = 0;
-        if (end + 8u > len || ns < 1u || ns > PIECE_MAX_SECT || b[end + 1] || pc_u16(b + end + 2)) return PE_SECT;
+        if (end + 8u > len || ns < 1u || ns > PIECE_MAX_SECT || b[end + 3]) return PE_SECT;
+        if (b[end + 1] > 12u || b[end + 2] > 15u || (!b[end + 1] && b[end + 2])) return PE_SECT;   /* the key */
         if (end + 8u + ns * PIECE_SECT > len) return PE_SECT;
         for (i = 0; i < ns; i++) {
             const uint8_t *s = b + end + 4u + i * PIECE_SECT;
@@ -122,6 +125,8 @@ static void piece_view(const uint8_t *b, piece_view_t *v)       /* only after pi
     v->nch = b[5];
     v->nsect = b[4] == 2u ? b[PIECE_HDR + v->nch * PIECE_CHREC] : 0u;
     v->sect = v->nsect ? b + PIECE_HDR + v->nch * PIECE_CHREC + 4u : 0;
+    v->key = v->nsect ? v->sect[-3] : 0u;
+    v->scale = v->nsect ? v->sect[-2] : 0u;
     for (i = 0; i < PIECE_MAX_CH; i++) {
         const uint8_t *c = b + PIECE_HDR + i * PIECE_CHREC;
         piece_ch_t *d = &v->ch[i];

@@ -8,11 +8,15 @@
  * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound (a drum channel: the 35 kits),
  * KNOB2 the tempo; white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
  * tempo for this piece; HOME goes back to the library (and stops). A piece with sections: the keys above F4 (F#4..G5)
- * launch section 1..14 (OCT+ 15..24), at the next bar line; SEQ loops the playing section. */
+ * launch section 1..14 (OCT+ 15..24), at the next bar line; SEQ loops the playing section.
+ * KEYS (US-24, live.c): ARP turns it on / off: the 27 keys then play the selected channel's sound in the piece's key
+ * (OCT- / OCT+ move them, ENV cycles the auto-chords, KNOB3 the scale, KNOB4 the root). MIDI IN (USB or the jack)
+ * plays on any screen but LIBRARY, as sent. */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
 #include <stdint.h>
 static int app_sysex(const uint8_t *p, uint32_t n);
+static volatile uint8_t midi_in_lost;           /* (SLOOP 2.8.3) a MIDI note message did not fit the ring (midi_uart.c) */
 #define LCD_IDLE app_idle
 #define APP_SYSEX app_sysex
 #include "platform.c"
@@ -33,6 +37,10 @@ static int app_sysex(const uint8_t *p, uint32_t n);
 #include "lib.c"
 #include "xfer.c"
 #include "ui.c"
+static void post(uint32_t op, uint32_t ch, uint32_t a, uint32_t b);
+#define LK_ON(ch, note, vel) post(SC_LIVE_ON, ch, note, vel)
+#define LK_OFF(ch, note) post(SC_LIVE_OFF, ch, note, 0)
+#include "live.c"                               /* the live keyboard, MIDI IN */
 
 #include "prefs.c"                              /* each piece's choices, in blob 0 */
 _Static_assert(sizeof prefs <= SECTOR_MAX, "prefs fit a blob");
@@ -70,15 +78,22 @@ static void app_audio(int32_t *out, uint32_t n)
 
 static int app_sysex(const uint8_t *p, uint32_t n) { return xfer_frame(p, n, fm1_ms, player_playing()); }
 
-static void midi_in(void)
+/* MIDI IN: notes on the piece's channels (live.c), as long as the synth's queue has room for what one may post (so a
+ * call from a redraw never waits); a lost note message (the main loop only): every MIDI note ends */
+static void midi_in(int main_loop)
 {
     uint8_t st, d1, d2;
-    while (midi_get(&st, &d1, &d2)) {}           /* (MIDI in plays nothing in v1) */
+    while (sq_w - sq_r <= 32u - 2u && midi_get(&st, &d1, &d2))
+        if (scr) lk_midi(st, d1, d2, sel, pl_v.nch);
+    if (main_loop && midi_in_lost) {
+        midi_in_lost = 0;
+        lk_midi_off();
+    }
 }
 
 static void app_idle(void)
 {
-    if (idle_ok) midi_in();
+    if (idle_ok) midi_in(0);
 }
 
 static void set_status(const char *s) { status = s; dirty |= D_FOOT; }
@@ -121,6 +136,9 @@ static int open_piece(uint32_t i)
         return -1;
     }
     loaded_id = e->id;
+    lk_keys_off();
+    lk_midi_off();
+    lk_open(&pl_v);
     edit_forget();
     edited = discard = 0;
     ed_tick = 0;
@@ -177,6 +195,14 @@ static void save_all(void)
     save_prefs();
 }
 
+static void keys_status(void)                   /* "KEYS D DOR TRIAD OCT+1" / "KEYS OFF" */
+{
+    static char b[40];
+    if (lk.on) lk_label(b, sizeof b);
+    else ui_fmt(b, sizeof b, "KEYS OFF");
+    set_status(b);
+}
+
 static const uint8_t WHITE_KEY[8] = {0, 2, 4, 6, 7, 9, 11, 12};   /* F3 G3 A3 B3 C4 D4 E4 F4: fm1_in.notes bits */
 
 static void player_input(uint32_t pressed, uint32_t keys)
@@ -197,6 +223,7 @@ static void player_input(uint32_t pressed, uint32_t keys)
         ed_tick -= ed_tick % g;
         scr = 2;
         dirty = D_ALL;
+        lk_keys_off();
         set_status(player_playing() ? "STOP TO EDIT" : "");
         return;
     }
@@ -204,9 +231,28 @@ static void player_input(uint32_t pressed, uint32_t keys)
         scr = 3;
         fxrow = 0;
         dirty = D_ALL;
+        lk_keys_off();
         return;
     }
-    fm1_enc_take(ENC_KNOB3);                    /* (EDIT's: not kept for it) */
+    if (pressed & 1u << BTN_ARP) {              /* KEYS */
+        lk.on ^= 1u;
+        if (!lk.on) lk_keys_off();
+        keys_status();
+    }
+    if (lk.on) {
+        int32_t ds = fm1_enc_take(ENC_KNOB3), dr = fm1_enc_take(ENC_KNOB4);
+        uint32_t ch0 = (uint32_t)lk.t.p[P_CHORD], oct0 = (uint32_t)lk.oct, sc0 = lk_scale(), r0 = (uint32_t)lk.t.p[P_ROOT];
+        if (ds) lk_key((uint32_t)lk.t.p[P_ROOT], (uint32_t)(((int32_t)lk_scale() + ds) % 17 + 17) % 17u);
+        if (dr) lk_key((uint32_t)(((int32_t)lk.t.p[P_ROOT] + dr) % 12 + 12), lk_scale());
+        if (pressed & 1u << BTN_ENV) lk.t.p[P_CHORD] = (int16_t)((lk.t.p[P_CHORD] + 1) % 6);
+        if (pressed & 1u << BTN_OCT_UP && lk.oct < 3) lk.oct++;
+        if (pressed & 1u << BTN_OCT_DOWN && lk.oct > -3) lk.oct--;
+        if (ch0 != (uint32_t)lk.t.p[P_CHORD] || oct0 != (uint32_t)lk.oct || sc0 != lk_scale() || r0 != (uint32_t)lk.t.p[P_ROOT])
+            keys_status();
+    } else {
+        fm1_enc_take(ENC_KNOB3);                /* (EDIT's: not kept for it) */
+        fm1_enc_take(ENC_KNOB4);
+    }
     if ((d = fm1_enc_take(ENC_KNOB1) + fm1_enc_take(ENC_SELECT))) {
         sel = (uint32_t)(((int32_t)sel + d) % (int32_t)pl_v.nch + (int32_t)pl_v.nch) % pl_v.nch;
         dirty |= D_STRIPS;
@@ -226,6 +272,10 @@ static void player_input(uint32_t pressed, uint32_t keys)
         if (!pl_v.nsect) set_status("NO SECTIONS");
         else { sloop ^= 1u; player_section_loop((int)sloop); set_status(sloop ? "SECTION LOOP ON" : "SECTION LOOP OFF"); }
         dirty |= D_SECT;
+    }
+    if (lk.on) {                                /* KEYS: the keys play, nothing else */
+        lk_keys(fm1_in.notes, keys, sel);
+        return;
     }
     if ((pressed & (1u << BTN_OCT_DOWN | 1u << BTN_OCT_UP)) && pl_v.nsect > SECT_KEYS) {
         spage = pressed & 1u << BTN_OCT_UP ? 1u : 0u;
@@ -406,7 +456,7 @@ static void app_main(void)
     for (;;) {
         uint32_t rel, pressed, keys, playing;
         platform_poll();
-        midi_in();
+        midi_in(1);
         playing = (uint32_t)player_playing();
 #ifdef UX_MAX
         {                                       /* a frame from the MIDI jack: the same transfer as USB */
@@ -435,10 +485,12 @@ static void app_main(void)
                 if (pressed & (1u << BTN_HOME | 1u << BTN_FX)) { scr = 1; dirty = D_ALL; }
                 else fx_input(pressed);
             } else if (pressed & 1u << BTN_HOME) {
+                lk_keys_off();                  /* (only the PLAYER plays the keys) */
                 if (edited && !discard) { discard = 1; set_status("UNSAVED EDITS: HOME AGAIN TO DISCARD"); }
                 else {
                     player_stop();
                     while (player_playing()) platform_poll();
+                    lk_midi_off();
                     scr = 0;
                     dirty = D_ALL;
                 }

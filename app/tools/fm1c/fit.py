@@ -2,7 +2,7 @@
 melodic notes in C1..C7, at most 32 KB. Every change is reported; nothing is changed silently."""
 from __future__ import annotations
 
-import os
+import math, os, re
 from dataclasses import dataclass, field
 
 import mido
@@ -19,6 +19,59 @@ PRIORITY = ("drums", "bass", "lead", "chords", "pad", "counter", "arp", "percuss
 KEYWORDS = (("counter", "counter"), ("drum", "drums"), ("kit", "drums"), ("perc", "percussion"), ("bass", "bass"),
             ("chord", "chords"), ("comp", "chords"), ("pad", "pad"), ("string", "pad"), ("arp", "arp"),
             ("drone", "drone"), ("fx", "fx"), ("effect", "fx"), ("lead", "lead"), ("melody", "lead"))
+
+
+# SLOOP's 16 scales (firmware/src/live.c SCALE_MASK, bit i = i semitones above the root); Studio's lib.rs SCALE_MASKS
+SCALE_MASKS = (0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x6B5, 0x295, 0x4A9, 0x9AD, 0x5AB, 0xAD5, 0x56B, 0xAAD, 0x4E9, 0x555, 0x6DB,
+               0xB6D)
+# text2midi's tonal systems, as Studio's engine has them (its copied knowledge base)
+TONAL = os.path.join(os.path.dirname(__file__), "..", "..", "studio", "engine", "crates", "t2m-core", "data", "tonal")
+
+
+def _systems() -> dict[str, list[int]]:
+    out = {}
+    for f in sorted(os.listdir(TONAL)) if os.path.isdir(TONAL) else []:
+        if f.endswith(".ron"):
+            with open(os.path.join(TONAL, f), encoding="utf-8") as fh:
+                for m in re.finditer(r'id:\s*"([^"]+)".*?steps:\s*\[([^\]]*)\]', fh.read(), re.S):
+                    out[m[1]] = [int(x) for x in m[2].replace(",", " ").split()]
+    return out
+
+
+def _pitch_class(s: str) -> int | None:
+    """text2midi's parse_pitch_class: a letter, then at most two sharps or flats, not mixed"""
+    s = s.strip()
+    if not s or s[0].upper() not in "CDEFGAB":
+        return None
+    pc, shift = "C D EF G A B".index(s[0].upper()), 0
+    for count, c in enumerate(s[1:]):
+        step = 1 if c in "#\u266f" else -1 if c in "b\u266d" else None
+        if step is None or count >= 2 or shift * step < 0:
+            return None
+        shift += step
+    return (pc + shift) % 12
+
+
+def brief_key(brief) -> tuple[int, int] | None:
+    """A text2midi brief's key for the FM-1's live keyboard (US-24): (its tonic's pitch class, the SLOOP scale its
+    tonal system is), in 12-TET only; None when it is not one of the 16 (the FM-1 then guesses it from the notes).
+    Studio's engine (lib.rs brief_key) reads the same."""
+    t = brief.get("tonality") if isinstance(brief, dict) else None
+    if not isinstance(t, dict) or t.get("tuning") != "12tet":
+        return None
+    tonic = t.get("tonic")
+    if isinstance(tonic, str):
+        pc = _pitch_class(tonic)
+    elif isinstance(tonic, dict) and isinstance(tonic.get("hz"), (int, float)) and not isinstance(tonic["hz"], bool):
+        hz = float(tonic["hz"])          # text2midi's class_of_hz: the nearest semitone; not a positive number: C
+        pc = int(math.floor(69 + 12 * math.log2(hz / 440) + 0.5)) % 12 if math.isfinite(hz) and hz > 0 else 0
+    else:
+        return None
+    steps = _systems().get(t["system"]) if isinstance(t.get("system"), str) else None
+    if pc is None or steps is None or any(not 0 <= x <= 11 for x in steps):
+        return None
+    mask = sum(1 << x for x in set(steps))
+    return (pc, SCALE_MASKS.index(mask)) if mask in SCALE_MASKS else None
 
 
 class FitError(ValueError):
@@ -167,7 +220,9 @@ def _cap_poly(notes: list[Note], cap: int) -> tuple[list[Note], int]:
     return out, dropped
 
 
-def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tuple[Piece, Report]:
+def fit(path: str, name: str | None = None, limits: Limits | None = None,
+        key: tuple[int, int] | None = None) -> tuple[Piece, Report]:
+    """key: text2midi's (brief_key), carried when the piece has sections"""
     limits = limits or Limits()
     rep = Report()
     mid = _read(path)
@@ -237,7 +292,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
     if tempo_x10 != round(600_000_000 / tempo_us):
         rep.add(f"tempo {60_000_000 / tempo_us:.1f} BPM clamped to {tempo_x10 / 10:g}")
     piece = Piece(clean_name(name if name is not None else os.path.splitext(os.path.basename(path))[0]),
-                  tempo_x10, length, chans, _sections(markers, scale, length, rep))
+                  tempo_x10, length, chans, _sections(markers, scale, length, rep), key)
     # too big: cut at a bar boundary until it fits
     while True:
         try:

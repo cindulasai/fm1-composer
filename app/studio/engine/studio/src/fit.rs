@@ -64,7 +64,10 @@ fn cap_poly(mut notes: Vec<N>, cap: usize) -> (Vec<N>, usize) {
 }
 
 /// `bytes` (a MIDI file) as a piece named `name`, at most `poly` notes at once per channel (drums 8)
-pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
+pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> { fit_key(bytes, name, poly, None) }
+
+/// fit, the piece carrying `key` (text2midi's brief: crate::brief_key) when it has sections (fit.py's key)
+pub fn fit_key(bytes: &[u8], name: &str, poly: usize, key: Option<(u8, u8)>) -> Result<Fitted, String> {
     if bytes.len() > MAX_INPUT {
         return Err(format!("{} KB is larger than the 8 MB this tool reads", bytes.len() / 1024));
     }
@@ -172,7 +175,7 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
         rep.push(format!("{} sections after the {MAX_SECT}th dropped (the FM-1 keeps {MAX_SECT})", sections.len() - MAX_SECT));
         sections.truncate(MAX_SECT);
     }
-    let mut piece = Piece { name: f1p::clean_name(name), tempo_x10, len_ticks: length as u32, channels, sections };
+    let mut piece = Piece { name: f1p::clean_name(name), tempo_x10, len_ticks: length as u32, channels, sections, key };
     let bytes = loop {                          // too big: cut at a bar boundary until it fits
         match f1p::encode(&piece) {
             Ok(b) => break b,

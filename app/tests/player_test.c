@@ -464,7 +464,7 @@ static void test_23_5_hostile_sections(void)
         CHECK(piece_check(pb, n) == PE_SECT, "bad table %u: %d", i, piece_check(pb, n));
     }
     {                                           /* reserved bytes, an empty name, a control character, short */
-        static const uint32_t at[4] = {1, 8, 9, 0};
+        static const uint32_t at[4] = {3, 8, 9, 0};   /* (US-24: +1 and +2 are the key; +3 is still reserved) */
         for (i = 0; i < 4; i++) {
             reset();
             n = sect_piece(2, bars, 90);

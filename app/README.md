@@ -87,6 +87,11 @@ the page to this computer only (127.0.0.1).
 | | keys F#4 to G5 (a piece with sections) | launch section 1 to 14: it starts at the next bar line (or where the playing section ends); stopped, it plays from that section; the playhead shows the section and the bar:beat in it (`VERSE1 3:2`), the strip under the channels lists them (playing amber, next white) |
 | | OCT+ / OCT- (more than 14 sections) | the keys launch sections 15 to 24 / 1 to 14 |
 | | SEQ | section loop on / off: the playing section repeats |
+| | ARP | KEYS on / off: the 27 note keys play the selected channel's sound over the piece (instead of muting and launching), in the piece's key: text2midi's (from the brief, carried in the piece), else guessed from its notes. The white keys walk the scale, C4 = the root; the black keys are silent. The footer says it: `KEYS D DOR` |
+| | OCT- / OCT+ (KEYS on) | the keys an octave down / up, 3 at most |
+| | ENV (KEYS on) | auto-chords: off, TRIAD, 7TH, 9TH, SUS4, POWER (SLOOP's): a white key plays its degree's chord, up to 4 notes, voiced nearest the last one; the black keys, held before the white key, change it (SLOOP's CHORD+): F# minor / major third, G# + 7th, A# sus4, C# + 9th, D# inverted |
+| | KNOB3 / KNOB4 (KEYS on) | the scale (SLOOP's 16: CHR MAJ MIN DOR MIX PEN MPEN HARM PHRY LYD LOC MEL BLUES WHOLE DIMHW DIMWH, then CHROMATIC: every key as it is) / the root |
+| any but LIBRARY | MIDI IN (USB or the jack) | notes play as sent (no scale): MIDI channel 1 to 8 on channel 1 to 8 in its sound (a channel the piece does not have: the selected one), other MIDI channels on the selected one. Live notes (keys and MIDI) take at most 4 of the 16 voices; while one sounds the piece keeps to 12 and never cuts it. A note-off lost to a full MIDI buffer ends every MIDI note (as SLOOP 2.8.3); leaving the piece ends them too |
 | | SAVE | keeps the sounds, mutes and tempo for this piece (when stopped; while playing it saves at the stop) |
 | | HOME | stops and goes back to the library |
 | | EDIT | opens the selected channel in EDIT |

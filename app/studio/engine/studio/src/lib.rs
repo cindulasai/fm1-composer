@@ -56,11 +56,34 @@ pub fn compose_midi(brief_json: &str, seed: u64) -> Result<Vec<u8>, String> {
     bundle.files.into_iter().next().map(|f| f.1).ok_or_else(|| "text2midi wrote no MIDI".to_string())
 }
 
-/// A brief → (its MIDI, the piece): `fm1c compose BRIEF --seed N --name NAME`.
+/// A brief → (its MIDI, the piece): `fm1c compose BRIEF --seed N --name NAME`. The piece carries the brief's key.
 pub fn make(brief_json: &str, seed: u64, name: &str, poly: usize) -> Result<(Vec<u8>, fit::Fitted), String> {
     let midi = compose_midi(brief_json, seed)?;
-    let fitted = fit::fit(&midi, name, poly)?;
+    let fitted = fit::fit_key(&midi, name, poly, brief_key(brief_json))?;
     Ok((midi, fitted))
+}
+
+/// SLOOP's 16 scales (firmware/src/live.c SCALE_MASK, bit i = i semitones above the root), as fm1c's fit.SCALE_MASKS.
+pub const SCALE_MASKS: [u16; 16] = [0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x6B5, 0x295, 0x4A9, 0x9AD, 0x5AB, 0xAD5, 0x56B, 0xAAD,
+                                    0x4E9, 0x555, 0x6DB, 0xB6D];
+
+/// The brief's key for the FM-1's live keyboard (US-24): (its tonic's pitch class, the SLOOP scale its tonal system
+/// is), in 12-TET only; None when it is not one of the 16 (the FM-1 then guesses it from the notes). fm1c's
+/// fit.brief_key reads the same.
+pub fn brief_key(brief_json: &str) -> Option<(u8, u8)> {
+    let brief = Brief::from_json(brief_json).ok()?;
+    let t = &brief.tonality;
+    if t.tuning != "12tet" { return None; }
+    let tonic = match &t.tonic {
+        t2m_core::brief::TonicSpec::Name(n) => t2m_core::Tonic::Class(t2m_core::parse_pitch_class(n)?),
+        t2m_core::brief::TonicSpec::Hz { hz } => t2m_core::Tonic::Hz(*hz),
+    };
+    let kb = knowledge().ok()?;
+    let steps = &kb.tonal_system(&t.system)?.steps;
+    if steps.iter().any(|&s| s > 11) { return None; }
+    let mask = steps.iter().fold(0u16, |m, &s| m | 1 << s);
+    let scale = SCALE_MASKS.iter().position(|&m| m == mask)?;
+    Some((tonic.midi_and_offset(4).0 % 12, scale as u8))
 }
 
 #[cfg(target_arch = "wasm32")]

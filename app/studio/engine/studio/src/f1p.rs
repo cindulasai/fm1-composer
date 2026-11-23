@@ -1,5 +1,5 @@
-//! The .f1p piece format (v1; v2 = v1 + a sections table, only when a piece has sections), as app/tools/fm1c/piece.py
-//! writes it (firmware/src/piece.h reads it).
+//! The .f1p piece format (v1; v2 = v1 + a sections table, only when a piece has sections; the table also carries the
+//! piece's key, US-24), as app/tools/fm1c/piece.py writes it (firmware/src/piece.h reads it).
 use unicode_normalization::UnicodeNormalization;
 
 pub const PPQ: u32 = 96;
@@ -24,7 +24,11 @@ pub struct Channel { pub role: &'static str, pub notes: Vec<Note>, pub sound: u8
 pub struct Section { pub tick: u32, pub name: String }
 
 #[derive(Clone, Debug)]
-pub struct Piece { pub name: String, pub tempo_x10: u32, pub len_ticks: u32, pub channels: Vec<Channel>, pub sections: Vec<Section> }
+pub struct Piece {
+    pub name: String, pub tempo_x10: u32, pub len_ticks: u32, pub channels: Vec<Channel>, pub sections: Vec<Section>,
+    /// (root 0..11 = C..B, SLOOP's scale 0..15): text2midi's key, written only with sections (piece.py's key)
+    pub key: Option<(u8, u8)>,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum EncodeError { TooBig(usize), Invalid(String) }
@@ -79,6 +83,9 @@ fn validate(p: &Piece) -> Result<(), EncodeError> {
         }
         prev = s.tick as i64;
     }
+    if let Some((root, scale)) = p.key && (root > 11 || scale > 15) {
+        return bad(format!("key must be (root 0..11, scale 0..15), not ({root}, {scale})"));
+    }
     Ok(())
 }
 
@@ -119,7 +126,8 @@ pub fn encode(p: &Piece) -> Result<Vec<u8>, EncodeError> {
     let evs: Vec<Vec<u8>> = p.channels.iter().map(events).collect();
     let mut sect = Vec::new();
     if !p.sections.is_empty() {
-        sect.extend_from_slice(&[p.sections.len() as u8, 0, 0, 0]);
+        let (root, scale) = p.key.map_or((0, 0), |(r, s)| (r + 1, s));
+        sect.extend_from_slice(&[p.sections.len() as u8, root, scale, 0]);
         for s in &p.sections {
             sect.extend_from_slice(&s.tick.to_le_bytes());
             let mut nm = s.name.as_bytes().to_vec();

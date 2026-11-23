@@ -28,6 +28,7 @@ int main(int argc, char **argv)
             piece_sect_name(&v, i, sn);
             printf("s %u %u %s\n", piece_sect_start(&v, i), piece_sect_end(&v, i), sn);
         }
+        if (v.key) printf("k %u %u\n", v.key - 1u, v.scale);
         for (i = 0; i < v.nch; i++) {
             piece_cur_t c;
             piece_note_t no;

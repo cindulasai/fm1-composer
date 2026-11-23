@@ -387,9 +387,13 @@ static void platform_poll(void)                 /* one call = one millisecond */
             fprintf(stderr, "script: an SMK-37 event in an FM-1 build (BOARD_SMK37=0), ignored\n");
 #endif
         } else if (script[step].st) {
-            mq[mq_w % 64u][0] = script[step].st; mq[mq_w % 64u][1] = script[step].d1; mq[mq_w % 64u][2] = script[step].d2;
-            mq[mq_w % 64u][3] = script[step].src;
-            mq_w++;
+            if (mq_w - mq_r >= 64u) {             /* the ring full: dropped (a note: the app's midi_in_lost, as the FM-1) */
+                if ((script[step].st & 0xE0u) == 0x80u) midi_in_lost = 1;
+            } else {
+                mq[mq_w % 64u][0] = script[step].st; mq[mq_w % 64u][1] = script[step].d1; mq[mq_w % 64u][2] = script[step].d2;
+                mq[mq_w % 64u][3] = script[step].src;
+                mq_w++;
+            }
         } else if (script[step].btn >= 200) {
             host_rel |= 1u << (script[step].btn - 200);
             fm1_in.buttons &= ~(1u << (script[step].btn - 200));

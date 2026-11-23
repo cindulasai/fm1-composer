@@ -30,6 +30,7 @@ Functions copied into a COMPOSER file (US-18; the file is COMPOSER's, so no one 
 | COMPOSER path | upstream functions | SLOOP blobs @ bac9c05 | licence | changed |
 | --- | --- | --- | --- | --- |
 | app/firmware/src/fx.c | firmware/src/fx.c (track_dist, lim_block, dc_block, fx_buses, djf_block, djf_run, tflt_run) + firmware/src/dsp.c (MULQ12R) | 75fc88c4ff84ad487c9f46e8b8f03be8a5f09ab6 + 7c6a2d27f416ff542d3c98825d1acde8d59c6c22 | GPL-3.0-only | functions copied; signed left shifts written as multiplications; SLOOP's song settings fixed at its defaults; pool sections (marked COMPOSER) |
+| app/firmware/src/live.c | firmware/src/seq.c (SCALE_MASK, NSCALES, KB_SILENT, scale_mask, kb_pitch, CHORD_DEG, chord_notes, chord_mod_of_key, vl_prev, scale_up, sort_notes, chord_play_notes, midi_sel_on, midi_sel_get, midi_sel_set) + firmware/src/params.c (N_SCALE's names, as LK_SCALE_NAME) | 379606c94bf2cbe2fa8ed2bcc909b22891f32782 + 6e261464403074622db23b35b79aa11e65f88826 | GPL-3.0-only | US-24: copied line for line (seq.c lines 22-40, 43, 141-144, 196-236, 252-393, 2922-2935; `tools/tests/test_live.py` compares them) behind a shim (lk_track_t; track_t and trk_index as macros); vl_prev / vl_n are sized by synth.c's NPART, 8 channels (SLOOP: 3 parts), a `COMPOSER:` line says so. The rest of live.c (keys, the piece's key, MIDI routing for 8 channels, midi_in_lost's release) is COMPOSER's |
 
 Generated, not copied: `app/firmware/src/felucca_drumkits.h` (`tools/gen_drumkits.py`, unchanged, writes it);
 `app/firmware/src/drum_tables.h` (`tools/gen_drum_tables.py`, ours: SLOOP's `tools/gen_tables.py` DECAY_K formula,
@@ -61,7 +62,7 @@ commit for them is not pinned (open: the reconciliation's unknown `unk_9401bf5ed
 | app/firmware/src/uac_fir.h | firmware/src/uac_fir.h | identical |
 | app/tools/get_toolchain.sh | tools/get_toolchain.sh | identical |
 | app/tools/lz4blk.py | tools/lz4blk.py | identical |
-| app/firmware/src/midi_uart.c | firmware/src/midi_uart.c | changed: 15 lines (US-12 SysEx), marked `COMPOSER:`; lacks SLOOP 2.8.3's `midi_in_lost` (US-24) |
+| app/firmware/src/midi_uart.c | firmware/src/midi_uart.c | changed: 15 lines (US-12 SysEx) and SLOOP 2.8.3's midi_in_lost (US-24: its 2 lines, the flag declared by composer.c), marked `COMPOSER:` |
 | app/firmware/src/usb.c, lcd.c, gfx.c, ota.c, recovery.c, bootguard.h | firmware/src/ (same names) | derived: 6 to 186 lines differ (Dinghy's and COMPOSER's changes) |
 | app/tools/build.py, fm1_install.py, fm1pkg_make.py | tools/ (same names) | derived: differ |
 

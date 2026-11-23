@@ -2,7 +2,9 @@
 /* synth.c: COMPOSER's sound. Eight channels, each a Felucca-Engines part (track_t) with up to NVOICE voices; at
  * most VOICE_BUDGET voices sound at once across all channels (the chip's audio budget), the rest are stolen:
  * first a released voice anywhere, then the oldest voice of the same channel, then the oldest anywhere. A stolen
- * voice fades out over a few blocks (no click). Sounds: every preset of the six Felucca engines plus the drum
+ * voice fades out over a few blocks (no click). Live notes (US-24: the keys in KEYS mode, MIDI IN; synth_live_on / _off)
+ * take at most LIVE_VOICES voices; while one sounds the piece keeps to VOICE_BUDGET - LIVE_VOICES and never takes a live
+ * voice, nor ends one (synth_off, synth_ch_off: the piece's notes only). Sounds: every preset of the six Felucca engines plus the drum
  * kits (drums.c), then SLOOP's FM6, PHYS, DIGITAL and VOICE presets (sloop_glue.c: appended, so ids 0-39 keep their v4
  * meaning); each
  * text2midi role has a default sound.
@@ -182,6 +184,17 @@ static void synth_init(void)
 #define SOUNDING(v) ((v).active && (v).stage >= 1u && (v).stage <= 3u)
 static int sounding(const voice_t *v) { return SOUNDING(*v); }
 
+#define LIVE_VOICES 4u
+static uint8_t vlive[NPART];                    /* bit k: trk[ch].v[k] plays a live note */
+static int live_v(uint32_t ch, uint32_t k) { return (vlive[ch] >> k & 1u) && SOUNDING(trk[ch].v[VCHK(k)]); }
+static uint32_t synth_live(void)                /* live voices sounding */
+{
+    uint32_t ch, k, n = 0;
+    for (ch = 0; ch < NPART; ch++)
+        for (k = 0; k < NVOICE; k++) n += (uint32_t)live_v(ch, k);
+    return n;
+}
+
 static uint32_t synth_active(void)
 {
     uint32_t ch, k, n = 0;
@@ -199,7 +212,7 @@ static uint32_t synth_count(uint32_t ch)        /* sounding voices of one channe
 }
 
 /* the voice to give up when over budget: a released one anywhere (oldest), else the oldest of channel `pref`,
- * else the oldest anywhere; 0 when nothing sounds */
+ * else the oldest anywhere; never a live one; 0 when nothing (else) sounds */
 static voice_t *steal_pick(uint32_t pref)
 {
     voice_t *best = 0;
@@ -209,7 +222,7 @@ static voice_t *steal_pick(uint32_t pref)
             if (pass == 1u && ch != pref) continue;
             for (k = 0; k < NVOICE; k++) {
                 voice_t *v = &trk[ch].v[VCHK(k)];
-                if (!sounding(v) || (pass == 0u && v->stage != 3u)) continue;
+                if (!sounding(v) || (pass == 0u && v->stage != 3u) || live_v(ch, k)) continue;
                 if (!best || v->age < best->age) best = v;
             }
         }
@@ -256,49 +269,111 @@ static void synth_on(uint32_t ch, uint32_t note, uint32_t vel)
     if (vel == 0u) return;                      /* (a note-on at velocity 0 is the player's note-off) */
     t = &trk[ch];
     cap = chs[ch].cap;
-    if (cap == 1u) v = &t->v[0];                /* MONO: one voice, retriggered */
+    if (cap == 1u) {                            /* MONO: one voice, retriggered; not while it plays a live note */
+        if (live_v(ch, 0)) return;
+        v = &t->v[0];
+    }
     for (k = 0; k < cap && !v; k++)             /* the same note again: retrigger it */
-        if (sounding(&t->v[VCHK(k)]) && t->v[VCHK(k)].note == note) v = &t->v[VCHK(k)];
+        if (sounding(&t->v[VCHK(k)]) && t->v[VCHK(k)].note == note && !live_v(ch, k)) v = &t->v[VCHK(k)];
     for (k = 0; k < cap && !v; k++)             /* a free voice */
         if (!t->v[VCHK(k)].active) v = &t->v[VCHK(k)];
     for (k = 0; k < cap && !v; k++)             /* a fading one */
         if (t->v[VCHK(k)].stage == 4u) v = &t->v[VCHK(k)];
-    if (!v) {                                   /* the channel is full: its oldest, a released one first */
-        v = &t->v[0];
-        for (k = 1; k < cap; k++) {
+    if (!v) {                                   /* the channel is full: its oldest, a released one first; not a live one */
+        for (k = 0; k < cap; k++) {
             voice_t *c = &t->v[VCHK(k)];
-            int crel = c->stage == 3u, vrel = v->stage == 3u;
-            if (crel != vrel ? crel : c->age < v->age) v = c;
+            int crel = c->stage == 3u, vrel = v && v->stage == 3u;
+            if (live_v(ch, k)) continue;
+            if (!v || (crel != vrel ? crel : c->age < v->age)) v = c;
         }
+        if (!v) return;                         /* every voice of the channel plays a live note */
     }
     if (!sounding(v)) {                         /* a voice that does not sound yet: is there room? */
-        while (synth_active() >= VOICE_BUDGET) {
+        uint32_t live = synth_live();           /* (while a live note sounds, 4 of the 16 are kept for them) */
+        while (synth_active() >= VOICE_BUDGET || (live && synth_active() - live >= VOICE_BUDGET - LIVE_VOICES)) {
             voice_t *s = steal_pick(ch);
             if (!s) break;
             s->stage = 4u;                      /* fade out (env_tick), off the budget */
             s->gate = 0;
         }
     }
+    vlive[ch] &= (uint8_t)~(1u << (v - t->v));
     voice_start(ch, v, note, vel);
 }
 
-static void synth_off(uint32_t ch, uint32_t note)
+static void synth_off(uint32_t ch, uint32_t note)   /* a note of the piece ends (not a live one) */
 {
     uint32_t k;
     if (ch >= NPART || note > 127u || chs[ch].e->oneshot) return;
     for (k = 0; k < NVOICE; k++) {
         voice_t *v = &trk[ch].v[VCHK(k)];
-        if (v->active && v->gate && v->note == note) { v->gate = 0; v->stage = 3u; }
+        if (v->active && v->gate && v->note == note && !(vlive[ch] >> k & 1u)) { v->gate = 0; v->stage = 3u; }
     }
 }
 
-static void synth_ch_off(uint32_t ch)           /* release every held note of a channel (mute, stop) */
+static void synth_live_off(uint32_t ch, uint32_t note)
+{
+    uint32_t k;
+    if (ch >= NPART || note > 127u || chs[ch].e->oneshot) return;
+    for (k = 0; k < NVOICE; k++) {
+        voice_t *v = &trk[ch].v[VCHK(k)];
+        if (v->active && v->gate && v->note == note && (vlive[ch] >> k & 1u)) { v->gate = 0; v->stage = 3u; }
+    }
+}
+
+/* a live note on channel ch, in its sound: at most LIVE_VOICES at once (a 5th: the oldest gives way); a voice of the
+ * piece makes room for it, never another live one while the channel has one of the piece's */
+static void synth_live_on(uint32_t ch, uint32_t note, uint32_t vel)
+{
+    track_t *t;
+    voice_t *v = 0;
+    uint32_t k, c, cap;
+    if (ch >= NPART || note > 127u || vel > 127u) return;
+    if (vel == 0u) { synth_live_off(ch, note); return; }
+    t = &trk[ch];
+    cap = chs[ch].cap;
+    for (k = 0; k < cap && !v; k++)             /* the same live note again: retriggered */
+        if (live_v(ch, k) && t->v[VCHK(k)].note == note) v = &t->v[VCHK(k)];
+    if (!v && synth_live() >= LIVE_VOICES) {    /* a 5th: the oldest live note fades out */
+        voice_t *o = 0;
+        uint32_t oc = 0, ok = 0;
+        for (c = 0; c < NPART; c++)
+            for (k = 0; k < NVOICE; k++)
+                if (live_v(c, k) && (!o || trk[c].v[VCHK(k)].age < o->age)) { o = &trk[c].v[VCHK(k)]; oc = c; ok = k; }
+        o->stage = 4u;
+        o->gate = 0;
+        vlive[oc] &= (uint8_t)~(1u << ok);
+    }
+    for (k = 0; k < cap && !v; k++)             /* a free voice, else a fading one */
+        if (!t->v[VCHK(k)].active) v = &t->v[VCHK(k)];
+    for (k = 0; k < cap && !v; k++)
+        if (t->v[VCHK(k)].stage == 4u) v = &t->v[VCHK(k)];
+    for (c = 0; c < 2u && !v; c++)              /* the piece's oldest on the channel (a released one first), else the
+                                                 * oldest live one (a channel of at most 4 voices, all live) */
+        for (k = 0; k < cap; k++) {
+            voice_t *x = &t->v[VCHK(k)];
+            int xrel = x->stage == 3u, vrel = v && v->stage == 3u;
+            if ((uint32_t)live_v(ch, k) != c) continue;
+            if (!v || (xrel != vrel ? xrel : x->age < v->age)) v = x;
+        }
+    if (!sounding(v))
+        while (synth_active() >= VOICE_BUDGET) {
+            voice_t *s = steal_pick(ch);
+            if (!s) break;
+            s->stage = 4u;
+            s->gate = 0;
+        }
+    vlive[ch] |= (uint8_t)(1u << (v - t->v));
+    voice_start(ch, v, note, vel);
+}
+
+static void synth_ch_off(uint32_t ch)           /* release every held note of the piece on a channel (mute) */
 {
     uint32_t k;
     if (ch >= NPART) return;
     for (k = 0; k < NVOICE; k++) {
         voice_t *v = &trk[ch].v[VCHK(k)];
-        if (v->active && v->stage != 4u) { v->gate = 0; v->stage = chs[ch].e->oneshot ? 4u : 3u; }
+        if (v->active && v->stage != 4u && !(vlive[ch] >> k & 1u)) { v->gate = 0; v->stage = chs[ch].e->oneshot ? 4u : 3u; }
     }
 }
 
@@ -437,7 +512,7 @@ static void synth_render(int32_t *out, uint32_t n)
 }
 
 /* ---------------------------------------------- the main loop's changes --- */
-enum { SC_SOUND, SC_LEVEL, SC_CH_OFF, SC_ALL_OFF, SC_NOTE_ON, SC_NOTE_OFF, SC_FX, SC_TEMPO };
+enum { SC_SOUND, SC_LEVEL, SC_CH_OFF, SC_ALL_OFF, SC_NOTE_ON, SC_NOTE_OFF, SC_FX, SC_TEMPO, SC_LIVE_ON, SC_LIVE_OFF };
 typedef struct { uint8_t op, ch, a, b; } synth_cmd_t;
 static synth_cmd_t sq[32];
 static volatile uint32_t sq_w, sq_r;            /* one writer each: main loop sq_w, audio sq_r */
@@ -476,6 +551,8 @@ static void synth_apply(void)                   /* in the audio interrupt, befor
         case SC_NOTE_OFF: synth_off(c->ch, c->a); break;
         case SC_FX: if (c->ch < NPART) for (k = 0; k < FX_N; k++) synth_fx(c->ch, k, fx_stage[c->ch][k]); break;
         case SC_TEMPO: synth_tempo((uint32_t)c->a | (uint32_t)c->b << 8); break;
+        case SC_LIVE_ON: synth_live_on(c->ch, c->a, c->b); break;
+        case SC_LIVE_OFF: synth_live_off(c->ch, c->a); break;
         default: break;
         }
         sq_r++;
