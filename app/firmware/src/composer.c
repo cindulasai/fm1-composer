@@ -103,7 +103,7 @@ static int open_piece(uint32_t i)
         uint32_t s = pf ? pf->sound[ch] : pl_v.ch[ch].sound;
         role[ch] = pl_v.ch[ch].role;
         snd[ch] = (uint8_t)(s < sound_count ? s : sound_default(role[ch]));
-        post(SC_SOUND, ch, snd[ch], 0);
+        post(SC_SOUND, ch, snd[ch], role[ch] + 1u);
         post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
     }
     mute = pf ? pf->mute : 0u;
@@ -168,7 +168,7 @@ static void player_input(uint32_t pressed, uint32_t keys)
     }
     if ((d = fm1_enc_take(ENC_PRESETS))) {
         snd[sel] = (uint8_t)(((int32_t)snd[sel] + d) % (int32_t)sound_count + (int32_t)sound_count) % sound_count;
-        post(SC_SOUND, sel, snd[sel], 0);
+        post(SC_SOUND, sel, snd[sel], role[sel] + 1u);
         dirty |= D_STRIPS;
     }
     if ((d = fm1_enc_take(ENC_KNOB2))) {
@@ -236,7 +236,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
     }
     if ((d = fm1_enc_take(ENC_PRESETS))) {
         snd[sel] = (uint8_t)(((int32_t)snd[sel] + d) % (int32_t)sound_count + (int32_t)sound_count) % sound_count;
-        post(SC_SOUND, sel, snd[sel], 0);
+        post(SC_SOUND, sel, snd[sel], role[sel] + 1u);
     }
     for (k = 0; k < ROLL_KEYS; k++)             /* a preview ends with its key */
         if ((preview >> k & 1u) && !(fm1_in.notes >> k & 1u)) { post(SC_NOTE_OFF, sel, ed_low() + k, 0); preview &= ~(1u << k); }

@@ -200,7 +200,7 @@ def test_8_2_select_tempo_and_sound_turns_exactly(tmp_path):
 
 
 def test_8_2_a_sound_outside_the_catalog_falls_back_to_the_roles(tmp_path):
-    p = encode(Piece("odd", 1200, 384, [Channel("lead", [Note(0, 60, 80, 100)], sound=40),
+    p = encode(Piece("odd", 1200, 384, [Channel("lead", [Note(0, 60, 80, 100)], sound=200),   # (v5: 40.. are FM6)
                                          Channel("bass", [Note(0, 40, 80, 100)], sound=254)]))
     lines, t = push(100, p)
     log, _ = run_host(script(tmp_path, "odd", lines + [f"{t + 50} btn {BTN['PLAY']}"], t + 300))
