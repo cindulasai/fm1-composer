@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* US-4: synth.c through its interface: voice budget and stealing, every sound audible and silent after release,
  * role defaults, hostile calls ignored, render cost. US-21: SLOOP's 32 synthesised kits (21.1, 21.2, 21.4, 21.5).
- * US-19: SLOOP's FM6 engine (sloop_glue.c) and the engine pool. */
+ * US-19: SLOOP's FM6 engine (sloop_glue.c) and the engine pool. US-20: SLOOP's PHYS, DIGITAL and VOICE engines. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -128,7 +128,8 @@ static void test_4_3_role_defaults(void)
     }
     CHECK(sound_default(ROLE_DRUMS) == find("KIT", "STD KIT"), "drums get the kit");
     CHECK(sound_default(200) == sound_default(ROLE_OTHER), "unknown role: other's sound");
-    CHECK(sound_count == 72u + ENG_FM6.npresets && sound_count <= SOUND_MAX, "catalog size %u", sound_count);   /* v4's 40, SLOOP's 32 kits, FM6 */
+    CHECK(sound_count == 80u + ENG_PHYS.npresets + ENG_DIGITAL.npresets + ENG_FORMANT.npresets && sound_count <= SOUND_MAX,
+          "catalog size %u", sound_count);   /* v4's 40, SLOOP's 32 kits, FM6, PHYS, DIGITAL, VOICE */
     CHECK(snd_eq(sound_name(sound_count), "?") && snd_eq(sound_engine(9999), "?"), "out of range names");
 }
 
@@ -762,12 +763,12 @@ static void test_19_3_v4_ids_keep_their_sounds(void)
               sound_engine(i), sound_name(i), V4[i][0], V4[i][1]);
     for (i = 0; i < ENG_FM6.npresets; i++)
         CHECK(sounds[72u + i].e == &ENG_FM6 && sounds[72u + i].pr == &FM6_PRESETS[i], "19.3 FM6 %u follows at %u", i, 72u + i);
-    CHECK(sound_count == 72u + ENG_FM6.npresets, "19.3 nothing else: %u", sound_count);   /* (40..71: SLOOP's kits) */
+    CHECK(ENG_FM6.npresets == 8u && sounds[80].e == &ENG_PHYS, "19.3 FM6 72..79, then US-20's engines");   /* (40..71: SLOOP's kits) */
     for (i = 0; i < ROLE_COUNT; i++)
         CHECK(eng_id(sounds[sound_default(i)].e) == ENG_NONE, "19.3 role %u default needs no engine block", i);
 }
 
-/* the pool: ENG_POOL_N channels play FM6, the next gets its role's default; a channel that leaves frees its block */
+/* the pool: ENG_FM6_MAX channels play FM6, the next gets its role's default; a channel that leaves frees its block */
 static void test_19_5_pool_full_gives_the_role_default(void)
 {
     uint32_t ch, fm = fm6_first();
@@ -775,7 +776,7 @@ static void test_19_5_pool_full_gives_the_role_default(void)
     for (ch = 0; ch < NPART; ch++) synth_role(ch, ch == 4u ? ROLE_BASS : ROLE_PAD);
     for (ch = 0; ch < NPART; ch++) synth_sound(ch, fm);
     for (ch = 0; ch < NPART; ch++)
-        CHECK((ch < ENG_POOL_N) == (chs[ch].e == &ENG_FM6), "19.5 ch %u: FM6 only while the pool lasts", ch);
+        CHECK((ch < ENG_FM6_MAX) == (chs[ch].e == &ENG_FM6), "19.5 ch %u: FM6 only while the pool lasts", ch);
     CHECK(chs[4].sound == sound_default(ROLE_BASS) && chs[5].sound == sound_default(ROLE_PAD), "19.5 refused: role default");
     synth_post(SC_SOUND, 6, fm, ROLE_LEAD + 1u); run(1, 99);
     CHECK(chs[6].sound == sound_default(ROLE_LEAD) && ch_role[6] == ROLE_LEAD, "19.5 posted role + 1 is kept");
@@ -871,7 +872,7 @@ static void fm6_sixteen(uint32_t k)                     /* 16 voices on the chan
 {
     uint32_t ch, n, v = 0;
     synth_init();
-    for (ch = 0; ch < ENG_POOL_N; ch++) {
+    for (ch = 0; ch < ENG_FM6_MAX; ch++) {
         synth_sound(ch, fm6_first() + k);
         for (n = 0; n < FM6_POLY && v < 16u; n++, v++) synth_on(ch, 40 + ch * 12 + n * 3, 100);
     }
@@ -899,6 +900,277 @@ static void test_19_6_sixteen_fm6_voices_cost(void)
     printf("19.6 render cost: 16 FM6 voices (%s): %.0f us per 256 frames on this host (limit 3000)\n",
            FM6_PRESETS[worst_k].name, us_per_256);
     CHECK(us_per_256 < 3000.0, "19.6 host render too slow: %.0f us", us_per_256);
+}
+
+/* ------------------------------------------------------------------ US-20 --- */
+static const engine_t *const US20[3] = {&ENG_PHYS, &ENG_DIGITAL, &ENG_FORMANT};
+
+static uint32_t first_of(const engine_t *e)             /* the first sound id of an engine */
+{
+    uint32_t id;
+    for (id = 0; id < sound_count && sounds[id].e != e; id++) {}
+    CHECK(id < sound_count, "no %s sound", e->name);
+    return id;
+}
+
+/* every preset on a channel of its own (all eight in turn: the pool), two notes held 1.5 s: heard, no sample beyond
+ * +-32767, no DC while it sounds (the mean of its last 0.5 s under 1/64 of its peak: SITAR's curved bridge, the most
+ * lopsided, ~1/100); 10.5 s after the note-off silent, no voice left */
+static void test_20_1_every_phys_digital_voice_preset_sounds_and_ends(void)
+{
+    int32_t out[2 * CTL];
+    uint32_t e, k, b, i, n = 0;
+    for (e = 0; e < 3u; e++)
+        for (k = 0; k < US20[e]->npresets; k++) {
+            uint32_t id = first_of(US20[e]) + k, ch = (k + e) % NPART;
+            int64_t sum = 0, cnt = 0;
+            synth_init();
+            synth_sound(ch, id);
+            synth_level(ch, 127, 64);
+            CHECK(chs[ch].e == US20[e] && chs[ch].pr == &US20[e]->presets[k], "20.1 ch %u plays %s %s", ch, US20[e]->name,
+                  sound_name(id));
+            synth_on(ch, 60, 110);
+            synth_on(ch, 67, 90);
+            peak = 0;
+            for (b = 0; b < SEC(1.5); b++) {
+                memset(out, 0, sizeof out);
+                synth_render(out, CTL);
+                for (i = 0; i < 2 * CTL; i++) {
+                    int32_t a = out[i] < 0 ? -out[i] : out[i];
+                    CHECK(a <= 32767, "20.1 %s: sample %d", sound_name(id), out[i]);
+                    if (a > peak) peak = a;
+                    if (b >= SEC(1.0)) { sum += out[i]; cnt++; }
+                }
+            }
+            CHECK(peak > 300, "20.1 %s %s is silent (peak %d)", US20[e]->name, sound_name(id), peak);
+            CHECK(llabs(sum / cnt) < peak / 64, "20.1 %s %s: DC %lld while it sounds", US20[e]->name, sound_name(id),
+                  (long long)(sum / cnt));
+            synth_off(ch, 60);
+            synth_off(ch, 67);
+            tail_abs = 0; tail_n = 0;
+            run(SEC(11.0), SEC(10.5));                  /* the longest release (127) is 10 s to -60 dB */
+            CHECK(tail_abs / (tail_n ? tail_n : 1) < 200, "20.1 %s %s does not end", US20[e]->name, sound_name(id));
+            CHECK(synth_active() == 0, "20.1 %s %s: a voice stuck", US20[e]->name, sound_name(id));
+            n++;
+        }
+    printf("20.1 %u presets (PHYS %u, DIGITAL %u, VOICE %u, ids %u..%u) sound and end\n", n, ENG_PHYS.npresets,
+           ENG_DIGITAL.npresets, ENG_FORMANT.npresets, first_of(&ENG_PHYS), sound_count - 1u);
+}
+
+/* SLOOP's three engines as copied: every preset as it is, then with its EDIT values moved (each DIGITAL algorithm,
+ * each PHYS model, a MODEL change under a note), notes 0..127, velocities 1..127, retriggers, releases and tails,
+ * render bit for bit what was recorded when the files were copied (any change to the copied arithmetic or to the glue
+ * that feeds it changes it) */
+static uint32_t us20_crc(const engine_t *e)
+{
+    static const uint8_t NOTE[6] = {36, 60, 84, 0, 127, 48}, VEL[6] = {127, 64, 1, 100, 30, 110};
+    int32_t out[2 * CTL];
+    uint32_t crc = 0, k, j, b, v, q;
+    for (k = 0; k < e->npresets; k++) {
+        uint32_t id = first_of(e) + k;
+        synth_init();
+        synth_sound(3, id);
+        synth_level(3, 90, 64);
+        for (j = 0; j < 6u; j++) {
+            synth_on(3, NOTE[j], VEL[j]);
+            for (b = 0; b < 40u; b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+            if (j == 2u) synth_on(3, NOTE[j], 90);    /* a retrigger */
+            if (j & 1u) synth_off(3, NOTE[j - 1u]);
+        }
+        synth_all_off();
+        for (b = 0; b < SEC(0.3); b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+        for (v = 0; v < 8u; v++) {
+            for (q = 0; q < 8u; q++) trk[3].p[P_E0 + q] = (int16_t)(q ? (id * 37u + q * 53u + v * 29u) % 128u : v * 17u);
+            synth_on(3, 40u + v * 9u, 50u + v * 10u);
+            for (b = 0; b < 24u; b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+        }
+        synth_all_off();
+        for (b = 0; b < SEC(0.2); b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+    }
+    return crc;
+}
+
+#define GOLD_PHYS 0xF2A04EEAu
+#define GOLD_DIGITAL 0x082FAAF9u
+#define GOLD_VOICE 0xC214EE94u
+static void test_20_1_sloop_engines_bit_for_bit(void)
+{
+    uint32_t p = us20_crc(&ENG_PHYS), d = us20_crc(&ENG_DIGITAL), v = us20_crc(&ENG_FORMANT);
+    printf("20.1 SLOOP's PHYS %08X DIGITAL %08X VOICE %08X\n", p, d, v);
+    CHECK(p == GOLD_PHYS, "PHYS renders %08X, recorded %08X", p, GOLD_PHYS);
+    CHECK(d == GOLD_DIGITAL, "DIGITAL renders %08X, recorded %08X", d, GOLD_DIGITAL);
+    CHECK(v == GOLD_VOICE, "VOICE renders %08X, recorded %08X", v, GOLD_VOICE);
+}
+
+/* the pitch of a held note on channel 0 by its zero crossings over 100 ms (from 60 ms after the note-on), in cents
+ * from the MIDI note. A plucked string's overtones are louder than its fundamental (they would add crossings), and the
+ * burst leaves a slow drift (it would hide some), so the signal goes through a band-pass first: six two-pole low-pass
+ * sections (Butterworth, Q 0.707) at 1.2 x the note, which leave the second harmonic ~46 dB below the fundamental, and two
+ * high-pass ones at 0.6 x. A linear filter moves no frequency, and its own ringing is at 1.2 or 0.6 x the note (it
+ * could only pull the estimate away from the note, never onto it) */
+static double pluck_cents(uint32_t note)
+{
+    static double x[8820];                              /* 0.2 s */
+    int32_t out[2 * CTL];
+    double f = 440.0 * pow(2.0, ((double)note - 69.0) / 12.0), c[8][5], z[8][4];
+    double t0 = -1, t1 = -1, prev = 0;
+    uint32_t b, i, k, n = SEC(0.2) * CTL, nc = 0;      /* (8800 samples) */
+    for (k = 0; k < 8u; k++) {                          /* RBJ biquads: b0 b1 b2 a1 a2, over a0 */
+        double w = 2 * M_PI * (k < 6u ? 1.2 : 0.6) * f / 44100, al = sin(w) / (2 * M_SQRT1_2), a0 = 1 + al, cw = cos(w);
+        double g = k < 6u ? (1 - cw) / 2 : (1 + cw) / 2;
+        c[k][0] = g / a0; c[k][1] = (k < 6u ? 2 * g : -2 * g) / a0; c[k][2] = g / a0;
+        c[k][3] = -2 * cw / a0; c[k][4] = (1 - al) / a0;
+    }
+    synth_init();
+    synth_sound(0, find("PHYS", "STR PLUCK"));
+    synth_level(0, 127, 64);
+    synth_on(0, note, 100);
+    for (b = 0; b < SEC(0.2); b++) {
+        memset(out, 0, sizeof out);
+        synth_render(out, CTL);
+        for (i = 0; i < CTL; i++) x[b * CTL + i] = out[2 * i];
+    }
+    memset(z, 0, sizeof z);
+    for (i = 0; i < n; i++) {
+        double y = x[i];
+        for (k = 0; k < 8u; k++) {                      /* z: x1 x2 y1 y2 */
+            double o = c[k][0] * y + c[k][1] * z[k][0] + c[k][2] * z[k][1] - c[k][3] * z[k][2] - c[k][4] * z[k][3];
+            z[k][1] = z[k][0]; z[k][0] = y; z[k][3] = z[k][2]; z[k][2] = o;
+            y = o;
+        }
+        if (i >= 2646u && i < 2646u + 4410u && prev < 0 && y >= 0) {   /* 60 .. 160 ms: rising crossings, interpolated */
+            double t = (double)i - y / (y - prev);
+            if (t0 < 0) t0 = t;
+            t1 = t;
+            nc++;
+        }
+        prev = y;
+    }
+    if (nc < 3u) return 9999;
+    return 1200.0 * log2(((nc - 1u) * 44100.0 / (t1 - t0)) / f);
+}
+
+static void test_20_2_phys_pluck_in_tune_c2_to_c6(void)
+{
+    uint32_t note;
+    double worst = 0;
+    for (note = 36; note <= 84; note++) {
+        double c = pluck_cents(note);
+        CHECK(fabs(c) <= 10.0, "20.2 STR PLUCK note %u: %+.1f cents", note, c);
+        if (fabs(c) > fabs(worst)) worst = c;
+    }
+    printf("20.2 PHYS STR PLUCK C2..C6, every semitone: worst %+.1f cents (zero crossings over 100 ms)\n", worst);
+}
+
+/* the pool: eight channels on PHYS (every model) each hold a block and are heard; the pool's use is reported and fits
+ * its RAM budget; a claim past the channels is refused; with the pool smaller (one block less) the eighth channel is
+ * refused cleanly: its role's default, heard */
+static void test_20_3_eight_channels_on_phys_from_the_pool(void)
+{
+    static const char *const PR[NPART] = {"STR PLUCK", "SITAR", "BELL TREE", "HAND DRUM", "BOWED MTL", "PHYS HARP",
+                                          "TIMPANI", "NYLON GTR"};
+    uint32_t ch, other, used;
+    synth_init();
+    CHECK(eng_pool_used() == 0u, "20.3 a fresh start holds no block: %u", eng_pool_used());
+    for (ch = 0; ch < NPART; ch++) { synth_role(ch, ROLE_PAD); synth_sound(ch, find("PHYS", PR[ch])); }
+    for (ch = 0; ch < NPART; ch++) {
+        void *a = eng_arena_of(&trk[ch], ENGI_PHYS);
+        CHECK(chs[ch].e == &ENG_PHYS && a, "20.3 ch %u plays PHYS from a block", ch);
+        for (other = 0; other < ch; other++) CHECK(a != eng_arena_of(&trk[other], ENGI_PHYS), "20.3 ch %u shares a block", ch);
+        synth_on(ch, 48 + ch * 3, 110);
+    }
+    used = eng_pool_used();
+    printf("20.3 eight channels on PHYS: pool %u B in use of %u B (budget %u B, a block %u B, PHYS's state %u B)\n", used,
+           (uint32_t)sizeof eng_pool, ENG_POOL_BUDGET, (uint32_t)sizeof(eng_block_t), (uint32_t)PHYS_ARENA);
+    CHECK(used == NPART * (uint32_t)sizeof(eng_block_t) && used <= ENG_POOL_BUDGET, "20.3 pool use %u", used);
+    run(SEC(0.1), 1u << 30);
+    for (ch = 0; ch < NPART; ch++) {                    /* each channel alone */
+        for (other = 0; other < NPART; other++) synth_level(other, other == ch ? 127u : 0u, 64);
+        peak = 0;
+        run(SEC(0.05), 1u << 30);
+        CHECK(peak > 300, "20.3 ch %u (%s) is silent: %d", ch, PR[ch], peak);
+    }
+    CHECK(eng_claim(NPART, ENGI_PHYS) == -1 && eng_pool_used() == used, "20.3 a ninth claim is refused, nothing taken");
+    synth_sound(NPART, find("PHYS", "STR PLUCK"));
+    CHECK(eng_pool_used() == used, "20.3 channel 9: nothing taken");
+    synth_init();
+    eng_pool_n = NPART - 1u;                            /* a pool one block smaller: the eighth claim finds none */
+    for (ch = 0; ch < NPART; ch++) { synth_role(ch, ch == 7u ? ROLE_BASS : ROLE_PAD); synth_sound(ch, find("PHYS", PR[ch])); }
+    for (ch = 0; ch < NPART - 1u; ch++) CHECK(chs[ch].e == &ENG_PHYS, "20.3 ch %u plays PHYS", ch);
+    CHECK(chs[7].sound == sound_default(ROLE_BASS) && eng_id(chs[7].e) == ENG_NONE && !eng_arena_of(&trk[7], ENGI_PHYS),
+          "20.3 refused: the role's default (%s %s)", sound_engine(chs[7].sound), sound_name(chs[7].sound));
+    CHECK(eng_pool_used() == (NPART - 1u) * (uint32_t)sizeof(eng_block_t), "20.3 the full pool: %u", eng_pool_used());
+    for (other = 0; other < NPART; other++) synth_level(other, other == 7u ? 127u : 0u, 64);
+    synth_on(7, 40, 110);
+    peak = 0;
+    run(SEC(0.2), 1u << 30);
+    CHECK(peak > 300, "20.3 the refused channel plays its default: %d", peak);
+    synth_sound(2, find("ANALOG", "SAW LEAD"));          /* a channel that leaves frees its block for the next claim */
+    synth_sound(7, find("PHYS", "SITAR"));
+    CHECK(chs[7].e == &ENG_PHYS && eng_arena_of(&trk[7], ENGI_PHYS) && !eng_arena_of(&trk[2], ENGI_PHYS), "20.3 block reused");
+    synth_init();
+    CHECK(eng_pool_n == ENG_POOL_N, "20.3 a fresh start hands out the whole pool");
+}
+
+/* hostile notes: 0 and 127 at velocity 1, then 100 retriggers in a second (notes 0, 127 and 60 at velocities 1..127):
+ * every sample within +-32767, and after the note-off no voice is left and nothing sounds */
+static void test_20_5_extreme_notes_and_retriggers(void)
+{
+    uint32_t e, k, r;
+    for (e = 0; e < 3u; e++)
+        for (k = 0; k < US20[e]->npresets; k++) {
+            uint32_t id = first_of(US20[e]) + k;
+            synth_init();
+            synth_sound(1, id);
+            synth_level(1, 127, 64);
+            synth_on(1, 0, 1);
+            synth_on(1, 127, 1);
+            run(SEC(0.2), 1u << 30);
+            for (r = 0; r < 100u; r++) {
+                synth_on(1, r % 3u == 0u ? 0u : r % 3u == 1u ? 127u : 60u, 1u + (r * 13u) % 127u);
+                run(SEC(0.01), 1u << 30);              /* (run: every sample within +-32767) */
+            }
+            synth_off(1, 0); synth_off(1, 127); synth_off(1, 60);
+            tail_abs = 0; tail_n = 0;
+            run(SEC(11.0), SEC(10.5));
+            CHECK(synth_active() == 0, "20.5 %s %s: a voice stuck", US20[e]->name, sound_name(id));
+            CHECK(tail_abs / (tail_n ? tail_n : 1) < 200, "20.5 %s %s: still sounding", US20[e]->name, sound_name(id));
+        }
+    printf("20.5 notes 0 / 127 at velocity 1, 100 retriggers in 1 s: every PHYS, DIGITAL, VOICE preset ends\n");
+}
+
+/* 16 voices (8 channels x 2 notes) of one preset; the costliest preset of the three engines timed */
+static void us20_sixteen(uint32_t id)
+{
+    uint32_t ch;
+    synth_init();
+    for (ch = 0; ch < NPART; ch++) { synth_sound(ch, id); synth_on(ch, 40 + ch * 5, 100); synth_on(ch, 47 + ch * 5, 100); }
+}
+
+static void test_20_6_sixteen_voices_of_the_costliest_cost(void)
+{
+    uint32_t e, k, worst = 0, worst_id = 0;
+    double us_per_256;
+    clock_t t0;
+    for (e = 0; e < 3u; e++)
+        for (k = 0; k < US20[e]->npresets; k++) {
+            uint32_t id = first_of(US20[e]) + k;
+            clock_t c0, c;
+            if (US20[e]->presets[k].mono) continue;    /* (a MONO preset: one voice a channel) */
+            c0 = clock();
+            us20_sixteen(id);
+            CHECK(synth_active() == 16u, "20.6 16 voices of %s sound: %u", sound_name(id), synth_active());
+            run(SEC(0.5), 1u << 30);
+            c = clock() - c0;
+            if ((uint32_t)c > worst) { worst = (uint32_t)c; worst_id = id; }
+        }
+    us20_sixteen(worst_id);
+    t0 = clock();
+    run(SEC(3), 1u << 30);
+    us_per_256 = (double)(clock() - t0) / CLOCKS_PER_SEC * 1e6 / (SEC(3) / 8.0);
+    printf("20.6 render cost: 16 voices of the costliest, %s %s: %.0f us per 256 frames on this host (limit 3000)\n",
+           sound_engine(worst_id), sound_name(worst_id), us_per_256);
+    CHECK(us_per_256 < 3000.0, "20.6 host render too slow: %.0f us", us_per_256);
 }
 
 int main(void)
@@ -937,6 +1209,12 @@ int main(void)
     test_19_5_a_finished_fm6_voice_frees_itself();
     test_19_5_steal_and_hush_end_fm6_voices();
     test_19_6_sixteen_fm6_voices_cost();
+    test_20_1_every_phys_digital_voice_preset_sounds_and_ends();
+    test_20_1_sloop_engines_bit_for_bit();
+    test_20_2_phys_pluck_in_tune_c2_to_c6();
+    test_20_3_eight_channels_on_phys_from_the_pool();
+    test_20_5_extreme_notes_and_retriggers();
+    test_20_6_sixteen_voices_of_the_costliest_cost();
     printf("%s (%u sounds)\n", fails ? "FAILED" : "ok", sound_count);
     return fails ? 1 : 0;
 }
