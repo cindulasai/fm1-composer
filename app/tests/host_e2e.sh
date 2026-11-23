@@ -16,7 +16,9 @@ tmp=$(mktemp build/host/.composer.XXXXXX)
 san=${SANFLAGS:-$(sh tests/sanflags.sh)}                     # (out-of-bounds stops the run, never passes)
 if ! cc -O1 -g -Wall -Wno-unused-function -DDINGHY_HOST -DAPP_VER='"dev"' $san ${HOST_CFLAGS:-} "$@" \
     -Ifirmware/hal -Ifirmware/src -Ifirmware/gen -Iengines -o "$tmp" firmware/src/composer.c; then
-    rm -f "$tmp"; exit 1
+    rm -rf "$tmp" "$tmp.dSYM"; exit 1
 fi
 mv "$tmp" "$bin"
+rm -rf "$bin.dSYM"                                           # (macOS cc -g writes <out>.dSYM: keep one, beside the binary)
+if [ -d "$tmp.dSYM" ]; then mv "$tmp.dSYM" "$bin.dSYM"; fi
 "$bin" "build/host/$name" "$script" > "build/host/$name.log"
