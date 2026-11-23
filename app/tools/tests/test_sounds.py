@@ -179,8 +179,10 @@ def test_22_5_composed_suite_brief_shows_the_mapped_sounds_on_the_player(tmp_pat
     lines, t = push(100, data)
     (log, _) = run_host(script(tmp_path, "us22_bossa", lines + [f"{t + 50} btn {BTN['PLAY']}"], t + 1500))
     s = at(log, t + 50)
+    pitch = 17 if piece.sections else 19                     # (US-23: text2midi's form makes room for the sections strip)
+    assert piece.sections
     for c, (role, sound) in enumerate(want):
-        assert (64 + c * 19, role.upper()) in s and (64 + c * 19, sound) in s, (role, sound)
+        assert (64 + c * pitch, role.upper()) in s and (64 + c * pitch, sound) in s, (role, sound)
     assert not {txt for y, txt in s} & {"SQR BASS", "SAW LEAD", "SINE KEY"}     # (no role defaults)
 
 
@@ -237,3 +239,24 @@ def test_22_6_a_program_byte_past_127_is_clipped_like_every_data_byte(tmp_path):
     p.write_bytes(b"MThd" + struct.pack(">IHHH", 6, 1, 1, 96) + b"MTrk" + struct.pack(">I", len(trk)) + trk)
     piece, rep = fit(str(p))
     assert [(c.role, N[c.sound]) for c in piece.channels] == [("fx", "METAL")] and rep.reductions == 0
+
+
+def test_34_a_fourth_fm6_channel_plays_its_roles_default(tmp_path):
+    """only 3 FM6 engine blocks: a piece asking a 4th (channel 4, bass) gets the bass default, as if it asked for it
+    (COMPOSER tells the synth each channel's role with its sound); heard alone, the two runs are the same samples"""
+    from test_ui import at, push, script
+    from fm1c.piece import Channel, Note, Piece, encode
+    from conftest import wav_frames
+
+    def run(sound4, name):
+        roles = ["lead", "pad", "chords", "bass"]
+        chans = [Channel(r, [Note(t * 96, 40 + 7 * c + t % 3, 80, 110) for t in range(32)], sound=s)
+                 for c, (r, s) in enumerate(zip(roles, [72, 73, 74, sound4]))]
+        lines, t = push(100, encode(Piece("fm6x4", 1200, 8 * 384, chans)))
+        lines += [f"{t + 50} btn 12", f"{t + 80} keys {1 | 4 | 16}", f"{t + 140} keys 0"]   # play; mute 1-3
+        log, wav = run_host(script(tmp_path, name, lines, t + 4000))
+        assert (64 + 3 * 19, "BASS") in at(log, t + 50)
+        f = wav_frames(wav)
+        return f[int((t + 1500) / 1000 * 44100) * 2:int((t + 3900) / 1000 * 44100) * 2]
+    a, b = run(75, "fm6four"), run(255, "fm6dflt")
+    assert max(abs(x) for x in b) > 1000 and a == b

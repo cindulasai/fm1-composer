@@ -18,6 +18,8 @@ static uint32_t lib_count(void) { return 0; }
 static const lib_entry_t *lib_entry(uint32_t i) { (void)i; return 0; }
 static uint32_t lib_free(void) { return 0; }
 static const char *sound_name(uint32_t id) { (void)id; return ""; }
+static int32_t text_w(const felucca_font_t *f, const char *s) { (void)f; return (int32_t)strlen(s) * 8; }
+#define PL_NONE 255u
 
 #include "ui.c"
 

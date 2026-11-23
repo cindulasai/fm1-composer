@@ -84,6 +84,9 @@ the page to this computer only (127.0.0.1).
 | | KNOB2 | tempo, 30 to 300 BPM |
 | | white keys F3 to F4 (1 to 8) | mute channel 1 to 8 |
 | | hold SEL + white key | solo |
+| | keys F#4 to G5 (a piece with sections) | launch section 1 to 14: it starts at the next bar line (or where the playing section ends); stopped, it plays from that section; the playhead shows the section and the bar:beat in it (`VERSE1 3:2`), the strip under the channels lists them (playing amber, next white) |
+| | OCT+ / OCT- (more than 14 sections) | the keys launch sections 15 to 24 / 1 to 14 |
+| | SEQ | section loop on / off: the playing section repeats |
 | | SAVE | keeps the sounds, mutes and tempo for this piece (when stopped; while playing it saves at the stop) |
 | | HOME | stops and goes back to the library |
 | | EDIT | opens the selected channel in EDIT |

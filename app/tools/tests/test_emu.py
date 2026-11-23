@@ -362,3 +362,22 @@ def test_18_9_strict_timing_densest_piece_every_effect(tmp_path):
     last = {int(m[1]): m[2] for m in re.finditer(r"SCREEN (40|68|96|180) \d+ [0-9A-F]{4} (\d+)$", log, re.M)}
     assert last == {40: "127", 68: "127", 96: "127", 180: "127"}, f"host: REVERB, DELAY, CHORUS, DRIVE at 127: {last}"
     assert lcd == rgb565(APP / f"build/host/fxref-{h2 + 500}.ppm"), "the emulator's FX screen: every effect at 127"
+
+
+def dense_sections():
+    """dense() with a section on every bar (as many as fit beside the notes, at most 24)"""
+    from fm1c.piece import Section, decode
+    p = decode(dense())
+    while True:
+        bars = p.len_ticks // 384
+        p.sections = [Section(b * 384, f"BAR{b + 1}") for b in range(min(24, bars))]
+        try:
+            return encode(p), len(p.sections)
+        except PieceError:                                   # (the table needs room: one bar less)
+            p.len_ticks -= 384
+            for c in p.channels:
+                c.notes = [n for n in c.notes if n.tick < p.len_ticks]
+
+
+
+from test_sections import test_23_6_strict_timing_densest_piece_a_section_jump_every_bar  # noqa: E402,F401  (run here by tests/emu_e2e.sh)
