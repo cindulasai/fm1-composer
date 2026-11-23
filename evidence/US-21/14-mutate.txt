@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-21
+SURVIVED app/firmware/src/synth.c:403  " < " -> " <= "  | int32_t xs = (int32_t)(x < -65535 ? -65535 : x > 65535 ? 65535 : x);
+MUTANTS: 12 tried, 11 killed, 1 survived (of 285 candidates in US-21)
+EXIT_CODE: 1

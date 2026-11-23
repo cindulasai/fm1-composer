@@ -1,0 +1,6 @@
+COMMAND: sh prove mutants US-21
+SURVIVED app/firmware/src/drum_synth.c:22  " + " -> " - "  | uint8_t pitch, fine;         /* the tone: MIDI note + 1/16 semitones (METAL / CYM: their base) */
+SURVIVED app/firmware/src/drum_synth.c:150  " + " -> " - "  | s->ka = ds_k32((uint32_t)clamp((int32_t)d->decay + dk, 0, 127));
+SURVIVED app/firmware/src/synth.c:373  " != " -> " == "  | if (v->stage != 4u && e->done(t, v)) { v->active = 0; v->gate = 0; v->stage = 0; v->env = 0; }
+MUTANTS: 12 tried, 9 killed, 3 survived (of 325 candidates in US-21)
+EXIT_CODE: 1

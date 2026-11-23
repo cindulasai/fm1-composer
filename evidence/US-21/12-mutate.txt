@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-21
+SURVIVED app/firmware/src/drum_synth.c:182  " >= " -> " > "  | s->cinc = ci >= 0x20000000u ? 0xFFFFFFFFu : ci << 3;
+SURVIVED app/firmware/src/drum_synth.c:378  " > " -> " >= "  | if ((d->src & 15u) > DN_CHIP || (d->src & ~(uint8_t)(15u | DN_CLAP))) d->src = DN_WHITE;
+MUTANTS: 12 tried, 10 killed, 2 survived (of 301 candidates in US-21)
+EXIT_CODE: 1

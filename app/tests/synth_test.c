@@ -591,6 +591,41 @@ static void test_21_2_composer_kits_keep_ids_and_render_bit_identical(void)
     printf("21.2 STD / TIGHT / BOOM KIT: ids 0..2, renders bit-identical to before the SLOOP kits\n");
 }
 
+/* SLOOP's drum voice as copied: every kit through its GM notes and three velocities renders bit for bit what was
+ * recorded when drum_synth.c was copied (any change to the copied arithmetic changes it) */
+#define GOLD_DSYN 0xA0D09F46u
+static void test_21_1_sloop_kits_bit_for_bit(void)
+{
+    static const uint8_t VEL[3] = {127, 80, 20};
+    int32_t out[2 * CTL];
+    uint32_t crc = 0, k, note, v, b, id0 = dsyn_first();
+    for (k = 0; k < DS_NKITS; k++) {
+        synth_init();
+        synth_sound(2, id0 + k);
+        synth_level(2, 90, 64);
+        for (v = 0; v < 3; v++)
+            for (note = 35; note <= 81; note++) {
+                synth_on(2, note, VEL[v]);
+                for (b = 0; b < 4; b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+            }
+        for (b = 0; b < SEC(0.5); b++) { memset(out, 0, sizeof out); synth_render(out, CTL); crc = crc32_upd(crc, out, sizeof out); }
+    }
+    printf("21.1 SLOOP's 32 kits: render %08X\n", crc);
+    CHECK(crc == GOLD_DSYN, "SLOOP's kits render %08X, recorded %08X", crc, GOLD_DSYN);
+}
+
+/* the role posted with a sound (SC_SOUND's b: role + 1, 0 = kept) is the channel's role */
+static void test_19_5_role_posted_with_the_sound(void)
+{
+    synth_init();
+    synth_post(SC_SOUND, 3, 0, ROLE_BASS + 1u);
+    synth_apply();
+    CHECK(ch_role[3] == ROLE_BASS, "role %u, posted BASS", ch_role[3]);
+    synth_post(SC_SOUND, 3, 1, 0);
+    synth_apply();
+    CHECK(ch_role[3] == ROLE_BASS && chs[3].sound == 1u, "b 0: the role kept, the sound changed");
+}
+
 static void test_21_4_notes_outside_the_map_silent_six_hits_on_a_tick_all_sound(void)
 {
     static const uint8_t SIX[6] = {36, 38, 42, 46, 49, 39};
@@ -891,6 +926,8 @@ int main(void)
     test_4_5_render_cost();
     test_21_1_every_kit_sounds_its_gm_notes_kick_darker_than_snare_than_hat();
     test_21_2_composer_kits_keep_ids_and_render_bit_identical();
+    test_21_1_sloop_kits_bit_for_bit();
+    test_19_5_role_posted_with_the_sound();
     test_21_4_notes_outside_the_map_silent_six_hits_on_a_tick_all_sound();
     test_21_5_densest_drum_pattern_on_a_sloop_kit_well_under_budget();
     test_19_1_every_fm6_preset_on_any_channel();

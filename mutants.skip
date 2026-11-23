@@ -93,3 +93,86 @@ app/firmware/src/drum_synth.c | uint8_t crush;               /* low nibble: bits
 app/firmware/src/drum_synth.c | s->hold = (uint16_t)(((uint32_t)s->hold * DK_SCALE[dsel & 7u]) >> 8); | equivalent in COMPOSER: dk is DK_IDX[E1 >> 4] = DK_IDX[4] = 0 (every kit preset has E1 64, DSYN_KIT in drums.c; nothing sets it), so this never changes or never runs
 app/firmware/src/drum_synth.c | s->kn = (d->src & DN_CLAP) ? ds_k32(12) : ds_k32((uint32_t)clamp((int32_t)d->ndec + dk, 0, 127));   /* CLAP: short bursts first */ | equivalent in COMPOSER: dk is DK_IDX[E1 >> 4] = DK_IDX[4] = 0 (every kit preset has E1 64, DSYN_KIT in drums.c; nothing sets it), so this never changes or never runs
 app/firmware/src/drum_synth.c | s->nhold = (uint16_t)(((uint32_t)s->nhold * DK_SCALE[dsel & 7u]) >> 8); | equivalent in COMPOSER: dk is DK_IDX[E1 >> 4] = DK_IDX[4] = 0 (every kit preset has E1 64, DSYN_KIT in drums.c; nothing sets it), so this never changes or never runs
+app/firmware/src/drum_synth.c | static const struct { uint8_t lane; int8_t semi; } DS_MAP[128 - 35] = { | equivalent: only the declared size grows (93 -> 163); the initializer and every index (note - 35, notes 35..127) are the same, the rest zero and never read
+app/firmware/src/drum_synth.c | uint32_t ph, inc, inc_to;    /* tone phase; increment now and at the end of the block */ | equivalent: the operator is inside a comment
+app/firmware/src/drum_synth.c | int32_t amp, amp_to;         /* tone envelope Q15, now and at the end of the block */ | equivalent: the operator is inside a comment
+app/firmware/src/drum_synth.c | static int32_t ds_onepole(uint32_t cut)                 /* CUTOFF_HZ index -> a = g / (1 + g), Q15 */ | equivalent: the operator is inside a comment
+app/firmware/src/drum_synth.c | nz = shl(nz, 1);                        /* band-passed: as loud as the others (COMPOSER: was nz <<= 1, UB for nz < 0; same bits) */ | equivalent: the operator is inside a comment
+app/firmware/src/drum_synth.c | s->held = shl(x >> bits, (uint32_t)bits);   /* COMPOSER: was (x >> bits) << bits (UB for x < 0 in C; same bits) */ | equivalent: the operator is inside a comment
+app/firmware/src/drum_synth.c | a = a0 + ((ra * (int32_t)(i + 1u)) >> CTL_LOG2);   /* (|r| < 2^17: no overflow) */ | equivalent: the operator is inside a comment
+app/firmware/src/drums.c | v->s[0] = v->s[1] = 32767;                  /* the fade: now, and at the end of the last block */ | equivalent: the operator is inside a comment
+app/firmware/src/synth.c | uint8_t eng_req, pold, xf_on, xf;           /* SLOOP's engine of the part and its fade (eng_fm6.c reads them; sloop_glue.c) */ | equivalent: the operator is inside a comment
+app/firmware/src/synth.c | if (fx_kill) {                              /* (stop) the return fades out over the first block, then stays shut and the | equivalent: the operator is inside a comment
+app/firmware/src/synth.c | case SC_SOUND: if (c->b) synth_role(c->ch, c->b - 1u); synth_sound(c->ch, c->a); break;   /* b: role + 1, 0 = kept */ | equivalent: the operator is inside a comment
+app/firmware/src/composer.c | static void set_tempo(uint32_t x10)               /* the player's and the delay's */ | equivalent: the operator is inside a comment
+app/firmware/src/fx.c | {   /* the chorus' two read points (Q8 samples back) and line 0's extra length, at both ends of the block */ | equivalent: the operator is inside a comment
+app/firmware/src/ui.c | uint32_t len, vel, has, pitch;              /* the note under the cursor (has) or the next new one's length, velocity */ | equivalent: the operator is inside a comment
+app/firmware/src/sloop_glue.c | static uint8_t eng_pool_own[ENG_POOL_N];        /* the engine id + 1 whose state a block holds, 0 = free */ | equivalent: the operator is inside a comment
+app/firmware/src/sloop_glue.c | static uint8_t eng_blk[NPART];                  /* a channel's block + 1, 0 = none */ | equivalent: the operator is inside a comment
+app/firmware/src/drum_synth.c | s->base16 = ((int32_t)d->pitch + semi) * 16 + d->fine + tune16; | equivalent in COMPOSER: tune16 = E0 - 64 = 0 (every kit preset has E0 64, DSYN_KIT in drums.c; nothing sets it), so this adds 0 or never runs
+app/firmware/src/drum_synth.c | if (!d->wave && tune16) {                           /* (2.7.2) a tone-less sound (closed hat, shaker, clap): TUNE | equivalent in COMPOSER: tune16 = E0 - 64 = 0 (every kit preset has E0 64, DSYN_KIT in drums.c; nothing sets it), so this adds 0 or never runs
+app/firmware/src/drum_synth.c | int32_t co8 = tune16 * 1197 / 64;               /* the TUNE as a CUTOFF_HZ index offset, Q8 */ | equivalent in COMPOSER: tune16 = E0 - 64 = 0 (every kit preset has E0 64, DSYN_KIT in drums.c; nothing sets it), so this adds 0 or never runs
+app/firmware/src/drum_synth.c | s->cut += co8; | equivalent in COMPOSER: tune16 = E0 - 64 = 0 (every kit preset has E0 64, DSYN_KIT in drums.c; nothing sets it), so this adds 0 or never runs
+app/firmware/src/drum_synth.c | s->ahp = ds_onepole((uint32_t)clamp((int32_t)d->hpf + co8 / 256, 1, 127)); | equivalent in COMPOSER: tune16 = E0 - 64 = 0 (every kit preset has E0 64, DSYN_KIT in drums.c; nothing sets it), so this adds 0 or never runs
+app/firmware/src/composer.c | fxv[sel][fxrow] = (uint8_t)fx_clamp(fxrow, (uint32_t)(v < 0 ? 0 : v)); | equivalent: v < 0 and v <= 0 give 0 alike when v is 0
+app/firmware/src/drum_synth.c | s->cinc = ci >= 0x20000000u ? 0xFFFFFFFFu : ci << 3; | equivalent: pitch_inc(k * 16) is never exactly 0x20000000 for k 0..127 (checked), so >= and > agree
+app/firmware/src/drum_synth.c | typedef struct { | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | char name[8];                                 /* ASCII, 0-padded (not terminated when 8 long) */ | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | uint8_t crush, src, rsv[2];                   /* the kit's crush; src: the factory kit it started from */ | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsnd_t s[DS_LANES]; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | } dsu_kit_t; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | uint32_t magic; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | uint16_t ver, n;                              /* 1, DSU_N */ | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu_kit_t k[DSU_N]; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | } dsu_bank_t; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | _Static_assert(sizeof(dsnd_t) == 22u && sizeof(dsu_kit_t) == 364u && sizeof(dsu_bank_t) == 1464u, "drum synth bank layout"); | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static dsu_bank_t dsu; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static volatile uint8_t dsu_dirty;                /* RAM differs from flash (an edit not stored yet) */ | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static const uint8_t DSU_DEF[DSU_N] = {0, 1, 5, 12};   /* 808, 909, TRAP, TECHNO */ | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static void dsu_from_factory(uint32_t k, uint32_t src) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | { | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu_kit_t *u = &dsu.k[k % DSU_N]; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | const dkit_t *f = &DS_KITS[src % DS_NKITS]; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | uint32_t i; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | memset(u, 0, sizeof *u); | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | for (i = 0; i < 8u && f->name[i]; i++) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | u->name[i] = f->name[i]; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | u->crush = f->crush; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | u->src = (uint8_t)(src % DS_NKITS); | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | memcpy(u->s, f->s, sizeof u->s); | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | } | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static void dsu_defaults(void) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | uint32_t k; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu.magic = DSU_MAGIC; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu.ver = 1; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu.n = DSU_N; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | for (k = 0; k < DSU_N; k++) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu_from_factory(k, DSU_DEF[k]); | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static void dsu_fix_sound(dsnd_t *d) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->wave > DW_BELL) d->wave = DW_SINE; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if ((d->src & 15u) > DN_CHIP || (d->src & ~(uint8_t)(15u | DN_CLAP))) d->src = DN_WHITE; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->pitch > 127u) d->pitch = 127; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | d->fine &= 15u; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->bend > 96u) d->bend = 96; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | d->btime &= 127u; d->decay &= 127u; d->ndec &= 127u; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->tlev > 127u) d->tlev = 127; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->t2lev > 127u) d->t2lev = 127; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->click > 127u) d->click = 127; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->nlev > 127u) d->nlev = 127; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | d->fcut &= 127u; d->hpf &= 127u; d->chip &= 127u; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (d->drive > 127u) d->drive = 127; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static void dsu_fix_kit(dsu_kit_t *u) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | for (i = 0; i < 8u; i++) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (u->name[i] && (u->name[i] < 32 || u->name[i] > 126)) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | u->name[i] = ' '; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | u->src %= DS_NKITS; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | u->rsv[0] = u->rsv[1] = 0; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | for (i = 0; i < DS_LANES; i++) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu_fix_sound(&u->s[i]); | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static int dsu_valid(const dsu_bank_t *b) { return b->magic == DSU_MAGIC && b->ver == 1u && b->n == DSU_N; } | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | static const dsu_kit_t *dsu_kit(uint32_t k)       /* (RAM never set up: the defaults, e.g. without flash) */ | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | if (!dsu_valid(&dsu)) | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | dsu_defaults(); | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/drum_synth.c | return &dsu.k[k % DSU_N]; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
+app/firmware/src/synth.c | int32_t xs = (int32_t)(x < -65535 ? -65535 : x > 65535 ? 65535 : x); | equivalent: a clamp; at x = -65535 or 65535 both sides give x
+app/firmware/src/composer.c | step = d > 0 ? 1 : -1; | equivalent: inside for (; d; ...), so d is never 0 here and d > 0 is d >= 0

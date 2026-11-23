@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-21
+SURVIVED app/firmware/src/composer.c:98  " > " -> " >= "  | step = d > 0 ? 1 : -1;
+MUTANTS: 12 tried, 11 killed, 1 survived (of 284 candidates in US-21)
+EXIT_CODE: 1

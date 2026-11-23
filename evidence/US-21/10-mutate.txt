@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-21
+SURVIVED app/firmware/src/drum_synth.c:171  " * " -> " / "  | int32_t co8 = tune16 * 1197 / 64;               /* the TUNE as a CUTOFF_HZ index offset, Q8 */
+SURVIVED app/firmware/src/composer.c:250  " < " -> " <= "  | fxv[sel][fxrow] = (uint8_t)fx_clamp(fxrow, (uint32_t)(v < 0 ? 0 : v));
+MUTANTS: 12 tried, 10 killed, 2 survived (of 306 candidates in US-21)
+EXIT_CODE: 1

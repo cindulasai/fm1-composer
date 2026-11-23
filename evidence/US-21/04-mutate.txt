@@ -1,0 +1,5 @@
+COMMAND: sh prove mutants US-21
+SURVIVED app/firmware/src/drum_synth.c:32  " + " -> " - "  | uint8_t drive, level;        /* drive 0..127; level: 128 + 4 x dB (-32 .. +31.75 dB) */
+SURVIVED app/firmware/src/drum_synth.c:154  " * " -> " / "  | s->hold = (uint16_t)(((uint32_t)s->hold * DK_SCALE[dsel & 7u]) >> 8);
+MUTANTS: 12 tried, 10 killed, 2 survived (of 323 candidates in US-21)
+EXIT_CODE: 1

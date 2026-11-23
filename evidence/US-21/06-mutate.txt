@@ -1,0 +1,8 @@
+COMMAND: sh prove mutants US-21
+SURVIVED app/firmware/src/drum_synth.c:44  " - " -> " + "  | static const struct { uint8_t lane; int8_t semi; } DS_MAP[128 - 35] = {
+SURVIVED app/firmware/src/drum_synth.c:163  " - " -> " + "  | s->fk = 8192 - (int32_t)(d->flt >> 3) * 245;        /* damping 2.0 .. ~0.15 (Q12), as tsvf_coef */
+SURVIVED app/firmware/src/drum_synth.c:244  " < " -> " <= "  | case DW_SQUARE: tone = (int32_t)s->ph < 0 ? -24000 : 24000; break;
+SURVIVED app/firmware/src/synth.c:466  " + " -> " - "  | case SC_SOUND: if (c->b) synth_role(c->ch, c->b - 1u); synth_sound(c->ch, c->a); break;   /* b: role + 1, 0 = kept */
+SURVIVED app/firmware/src/composer.c:346  " - " -> " + "  | ed_tick = t - t % g;
+MUTANTS: 12 tried, 7 killed, 5 survived (of 318 candidates in US-21)
+EXIT_CODE: 1
