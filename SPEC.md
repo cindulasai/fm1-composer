@@ -35,6 +35,11 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F17 | Studio right = fm1-emu's own page (unchanged, pinned) booting COMPOSER via its ?package= link; Studio is a virtual MIDI input there ("COMPOSER Studio"); Send to FM-1 = text2midi's MIDI → fit → .f1p → SysEx over that input → LIBRARY, plays | v4 | shipped |
 | F15 | Side by side: fm1-emu's browser build (MIT, pinned) runs COMPOSER on the same page; the piece is pushed over the emulated MIDI jack, appears in LIBRARY, plays | v3 | shipped |
 | F11 | EDIT screen: piano roll per channel; keys toggle notes at the cursor; grid, length, velocity, octave; play from the cursor's bar; SAVE replaces the piece | v2 | shipped |
+| F18 | Effects from SLOOP (fx.c, pinned): per channel filter + drive, sends to reverb / delay / chorus, master limiter + DC block; set per channel on the device, saved with the piece | v5 | planned |
+| F19 | SLOOP's FM6 engine (6-op FM, DX7 patches) + its preset bank, copied unchanged where possible | v5 | planned |
+| F20 | SLOOP's PHYS (physical models), DIGITAL (4-op FM) and VOICE (formant) engines + presets | v5 | planned |
+| F21 | SLOOP's 32 synthesized drum kits (drum_synth.c) beside COMPOSER's 3 | v5 | planned |
+| F22 | text2midi's instruments, roles and mix reach the FM-1: each part gets a fitting sound and pan (fm1c and Studio, same bytes) | v5 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -90,12 +95,21 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 18 | SAVE of an edited piece = put new entry, then delete old (power cut between: both kept, nothing lost); prefs move to the new id | council | yes |
 | 19 | EDIT controls: SELECT cursor, KNOB1 grid 1/32..1/4, KNOB2 length, KNOB3 velocity, OCT-/+ octave, keys toggle, FX undo | council | no |
 | 16 | platform_poll hands the updater only a frame the app saw and declined (fixes a frame lost between the two, found under FM1_STRICT) | council | no |
+| 26 | Device shape: arrangement player + live play + a step sequencer on all 8 tracks (exceeds SLOOP's 3+1); sound first (v5), live play + sequencer next (v6) | user | yes |
+| 27 | Samples: build synthesized engines first, measure flash, add sampled instruments only if the library keeps ≥ 200 KB (code space: 97.5 KB of 568 KB used at v4) | user | yes |
+| 28 | One core, 16 voices: SLOOP's second-core path stays off until a real-device test (known crashes on some units) | user | yes |
+| 29 | SLOOP 2.8.5 (isod89/sloop-fm1 @ bac9c05, GPL-3.0) code copied unchanged where possible, pinned + provenance; our glue only; its assets (logo, Hügelton art) not copied | user | yes |
+| 30 | Float: tested in the emulator before any float code; until then integer only (RULES.md) | user | no |
+| 31 | v4 pieces keep playing; every new sound plays the densest piece with 0 starved halves in fm1-emu's on-chip timing (FM1_STRICT) | user | yes |
 
 ## Claims
-"better than SLOOP" → narrowed: not a claim; different product (library player vs live groovebox). README: "inspired by SLOOP".
+"better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
 "16 voices" → narrowed to the measured number in README.
 
 ## Backlog
+- v6 (next, decided): live play + step sequencer on 8 tracks: launch sections at the next bar, keyboard in the piece's key with auto-chords, live MIDI in, energy + swing knobs, send from Studio while playing, step programming/recording per track
+- Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
+- Second core for more voices: after a real-device test (decision 28)
 - Versus SLOOP (isod89/sloop-fm1, a mature live groovebox): COMPOSER wins on AI arrangements from plain English, an 8-part arrangement player, and Studio in the browser. To close the gaps, most valuable first: one-click install from the browser; more sounds and engines (FM6 / DX7 patches, physical models); a setlist that chains pieces; piano-roll editing in Studio before pushing; per-channel filter and effects; MIDI out of the playing piece
 - Public Studio page: free / demo AI keys or an in-browser model (no key); public repo or other free static host — user decides
 - Desktop app (Studio packaged)
@@ -111,3 +125,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v2 — Phase 2: note editing on the device (US-10–US-11)
 - v3 — COMPOSER Studio in the browser, emulator side by side (US-12–US-15)
 - v4 — Studio = text2midi's UI + fm1-emu's page, reused unchanged, MIDI cable between (US-16–US-17)
+- v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22)
