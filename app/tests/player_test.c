@@ -39,7 +39,11 @@ static uint32_t build(uint32_t tempo, uint32_t len, uint32_t nch, const tn_t *co
         pb[off] = (uint8_t)bs_n;
         for (i = 0; i < bs_n; i++) {
             put32(pb + off + 4 + i * 12, bs_t[i]);
-            snprintf((char *)pb + off + 8 + i * 12, 9, "S%u", i + 1);
+            {   /* the name field is 8 bytes, zero-padded: format apart, copy only the characters */
+                char nm[12];
+                int k = snprintf(nm, sizeof nm, "S%u", (unsigned)(i + 1));
+                memcpy(pb + off + 8 + i * 12, nm, (size_t)k);
+            }
         }
         off += 4 + bs_n * 12;
     }
