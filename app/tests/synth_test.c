@@ -796,6 +796,27 @@ static void test_19_5_hostile_patch_bytes(void)
     CHECK(fm6_slot[0] == FM6_NFACTORY && !memcmp(&fm6_patch[0][FP_NAME], "INIT VOICE", 10), "19.5 empty bank slot: init voice");
 }
 
+/* an FM6 voice whose own envelopes have ended frees its slot at once, not at the 4 s release cut */
+static void test_19_5_a_finished_fm6_voice_frees_itself(void)
+{
+    uint32_t k, b, natural = 0, fm = fm6_first();
+    for (k = 0; k < ENG_FM6.npresets; k++) {
+        synth_init();
+        synth_sound(0, fm + k);
+        synth_level(0, 127, 64);
+        synth_on(0, 60, 100);
+        run(SEC(0.2), 99);
+        synth_off(0, 60);
+        for (b = 0; b < SEC(3.0) && trk[0].v[0].active; b++) {
+            CHECK(trk[0].v[0].stage != 4u, "%s: no release cut within 3 s", sound_name(fm + k));
+            run(1, 99);
+        }
+        if (!trk[0].v[0].active) natural++;
+    }
+    printf("19.5 FM6 voices that end by their own envelopes within 3 s of note-off: %u of %u\n", natural, ENG_FM6.npresets);
+    CHECK(natural >= 1u, "a short FM6 sound frees its voice when it has died away: %u", natural);
+}
+
 static void test_19_5_steal_and_hush_end_fm6_voices(void)
 {
     uint32_t ch, n, fm = fm6_first();
@@ -876,6 +897,7 @@ int main(void)
     test_19_3_v4_ids_keep_their_sounds();
     test_19_5_pool_full_gives_the_role_default();
     test_19_5_hostile_patch_bytes();
+    test_19_5_a_finished_fm6_voice_frees_itself();
     test_19_5_steal_and_hush_end_fm6_voices();
     test_19_6_sixteen_fm6_voices_cost();
     printf("%s (%u sounds)\n", fails ? "FAILED" : "ok", sound_count);

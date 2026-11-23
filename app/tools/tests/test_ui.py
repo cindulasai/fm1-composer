@@ -201,12 +201,17 @@ def test_8_2_select_tempo_and_sound_turns_exactly(tmp_path):
 
 
 def test_8_2_a_sound_outside_the_catalog_falls_back_to_the_roles(tmp_path):
+    names = catalog(tmp_path)
+    n = len(names)                                                   # (the first id past the catalog, and its last)
     p = encode(Piece("odd", 1200, 384, [Channel("lead", [Note(0, 60, 80, 100)], sound=200),
-                                         Channel("bass", [Note(0, 40, 80, 100)], sound=254)]))
+                                         Channel("bass", [Note(0, 40, 80, 100)], sound=254),
+                                         Channel("pad", [Note(0, 52, 80, 100)], sound=n),
+                                         Channel("chords", [Note(0, 55, 80, 100)], sound=n - 1)]))
     lines, t = push(100, p)
     log, _ = run_host(script(tmp_path, "odd", lines + [f"{t + 50} btn {BTN['PLAY']}"], t + 300))
     s = at(log, t + 50)
     assert (64, "SAW LEAD") in s and (83, "SQR BASS") in s
+    assert (102, "SOFT PAD") in s and (121, names[n - 1]) in s, "id n: the pad's default (SOFT PAD); id n - 1: the last sound"
 
 
 def test_8_5_library_emptied_while_open_is_cleared(tmp_path):

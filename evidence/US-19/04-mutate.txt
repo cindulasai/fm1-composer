@@ -1,0 +1,4 @@
+COMMAND: sh prove mutants US-19
+SURVIVED app/firmware/src/composer.c:127  " < " -> " <= "  | snd[ch] = (uint8_t)(s < sound_count ? s : sound_default(role[ch]));
+MUTANTS: 12 tried, 11 killed, 1 survived (of 475 candidates in US-19)
+EXIT_CODE: 1
