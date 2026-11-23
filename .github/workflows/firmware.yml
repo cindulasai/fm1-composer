@@ -49,6 +49,7 @@ jobs:
       - name: Gate
         run: PY=python3 sh app/check.sh
       - uses: actions/upload-artifact@v4
+        if: always()        # (a red gate still fails the run; the package is kept to look into it)
         with:
           name: composer-fwsc
           path: |
