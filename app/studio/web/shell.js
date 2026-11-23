@@ -1,6 +1,6 @@
 // COMPOSER Studio: text2midi's window (left) and fm1-emu's page running COMPOSER (right), side by side, joined by a
 // MIDI cable. Send to FM-1 fits text2midi's open piece for the FM-1 (every change reported) and plays its transfer
-// SysEx into the cable, paced to the MIDI jack's 31250 baud.
+// SysEx into the cable, paced to the MIDI jack's 31250 baud (slower while the emulator runs slower than real time).
 import { transferFrames, savedLibraries } from './fm1link.js';
 
 const $ = (s) => document.querySelector(s);
@@ -36,6 +36,7 @@ $('#send').addEventListener('click', async () => {
   say('Checking the FM-1 …');
   let before = -1;                             // the newest piece in the FM-1's saved flash now: Send must add a newer one
   try { before = Math.max(-1, ...(await savedLibraries()).flat().map((p) => p.seq)); } catch { /* nothing saved yet */ }
+  const slow = () => { try { return Math.max(1, Math.min(10, cable.load())); } catch { return 1; } };
   const bar = $('#send-progress');
   bar.hidden = false;
   try {
@@ -46,11 +47,12 @@ $('#send').addEventListener('click', async () => {
       cable.send(f);
       sent += f.length;
       bar.value = sent / total;
-      await sleep(f.length / BYTES_PER_MS);
+      await sleep(f.length * slow() / BYTES_PER_MS);   // (fm1-emu drops what is more than a second behind)
     }
     const same = (p) => p.seq > before && p.bytes.length === made.f1p.length && p.bytes.every((x, k) => x === made.f1p[k]);
     let saved = false;
-    for (let i = 0; i < 20 && !saved; i++) {    // read back from fm1-emu's saved flash
+    const tries = Math.ceil(20 * slow());
+    for (let i = 0; i < tries && !saved; i++) { // read back from fm1-emu's saved flash (10 s, longer on a slow one)
       await sleep(500);
       try { saved = (await savedLibraries()).some((lib) => lib.some(same)); } catch { /* not saved yet */ }
     }

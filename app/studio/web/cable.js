@@ -21,6 +21,12 @@
   window.composerCable = {
     name: NAME,
     connected: () => typeof input.onmidimessage === 'function',
+    // fm1-emu's load (time spent emulating per time emulated, from its status line: "load 63%"); above 1 it runs
+    // slower than real time, and its MIDI IN jack takes bytes that much slower. 1 while it is not shown yet
+    load() {
+      const m = /· load (\d+)%/.exec(document.querySelector('#status')?.textContent || '');
+      return m ? Math.max(0.01, Number(m[1]) / 100) : 1;
+    },
     send(bytes) {
       if (typeof input.onmidimessage !== 'function') throw new Error(`choose "${NAME}" in the FM-1's MIDI in`);
       input.onmidimessage({ data: Uint8Array.from(bytes), timeStamp: performance.now() });

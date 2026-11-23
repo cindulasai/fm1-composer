@@ -51,7 +51,8 @@ One page, two apps you may already know, joined by a MIDI cable:
 - **Right: [fm1-emu](https://github.com/joakimeriksson/fm1-emu)'s own page**, the FM-1 emulator, running COMPOSER.
   Studio shows up in its **MIDI in** list as "COMPOSER Studio", like a MIDI keyboard would.
 - **Send to FM-1** fits text2midi's piece to the FM-1 (every change is listed) and plays it into that cable, into the
-  FM-1's MIDI IN. Studio reads the piece back from the emulated flash before it says "On the FM-1". Press PLAY on the
+  FM-1's MIDI IN (more slowly when the emulator runs slower than real time on this computer). Studio reads the piece
+  back from the emulated flash before it says "On the FM-1". Press PLAY on the
   FM-1 (or Space) to hear it there.
 
 Both apps run unchanged, at pinned versions: Studio adds only the cable, the Send button, and the small stand-in

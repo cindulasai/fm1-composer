@@ -235,6 +235,25 @@ def test_17_4_get_web_emu_refuses_a_changed_checkout(tmp_path):
     assert r.returncode == 2 and "has local changes; not building it" in r.stderr
 
 
+def test_17_2_a_slow_emulator_gets_the_piece_slower_and_saves_it(studio):
+    """fm1-emu holds a second of MIDI backlog and drops the rest: when it runs slower than real time (its status line's
+    load above 100%), Send slows down with it"""
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    assert f.evaluate("() => window.composerCable.load()") == 1, "1 until fm1-emu shows a load"
+    f.wait_for_function("() => / · load \\d+%/.test(document.querySelector('#status').textContent)", timeout=30000)
+    text, load = f.evaluate("() => [document.querySelector('#status').textContent, window.composerCable.load()]")
+    assert load == max(0.01, int(re.search(r" · load (\d+)%", text)[1]) / 100), (text, load)
+    f.evaluate("""() => { const c = window.composerCable, send = c.send.bind(c); window.sent = [];
+        c.load = () => 3;                                   // three times slower than real time
+        c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""")
+    assert send(page, secs=180).startswith("On the FM-1")
+    sent = f.evaluate("() => window.sent")
+    rate = sum(n for _, n in sent[:-1]) / (sent[-1][0] - sent[0][0])
+    assert rate < 2.5 / 3 * 1.05, f"{rate:.2f} bytes/ms: at most a third of 2.5"
+
+
 def test_17_2_a_resend_that_never_arrives_is_not_called_saved(studio):
     page, _, _ = studio()
     open_example(page)
