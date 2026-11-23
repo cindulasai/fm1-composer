@@ -1,0 +1,3 @@
+COMMAND: cd app && FM1_FWSC=build/ci-us18/composer.fwsc PY=/Users/bot/Claude/Projects/fm1-composer/.venv/bin/python sh tests/emu_e2e.sh
+emu e2e: 8 passed in 155.67s (0:02:35)
+EXIT_CODE: 0
