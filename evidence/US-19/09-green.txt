@@ -1,0 +1,19 @@
+COMMAND: cd app && FM1_LIVE=/nonexistent sh check.sh
+...........................................sssssF
+=================================== FAILURES ===================================
+______________ test_20_6_strict_timing_densest_piece_all_on_phys _______________
+
+tmp_path = PosixPath('/private/var/folders/9k/ry2jpry5791d4vht2ctjslj40000gp/T/pytest-of-bot/pytest-1550/test_20_6_strict_timing_denses0')
+
+    def test_20_6_strict_timing_densest_piece_all_on_phys(tmp_path):
+        names = re.findall(r'^\s*\{"([^"]+)", \{PM_', (APP / "engines/eng_phys.c").read_text(), re.M)
+>       bowl = PHYS_FIRST + names.index("GLASS BOWL")           # (a bowed modal bank: the costliest of PHYS, DIGITAL and VOICE
+               ^^^^^^^^^^
+E       NameError: name 'PHYS_FIRST' is not defined
+
+tools/tests/test_emu.py:241: NameError
+=========================== short test summary info ============================
+FAILED tools/tests/test_emu.py::test_20_6_strict_timing_densest_piece_all_on_phys
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 43 passed, 5 skipped in 24.65s
+EXIT_CODE: 1

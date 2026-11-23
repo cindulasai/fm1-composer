@@ -17,6 +17,7 @@ int main(int argc, char **argv)
     int e;
     uint32_t secs, frames, fr, i, ch, clipped = 0;
     int32_t peak = 0;
+    uint32_t vmax = 0, fmax = 0;                /* the most voices sounding at once: all, and FM6's */
     double sq = 0;
     if (argc == 2 && !strcmp(argv[1], "--sounds")) {           /* the catalog, in PRESETS order */
         synth_init();
@@ -50,6 +51,12 @@ int main(int argc, char **argv)
         memset(out, 0, sizeof out);
         synth_apply();
         synth_render(out, CTL);
+        {
+            uint32_t ch, v = synth_active(), fm = 0;
+            for (ch = 0; ch < NPART; ch++) if (chs[ch].e == &ENG_FM6) fm += synth_count(ch);
+            if (v > vmax) vmax = v;
+            if (fm > fmax) fmax = fm;
+        }
         for (i = 0; i < 2 * CTL; i++) {
             int32_t a = out[i] < 0 ? -out[i] : out[i];
             if (a > peak) peak = a;
@@ -59,7 +66,7 @@ int main(int argc, char **argv)
         }
     }
     fclose(f);
-    printf("%s: %u s, peak %d, rms %.0f, clipped %.4f%%, voices dropped %u\n", argv[2], secs, peak,
-           __builtin_sqrt(sq / (frames * 2.0)), 100.0 * clipped / (frames * 2.0), pl_dropped);
+    printf("%s: %u s, peak %d, rms %.0f, clipped %.4f%%, voices dropped %u, at once %u (FM6 %u)\n", argv[2], secs, peak,
+           __builtin_sqrt(sq / (frames * 2.0)), 100.0 * clipped / (frames * 2.0), pl_dropped, vmax, fmax);
     return 0;
 }

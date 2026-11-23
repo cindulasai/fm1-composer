@@ -192,26 +192,46 @@ FM6_FIRST, KITS_FIRST = 72, 40                               # (v5 catalog: v4's
 
 
 @emu_only
+def fm6_presets():
+    """FM6's presets as eng_fm6.c lists them: [(name, mono)]"""
+    src = (APP / "engines/eng_fm6.c").read_text()
+    return [(n, int(m)) for n, m in re.findall(r'^\s*\{"([^"]+)", \{[^}]*\}, \{[^}]*\}, -?\d+, (\d+), FX', src, re.M)]
+
+
 def fm6_sixteen():
-    """the most FM6 the firmware plays: its 3 FM6 channels (ENG_FM6_MAX) each a 6-note chord a 16th, held a half
-    note, so 18 FM6 notes always want the 16 voices (the rest of the channels silent): as many notes as fit"""
+    """the most FM6 the firmware plays: its 3 FM6 channels (ENG_FM6_MAX) on polyphonic presets, each a 6-note chord a
+    16th held a half note, so 18 FM6 notes always want the 16 voices (the rest of the channels silent)"""
+    poly = [FM6_FIRST + k for k, (_, mono) in enumerate(fm6_presets()) if not mono][:3]
     best, bars = None, 1
     while True:
         chans = [Channel(r, [Note(s * 24, 48 + c * 4 + k * 3 + s % 3, 192, 100) for s in range(bars * 16) for k in range(6)],
-                         sound=FM6_FIRST + c) for c, r in enumerate(["lead", "pad", "chords"])]
+                         sound=poly[c]) for c, r in enumerate(["lead", "pad", "chords"])]
         try:
             best, bars = (encode(Piece("fm6x16", 1400, bars * 384, chans)), chans), bars + 1
         except PieceError:
             return best
 
 
+def host_render(tmp_path, d, name="p"):
+    """the piece through the firmware's own player and synth on this computer (tests/render_piece.c): its report"""
+    exe, f1p = tmp_path / "render_piece", tmp_path / f"{name}.f1p"
+    if not exe.exists():
+        subprocess.run(["cc", "-O1", "-Wno-unused-function", f"-I{APP}/firmware/src", f"-I{APP}/engines", "-o", str(exe),
+                        str(APP / "tests/render_piece.c"), "-lm"], check=True)
+    f1p.write_bytes(d)
+    return subprocess.run([str(exe), str(f1p), str(tmp_path / f"{name}.wav"), "10"], capture_output=True, text=True,
+                          check=True).stdout
+
+
 @emu_only
 def test_19_6_strict_timing_sixteen_fm6_voices(tmp_path):
+    presets = fm6_presets()
+    assert len(presets) == 8 and sum(m for _, m in presets) >= 1, presets      # (the table read: ROUND BASS is mono)
     d, chans = fm6_sixteen()
     assert len(chans) == 3 == int(re.search(r"#define ENG_FM6_MAX (\d+)u", (APP / "firmware/src/sloop_glue.c").read_text())[1])
-    ends = sorted((n.tick, n.tick + n.dur) for ch in chans for n in ch.notes)
-    t = 384 * 2                                               # (from bar 3: every 16th holds 18 sounding FM6 notes)
-    assert all(sum(a <= x < b for a, b in ends) >= 16 for x in range(t, ends[-1][0], 24)), "16 FM6 voices busy"
+    assert not [ch for ch in chans if presets[ch.sound - FM6_FIRST][1]], "no mono preset (one voice a channel)"
+    host = host_render(tmp_path, d)
+    assert " at once 16 (FM6 16)" in host, host                 # the firmware's synth sounds 16 FM6 voices at once
     empty, under, level = strict_densest(tmp_path, d)
     assert (empty, under) == ("0", "0") and level > 300
 
