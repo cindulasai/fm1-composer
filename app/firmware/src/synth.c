@@ -3,7 +3,8 @@
  * most VOICE_BUDGET voices sound at once across all channels (the chip's audio budget), the rest are stolen:
  * first a released voice anywhere, then the oldest voice of the same channel, then the oldest anywhere. A stolen
  * voice fades out over a few blocks (no click). Sounds: every preset of the six Felucca engines plus the drum
- * kits (drums.c); each text2midi role has a default sound.
+ * kits (drums.c), then SLOOP's FM6 patches (sloop_glue.c: appended, so ids 0-39 keep their v4 meaning); each
+ * text2midi role has a default sound.
  *
  * Interface (synth_*): the audio interrupt calls synth_render(); notes come from the player in the same
  * interrupt. The main loop changes sounds and levels through synth_post() (a single-producer queue the next
@@ -19,8 +20,12 @@
 #endif
 #include "fe_tables.h"
 #include "felucca_engine.h"
-enum { P_ATK, P_REL, P_FTYPE, P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7, P_COUNT };
-typedef struct track { int16_t p[P_COUNT]; voice_t v[NVOICE]; } track_t;
+enum { P_ATK, P_REL, P_FTYPE, P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7, P_VOICE, P_COUNT };   /* (P_VOICE: SLOOP's, 0) */
+typedef struct track {
+    int16_t p[P_COUNT];
+    voice_t v[NVOICE];
+    uint8_t eng_req, pold, xf_on, xf;           /* SLOOP's engine of the part and its fade (eng_fm6.c reads them; sloop_glue.c) */
+} track_t;
 static track_t trk[NPART];
 #include "dsp.c"
 #include "eng_analog.c"
@@ -30,12 +35,13 @@ static track_t trk[NPART];
 #include "eng_wheel.c"
 #include "eng_noise.c"
 #include "drums.c"
+#include "sloop_glue.c"                        /* SLOOP's FM6 and the engine pool */
 #include "synth_tables.h"
 #include "piece.h"
 
 /* ---------------------------------------------------------------- the sounds --- */
 static const engine_t *const ENGINES[] = {&ENG_KIT, &ENG_ANALOG, &ENG_PHASE, &ENG_TRIO, &ENG_WHEEL, &ENG_LOFI, &ENG_NOISE,
-                                          &ENG_DSYN};   /* (new engines after the others: sound ids never move) */
+                                          &ENG_DSYN, &ENG_FM6};   /* (new engines go last: saved sound ids keep their meaning) */
 #define SOUND_MAX 128u
 typedef struct { const engine_t *e; const preset_t *pr; } sound_t;
 static sound_t sounds[SOUND_MAX];
@@ -96,6 +102,7 @@ typedef struct {
     uint8_t vol, pan, cap;
 } chan_t;
 static chan_t chs[NPART];
+static uint8_t ch_role[NPART];                  /* each channel's role (piece.h ROLE_*): its sound when the pool is full */
 static int32_t vlast[NPART][NVOICE];            /* each voice's amplitude at the end of its last block (Q15) */
 static uint32_t vage;
 
@@ -111,6 +118,8 @@ static void synth_sound(uint32_t ch, uint32_t id)
     track_t *t;
     uint32_t k;
     if (ch >= NPART || id >= sound_count) return;
+    if (eng_claim(ch, eng_id(sounds[id].e)))    /* no engine block free: the role's default (never a pool engine) */
+        id = sound_default(ch_role[ch]);
     c = &chs[ch];
     t = &trk[ch];
     c->sound = id;
@@ -122,6 +131,12 @@ static void synth_sound(uint32_t ch, uint32_t id)
     for (k = 0; k < 8u; k++) t->p[P_E0 + k] = c->pr->e[k];
     t->p[P_ATK] = c->pr->env[0];
     t->p[P_REL] = c->pr->env[3];
+    eng_loaded(t, c->e);
+}
+
+static void synth_role(uint32_t ch, uint32_t role)
+{
+    if (ch < NPART) ch_role[ch] = (uint8_t)(role < ROLE_COUNT ? role : ROLE_OTHER);
 }
 
 static void synth_level(uint32_t ch, uint32_t vol, uint32_t pan)
@@ -136,8 +151,11 @@ static void synth_init(void)
 {
     uint32_t ch;
     sounds_init();
+    eng_pool_reset();
+    fm6_init();
     vage = 0;
     for (ch = 0; ch < NPART; ch++) {
+        ch_role[ch] = ROLE_OTHER;
         synth_sound(ch, sound_default(ROLE_OTHER));
         synth_level(ch, 100, 64);
     }
@@ -312,6 +330,10 @@ static int32_t env_tick(uint32_t ch, voice_t *v)
     return v->env >> 9;
 }
 
+/* an engine's own envelope (ownenv) after note-off: cut (faded out) at the latest after 4 s, so a patch whose
+ * release holds (a DX7 L4 at 99) cannot keep a voice forever: v->env counts it down (Q24, from full) */
+#define OWN_REL_STEP ((1 << 24) / (4 * FS / CTL))
+
 /* add n (<= CTL) stereo frames to out (L R L R ...) */
 static void synth_render(int32_t *out, uint32_t n)
 {
@@ -336,12 +358,17 @@ static void synth_render(int32_t *out, uint32_t n)
             if (e->oneshot) {
                 a = e->amp(t, v, 0);
                 if (v->stage == 4u) { v->s[0] >>= 1; }
+            } else if (e->ownenv) {             /* the engine's envelopes are the amplitude (FM6): no ADSR, no velocity */
+                if (v->stage == 3u && (v->env -= OWN_REL_STEP) <= 0) { v->stage = 4u; v->env = 1 << 24; }
+                if (v->stage != 4u && e->done(t, v)) { v->active = 0; v->gate = 0; v->stage = 0; v->env = 0; }
+                if (v->stage == 1u || v->stage == 2u) v->env = 1 << 24;   /* (held: the release timer full) */
+                a = v->stage == 4u ? env_tick(ch, v) : 32767;
             } else {
                 a = env_tick(ch, v);
                 if (e->amp) a = e->amp(t, v, a);
             }
             if (!v->active) { vlast[ch][k] = 0; continue; }
-            a = a * VEL_Q15[v->vel] >> 15;
+            if (!e->ownenv) a = a * VEL_Q15[v->vel] >> 15;
             base = pitch_inc((uint32_t)clamp(v->pitch16, 0, 2047));
             m.inc = base;
             m.pitch16 = v->pitch16;
@@ -388,7 +415,7 @@ static void synth_apply(void)                   /* in the audio interrupt, befor
     while (sq_r != sq_w) {
         const synth_cmd_t *c = &sq[sq_r % 32u];
         switch (c->op) {
-        case SC_SOUND: synth_sound(c->ch, c->a); break;
+        case SC_SOUND: if (c->b) synth_role(c->ch, c->b - 1u); synth_sound(c->ch, c->a); break;   /* b: role + 1, 0 = kept */
         case SC_LEVEL: synth_level(c->ch, c->a, c->b); break;
         case SC_CH_OFF: synth_ch_off(c->ch); break;
         case SC_ALL_OFF: synth_all_off(); break;

@@ -17,12 +17,12 @@ def test_21_1_kits_are_sloops_in_its_order(tmp_path):
     names = re.search(r"#define DS_KIT_NAME_LIST (.*)", h)[1]
     sloop = re.findall(r'"([^"]+)"', names)
     assert len(sloop) == 32 and "#define DS_NKITS 32u" in h
-    assert catalog(tmp_path)[-32:] == sloop, "the 32 kits close the catalog, in SLOOP's order"
+    assert catalog(tmp_path)[40:72] == sloop, "the 32 kits follow v4's 40 sounds, in SLOOP's order"
 
 
 def test_21_3_presets_on_a_drum_channel_turns_through_35_kits(tmp_path):
     names = catalog(tmp_path)
-    kits = names[:3] + names[-32:]
+    kits = names[:3] + names[40:72]
     assert kits[:3] == ["STD KIT", "TIGHT KIT", "BOOM KIT"]
     steps = [(50, f"btn {BTN['PLAY']}"), (100, f"enc {ENC['SELECT']} 2")]       # channel 3: drums (STD KIT)
     steps += [(200 + 40 * i, f"enc {ENC['PRESETS']} 1") for i in range(35)]
@@ -38,9 +38,13 @@ def test_21_3_presets_on_a_drum_channel_turns_through_35_kits(tmp_path):
     assert len(set(seen[:35])) == 35
 
 
-def test_21_3_presets_elsewhere_still_turns_through_every_sound(tmp_path):
+def test_21_3_presets_elsewhere_skips_the_kits(tmp_path):
     names = catalog(tmp_path)
-    k = names.index("SAW LEAD")
-    steps = [(50, f"btn {BTN['PLAY']}"), (200, f"enc {ENC['PRESETS']} -1")]      # channel 1: lead
-    (log, _), t = library_with(tmp_path, ["lead"], steps, 600, name="lead1")
-    assert (64, names[k - 1]) in [(y, txt) for ms, y, txt in screen(log) if ms >= t + 200]
+    assert names.index("SAW LEAD") == 3 and names[:3] == ["STD KIT", "TIGHT KIT", "BOOM KIT"]
+    steps = [(50, f"btn {BTN['PLAY']}"), (200, f"enc {ENC['PRESETS']} -1"), (300, f"enc {ENC['PRESETS']} 1"),
+             (400, f"enc {ENC['PRESETS']} 37")]                                   # channel 1: lead
+    (log, _), t = library_with(tmp_path, ["lead"], steps, 700, name="lead1")
+    seen = [txt for ms, y, txt in screen(log) if y == 64 and ms >= t + 200 and txt in names]
+    assert seen[0] == names[-1], "SAW LEAD turned down: past the 3 kits, round to the last sound (FM6)"
+    assert seen[1] == "SAW LEAD" and seen[2] == names[72], "36 sounds up, then past the 32 kits to FM6's first"
+    assert not [x for x in seen if names.index(x) in range(40, 72) or names.index(x) < 3], seen
