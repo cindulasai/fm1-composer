@@ -108,7 +108,9 @@ step lit, notes in amber (a note begun before the page in grey). `*` after the c
 
 The player shows each channel's role (LEAD, BASS, DRUMS…), its sound and M / S, with the position as
 bar:beat. There are 40 sounds from six Felucca engines plus COMPOSER's own drum kits. Each role starts with a
-fitting one.
+fitting one. After them come SLOOP's (copied unchanged): 32 synthesized kits (ids 40–71), FM6's DX7 patches (72–79), and
+PHYS physical models (plucked strings, bells, bars, drum heads, sitar: 80–105), DIGITAL 4-operator FM keys and mallets
+(106–127) and VOICE sung vowels (128–134): 135 sounds. PHYS can play on all 8 channels at once, FM6 on 3.
 
 Every channel has SLOOP's effects: sends to a shared reverb (SLOOP's feedback delay network), a delay that follows
 the tempo (1/8 note) and a chorus, plus a low-pass FILTER with RESO and DRIVE (SLOOP's DIST). After them, SLOOP's

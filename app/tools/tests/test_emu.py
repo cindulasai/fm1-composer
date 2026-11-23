@@ -211,6 +211,19 @@ def test_21_5_strict_timing_densest_piece_on_sloop_kits(tmp_path):
         assert level > 300, "heard"
 
 
+PHYS_FIRST = 80                                                # (v5 catalog: after FM6's 72..79; US-20)
+
+
+@emu_only
+def test_20_6_strict_timing_densest_piece_all_on_phys(tmp_path):
+    names = re.findall(r'^\s*\{"([^"]+)", \{PM_', (APP / "engines/eng_phys.c").read_text(), re.M)
+    bowl = PHYS_FIRST + names.index("GLASS BOWL")           # (a bowed modal bank: the costliest of PHYS, DIGITAL and VOICE
+    d = dense([bowl] * 8)                                    # a voice, SLOOP's cpu_baseline.txt; every channel on it, 16 voices)
+    assert len(d) > 30000
+    empty, under, level = strict_densest(tmp_path, d)
+    assert (empty, under) == ("0", "0") and level > 300
+
+
 def test_9_5_missing_emulator_or_firmware_is_a_visible_skip(tmp_path):
     sh = APP / "tests/emu_e2e.sh"
     r = subprocess.run(["sh", str(sh)], env={**os.environ, "FM1_LIVE": str(tmp_path / "none")}, capture_output=True, text=True)

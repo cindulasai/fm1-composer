@@ -3,7 +3,8 @@
  * most VOICE_BUDGET voices sound at once across all channels (the chip's audio budget), the rest are stolen:
  * first a released voice anywhere, then the oldest voice of the same channel, then the oldest anywhere. A stolen
  * voice fades out over a few blocks (no click). Sounds: every preset of the six Felucca engines plus the drum
- * kits (drums.c), then SLOOP's FM6 patches (sloop_glue.c: appended, so ids 0-39 keep their v4 meaning); each
+ * kits (drums.c), then SLOOP's FM6, PHYS, DIGITAL and VOICE presets (sloop_glue.c: appended, so ids 0-39 keep their v4
+ * meaning); each
  * text2midi role has a default sound.
  *
  * Interface (synth_*): the audio interrupt calls synth_render(); notes come from the player in the same
@@ -20,7 +21,8 @@
 #endif
 #include "fe_tables.h"
 #include "felucca_engine.h"
-enum { P_ATK, P_REL, P_FTYPE, P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7, P_VOICE, P_COUNT };   /* (P_VOICE: SLOOP's, 0) */
+enum { P_ATK, P_REL, P_FTYPE, P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7, P_VOICE, P_ROOT, P_COUNT };   /* (P_VOICE,
+                                                 * P_ROOT: SLOOP's, 0: POLY, C; PHYS SYMP's ROOT chord reads it) */
 typedef struct track {
     int16_t p[P_COUNT];
     voice_t v[NVOICE];
@@ -35,14 +37,15 @@ static track_t trk[NPART];
 #include "eng_wheel.c"
 #include "eng_noise.c"
 #include "drums.c"
-#include "sloop_glue.c"                        /* SLOOP's FM6 and the engine pool */
+#include "sloop_glue.c"                        /* SLOOP's FM6, PHYS, DIGITAL, VOICE and the engine pool */
 #include "synth_tables.h"
 #include "piece.h"
 
 /* ---------------------------------------------------------------- the sounds --- */
 static const engine_t *const ENGINES[] = {&ENG_KIT, &ENG_ANALOG, &ENG_PHASE, &ENG_TRIO, &ENG_WHEEL, &ENG_LOFI, &ENG_NOISE,
-                                          &ENG_DSYN, &ENG_FM6};   /* (new engines go last: saved sound ids keep their meaning) */
-#define SOUND_MAX 128u
+                                          &ENG_DSYN, &ENG_FM6, &ENG_PHYS, &ENG_DIGITAL, &ENG_FORMANT};   /* (new engines go last:
+                                                 * saved sound ids keep their meaning) */
+#define SOUND_MAX 192u                          /* (a piece stores a sound in a byte, 255 = the role's default) */
 typedef struct { const engine_t *e; const preset_t *pr; } sound_t;
 static sound_t sounds[SOUND_MAX];
 static uint32_t sound_count;
@@ -50,6 +53,7 @@ static uint32_t sound_count;
 static void sounds_init(void)
 {
     uint32_t i, k;
+    sloop_presets_init();
     sound_count = 0;
     for (i = 0; i < NELEM(ENGINES); i++)
         for (k = 0; k < ENGINES[i]->npresets && sound_count < SOUND_MAX; k++) {
@@ -132,6 +136,7 @@ static void synth_sound(uint32_t ch, uint32_t id)
     for (k = 0; k < 8u; k++) t->p[P_E0 + k] = c->pr->e[k];
     t->p[P_ATK] = c->pr->env[0];
     t->p[P_REL] = c->pr->env[3];
+    if (c->e == &ENG_PHYS && c->cap > phys_poly(t)) c->cap = (uint8_t)phys_poly(t);   /* (SYMP: two voices, SLOOP voice.c) */
     eng_loaded(t, c->e);
 }
 
