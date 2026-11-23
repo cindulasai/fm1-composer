@@ -105,12 +105,14 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 33 | SLOOP's fm6_core.c kept byte for byte: sanitizers allow signed left shifts and wrap-around (as SLOOP's own test run); fm6_bank.c copied, not built (its flash bank: FM6 plays COMPOSER's 8 presets) | council | no |
 | 34 | Sound from text2midi's instrument, else the part's first GM program, else the role default (sounds.py = sounds.rs, one table). Only 3 FM6 channels at once (3 engine blocks): fit swaps a 4th+ FM6 part for a near non-FM6 sound and reports it | council | no |
 | 35 | Engine pool: 8 blocks of 8.6 KB (PHYS's state), so PHYS / DIGITAL / VOICE play on all 8 channels; FM6 stays capped at 3 (ENG_FM6_MAX). Pool section 319.5 KB of 344 KB (CI build): the rest of v5/v6 must fit in ~24 KB of pool. SLOOP's XP extras, sends and pattern hints of these presets are not played | council | yes |
+| 36 | Measured at v5 (decision 27): code image 150.6 KB of 568 KB, the library keeps its 292 KB (separate flash), so ~430 KB is free for sampled instruments; v5 ships without samples (135 synthesized sounds), sampled instruments go to the Backlog. Float (decision 30): none needed, all v5 DSP is integer | council | no |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
 "16 voices" → narrowed to the measured number in README.
 
 ## Backlog
+- Sampled instruments (piano, strings, choir) in the ~430 KB of free code flash (decision 36), if a sound test shows the synthesized ones fall short
 - v6 (next, decided): live play + step sequencer on 8 tracks: launch sections at the next bar, keyboard in the piece's key with auto-chords, live MIDI in, energy + swing knobs, send from Studio while playing, step programming/recording per track
 - Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
 - Second core for more voices: after a real-device test (decision 28)
