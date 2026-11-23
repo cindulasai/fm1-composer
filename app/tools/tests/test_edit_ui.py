@@ -149,6 +149,16 @@ def test_11_6_piece_full_and_library_full(tmp_path, host_bin):
     assert (tmp_path / "b8.f1p").read_bytes() == big[8]                 # the old piece, byte for byte
 
 
+def test_11_3_undo_puts_the_cursor_on_the_grid(tmp_path):
+    steps = [(100, f"enc {ENC['KNOB1']} -1"), (200, f"enc {ENC['SELECT']} 1"), *key(300, 0),   # 1/32, tick 12: F3
+             (500, f"enc {ENC['KNOB1']} 3"), (600, f"enc {ENC['SELECT']} 1"), (700, f"btn {BTN['FX']}")]
+    (log, _), t0 = run(tmp_path, [song()], steps, 800)
+    assert (4, "BAR 1  1/32") in at(log, t0 + 100, t0 + 199)
+    assert (196, "F3  LEN 1/16  VEL 100") in at(log, t0 + 300, t0 + 499)
+    assert (196, "E4  LEN 1/8  VEL 90") in at(log, t0 + 600, t0 + 699)                   # 1/4: tick 96
+    assert (196, "C4  LEN 1/16  VEL 100") in at(log, t0 + 700), "undone at tick 12: the cursor on its 1/4 step, tick 0"
+
+
 def test_11_3_one_knob_turn_on_a_chord_is_one_undo(tmp_path):
     chord = [Note(0, 60, 24, 100), Note(0, 64, 24, 100), Note(0, 67, 24, 100)]
     steps = [(100, f"enc {ENC['KNOB2']} 1"), (200, f"btn {BTN['FX']}"), (300, f"btn {BTN['FX']}")]
