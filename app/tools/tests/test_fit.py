@@ -51,7 +51,7 @@ def test_3_3_range_fold_and_drums_untouched(tmp_path):
 
 
 def test_3_3_ticks_scaled_to_96_ppq_and_tempo(tmp_path):
-    f = make_midi(tmp_path / "t.mid", [("bass – b", 0, [(960, 40, 480, 70)])], tpq=480, tempo=600000)
+    f = make_midi(tmp_path / "t.mid", [("bass – bass.synth", 0, [(960, 40, 480, 70)])], tpq=480, tempo=600000)
     piece, rep = fit(str(f))
     n = piece.channels[0].notes[0]
     assert (n.tick, n.dur) == (192, 96) and piece.tempo_x10 == 1000
@@ -94,7 +94,7 @@ def test_3_1_unnamed_dropped_part_is_named_by_role(tmp_path):
 
 
 def test_3_3_range_edges_kept(tmp_path):
-    f = make_midi(tmp_path / "e.mid", [("lead", 0, [(0, 24, 10, 80), (100, 96, 10, 80)])])
+    f = make_midi(tmp_path / "e.mid", [("lead – synth.lead", 0, [(0, 24, 10, 80), (100, 96, 10, 80)])])
     piece, rep = fit(str(f))
     assert sorted(n.pitch for n in piece.channels[0].notes) == [24, 96] and rep.reductions == 0
 

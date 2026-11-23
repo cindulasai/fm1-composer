@@ -12,6 +12,8 @@ pub struct Part {
     pub notes: Vec<(i128, u8, i128, u8)>,
     pub vol: u8,
     pub pan: u8,
+    /// the first program change of its channel in its track
+    pub program: Option<u8>,
     pub role: &'static str,
 }
 
@@ -102,9 +104,11 @@ pub fn parse(d: &[u8]) -> Result<Parsed, String> {
         let mut held: Vec<((u8, u8), VecDeque<(i128, u8)>)> = Vec::new();
         let mut held_ix: HashMap<(u8, u8), usize> = HashMap::new();
         let mut cc = [[None::<u8>; 2]; 16];
+        let mut prog = [None::<u8>; 16];
         let mut add = |parts: &mut Vec<Part>, ch: u8, name: &str, note: (i128, u8, i128, u8)| {
             let i = *part_ix.entry((ti, ch)).or_insert_with(|| {
-                parts.push(Part { name: name.to_string(), src: ch, notes: Vec::new(), vol: 100, pan: 64, role: "other" });
+                parts.push(Part { name: name.to_string(), src: ch, notes: Vec::new(), vol: 100, pan: 64, program: None,
+                                  role: "other" });
                 parts.len() - 1
             });
             parts[i].notes.push(note);
@@ -161,6 +165,7 @@ pub fn parse(d: &[u8]) -> Result<Parsed, String> {
                     let slot = &mut cc[ch as usize][(data[0] == 10) as usize];
                     if slot.is_none() { *slot = Some(data[1]); }
                 }
+                0xC0 => { prog[ch as usize].get_or_insert(data[0]); }
                 0xE0 if (data[0] as u16 | (data[1] as u16) << 7) != 8192 => bends = true,
                 _ => {}
             }
@@ -174,6 +179,7 @@ pub fn parse(d: &[u8]) -> Result<Parsed, String> {
                 if p.name.is_empty() { p.name = name.clone(); }
                 p.vol = cc[ch as usize][0].unwrap_or(100);
                 p.pan = cc[ch as usize][1].unwrap_or(64);
+                p.program = prog[ch as usize];
             }
         }
     }

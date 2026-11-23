@@ -1,6 +1,7 @@
 //! A MIDI file fitted to what COMPOSER plays, exactly as app/tools/fm1c/fit.py does it (same piece, same report).
 use crate::f1p::{self, Channel, EncodeError, Note, Piece, MAX_BYTES, MAX_CH, MAX_TICKS, PPQ};
 use crate::smf;
+use crate::sounds;
 
 pub const MAX_INPUT: usize = 8 * 1024 * 1024;
 const LOW: i64 = 24;
@@ -26,13 +27,14 @@ impl Fitted {
 /// tempo x10 as Python's {x / 10:g}
 pub fn bpm(x10: u32) -> String { if x10 % 10 == 0 { format!("{}", x10 / 10) } else { format!("{}.{}", x10 / 10, x10 % 10) } }
 
-pub fn role_of(name: &str, src: u8) -> &'static str {
+pub fn role_of(name: &str, src: u8, program: Option<u8>) -> &'static str {
     if src == 9 { return "drums"; }
     let n = name.to_lowercase();
     if let Some(first) = n.split_whitespace().next() && let Some(r) = f1p::ROLES.iter().find(|r| **r == first) {
         return r;
     }
-    KEYWORDS.iter().find(|(k, _)| n.contains(k)).map_or("other", |(_, r)| r)
+    KEYWORDS.iter().find(|(k, _)| n.contains(k)).map(|(_, r)| *r)
+        .or_else(|| sounds::role_hint(name, program)).unwrap_or("other")
 }
 
 fn floor_div(a: i128, b: i128) -> i128 { let q = a / b; if (a % b != 0) && ((a < 0) != (b < 0)) { q - 1 } else { q } }
@@ -71,7 +73,7 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
     let mut rep = Vec::new();
     if bends { rep.push("pitch bends ignored (notes play at the nearest key)".to_string()); }
     let tpq = if tpq == 0 { PPQ as i128 } else { tpq };
-    for p in parts.iter_mut() { p.role = role_of(&p.name, p.src); }
+    for p in parts.iter_mut() { p.role = role_of(&p.name, p.src, p.program); }
     if parts.iter().any(|p| p.role == "drums") {
         let mut i = 0;
         while i < parts.len() {
@@ -92,7 +94,7 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
     parts.truncate(MAX_CH);
 
     let scale = |t: i128| floor_div(t * PPQ as i128 + floor_div(tpq, 2), tpq);
-    let (mut chans, mut end) = (Vec::new(), 1i128);
+    let (mut chans, mut end, mut unknown, mut fm6) = (Vec::new(), 1i128, Vec::new(), 0);
     for p in &parts {
         let drums = p.role == "drums";
         let (mut notes, mut folded) = (Vec::new(), 0);
@@ -111,11 +113,32 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
         let (notes, dropped) = cap_poly(notes, cap);
         if dropped > 0 { rep.push(format!("{}: {dropped} notes dropped (more than {cap} at once)", p.role)); }
         end = notes.iter().map(|n| n.tick + n.dur).fold(end, i128::max);
-        chans.push((p.role, notes, p.vol.min(127), p.pan.min(127), p.src));
+        let sound = match sounds::sound(&p.name, p.program, p.role) {
+            None => {
+                unknown.push(format!("'{}'", if p.name.is_empty() { p.role } else { p.name.as_str() }));
+                255
+            }
+            Some(s) if s >= sounds::FM6_FIRST => {
+                fm6 += 1;
+                if fm6 > sounds::FM6_POOL {
+                    let alt = sounds::FM6_ALT[(s - sounds::FM6_FIRST) as usize];
+                    rep.push(format!("{}: {} plays as {} (the FM-1 plays at most {} FM6 sounds at once)", p.role,
+                                     sounds::NAMES[s as usize], sounds::NAMES[alt as usize], sounds::FM6_POOL));
+                    alt
+                } else {
+                    s
+                }
+            }
+            Some(s) => s,
+        };
+        chans.push((p.role, notes, sound, p.vol.min(127), p.pan.min(127), p.src));
+    }
+    if !unknown.is_empty() {
+        rep.push(format!("role default sound for {} (no known instrument or GM program)", unknown.join(", ")));
     }
     let length = (MAX_TICKS as i128).min(floor_div(end + BAR as i128 - 1, BAR as i128) * BAR as i128);
     let mut channels = Vec::new();
-    for (role, notes, vol, pan, src) in chans {
+    for (role, notes, sound, vol, pan, src) in chans {
         let late = notes.iter().filter(|n| n.tick >= length).count();
         if late > 0 { rep.push(format!("{role}: {late} notes past {} bars dropped", MAX_TICKS / BAR)); }
         let mut kept = Vec::new();
@@ -123,7 +146,7 @@ pub fn fit(bytes: &[u8], name: &str, poly: usize) -> Result<Fitted, String> {
             if n.tick < 0 { return Err("a note lies before the start of the piece".into()); }
             kept.push(Note { tick: n.tick as u32, pitch: n.pitch, dur: n.dur as u16, vel: n.vel });
         }
-        channels.push(Channel { role, notes: kept, sound: 255, vol, pan, src });
+        channels.push(Channel { role, notes: kept, sound, vol, pan, src });
     }
     let exact = round_div(600_000_000, tempo_us);
     let tempo_x10 = exact.clamp(300, 3000) as u32;

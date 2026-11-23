@@ -46,7 +46,11 @@ def test_13_1_make_equals_fm1c_compose(studio_cli, tmp_path, brief, seed):
 
 # ---- 13.2: random MIDI files through both fitters ----
 NAMES = ["", "Lead", "bass – Fender", "Drums", "Percussion", "perc loop", "Strings", "pad warm", "Arp 1", "chords – Rhodes",
-         "counter melody", "FX riser", "drone", "Melody", "Kit", "piano comp", "Café ☕", "\xe9t\xe9", "Synth"]
+         "counter melody", "FX riser", "drone", "Melody", "Kit", "piano comp", "Café ☕", "\xe9t\xe9", "Synth",
+         # (US-22: text2midi's "<id> – <instrument>", AI track ids, instrument names, unknown ones)
+         "lead – keys.rhodes", "keys – keys.piano", "keys", "pad2", "texture – fx.riser", "hook – harp.orchestral",
+         "x – no.such", "Piano", "Vibes", "drums – kit.standard", "bass – bass.upright", "chords – guitar.nylon",
+         "lead – vibes.vibraphone", "counter – keys.rhodes", "rhodes – KEYS.RHODES", "Track 1", "Strings 2"]
 
 
 def vlq(n):
@@ -93,7 +97,8 @@ def gen_track(rng, tpq):
         if rng.random() < 0.3: evs.append((rng.randint(0, span), 2, bytes([0xB0 | ch, 7, rng.randint(0, 127)])))
         if rng.random() < 0.3: evs.append((rng.randint(0, span), 2, bytes([0xB0 | ch, 10, rng.randint(0, 127)])))
         if rng.random() < 0.2: evs.append((rng.randint(0, span), 2, bytes([0xE0 | ch, 0, rng.choice([64, 70])])))
-        if rng.random() < 0.2: evs.append((0, 2, bytes([0xC0 | ch, rng.randint(0, 127)])))
+        if rng.random() < 0.5: evs.append((rng.choice([0, 0, rng.randint(0, span)]), 2,
+                                           bytes([0xC0 | ch, rng.choice([0, 4, 25, 33, 64, 88, 127, rng.randint(0, 127)])])))
         if rng.random() < 0.1: evs.append((rng.randint(0, span), 0, bytes([0x80 | ch, 60, 0])))     # off, never on
     if rng.random() < 0.1:
         evs.append((rng.randint(0, span), 2, b"\xf0\x03\x7d\x01\xf7"))
@@ -303,3 +308,64 @@ def test_13_2_oversize_cut_with_notes_on_every_bar_line(studio_cli, tmp_path):
     p.write_bytes(b"MThd" + struct.pack(">IHHH", 6, 1, 1, 96) + b"MTrk" + struct.pack(">I", len(body)) + bytes(body))
     want, got = fm1c_fit(p, "dense", 6), engine_fit(studio_cli, p, "dense", 6, tmp_path)
     assert want and "cut to" in want[1] and got == want
+
+
+# ---- 22.4: the sounds, roles and mix through both fitters ----
+def test_22_4_every_suite_brief_fits_as_fm1c_does(studio_cli, tmp_path):
+    t2m_or_skip()
+    briefs = sorted(BRIEFS.glob("*.json"))
+    assert len(briefs) == 36
+    sounds = set()
+    for brief in briefs:
+        a, b = tmp_path / f"a-{brief.stem}.f1p", tmp_path / f"b-{brief.stem}.f1p"
+        ra = run(APP / "fm1c", "compose", brief, "--seed", 1, "-o", a.name, cwd=tmp_path)
+        rb = run(studio_cli, "make", brief, "--seed", 1, "--name", brief.stem, "-o", b.name, cwd=tmp_path)
+        assert ra.returncode == 0 and rb.returncode == 0, ra.stderr + rb.stderr
+        assert rb.stdout.replace(b.name, a.name) == ra.stdout, brief.stem
+        assert a.read_bytes() == b.read_bytes(), brief.stem
+        assert "role default sound" not in ra.stdout, ra.stdout
+        sounds |= {a.read_bytes()[48 + 16 * i + 1] for i in range(a.read_bytes()[5])}
+    assert 255 not in sounds and len(sounds) >= 12, sounds          # every part has its instrument's sound
+
+
+def test_22_4_random_midi_files_fit_as_fm1c_does(studio_cli, tmp_path):
+    rng = random.Random(2204)
+    same = 0
+    for i in range(300):
+        p = tmp_path / f"m{i}.mid"
+        p.write_bytes(gen_midi(rng))
+        want, got = fm1c_fit(p, "song", 6), engine_fit(studio_cli, p, "song", 6, tmp_path)
+        assert want == got, f"file {i}"
+        same += want is not None
+    assert same > 200
+
+
+def smf(tracks, raw=b""):
+    """a MIDI file: per track (name, channel, program or None), four notes; `raw` events lead the last track"""
+    out = []
+    for k, (name, ch, prog) in enumerate(tracks):
+        body = meta(3, name.encode("utf-8")) + (bytes([0, 0xC0 | ch, prog]) if prog is not None else b"")
+        body += (raw if k == len(tracks) - 1 else b"")
+        for j in range(4):
+            body += vlq(0 if j == 0 else 48) + bytes([0x90 | ch, 48 + j + k, 90]) + vlq(48) + bytes([0x80 | ch, 48 + j + k, 0])
+        out.append(b"MTrk" + struct.pack(">I", len(body) + 4) + body + b"\x00\xff\x2f\x00")
+    return b"MThd" + struct.pack(">IHHH", 6, 1, len(out), 96) + b"".join(out)
+
+
+def test_22_4_every_program_and_instrument_fits_as_fm1c_does(studio_cli, tmp_path):
+    from fm1c import sounds
+    files = [smf([("Track", 0, p), ("Loop perc", 1, p), ("Drum", 9, p), ("hit", 9, None)]) for p in range(128)]
+    files += [smf([(f"x – {a}", 0, None), (a.upper(), 9, None), (a, 2, 33)])
+              for a in list(sounds.ALIASES) + list(sounds.INSTRUMENTS)]
+    files += [smf([("bass – bass.upright", 0, None), ("lead – vibes.vibraphone", 1, None),
+                   ("chords – guitar.nylon", 2, None), ("pad 3", 3, 8), ("counter – keys.rhodes", 4, None),
+                   ("arp", 5, 4), ("drone", 6, 24), ("fx – kit.standard", 7, None)]),
+              smf([("lead – kit.standard", 0, 4), ("drums – keys.piano", 1, 25), ("perc", 2, 64),
+                   ("Track 9", 3, None), ("", 4, None), ("keys – who.knows", 5, None)]),
+              smf([("Track", 0, None)], raw=b"\x00\xc0\x85"),
+              smf([("Track", 3, None)], raw=b"\x00\xb3\x07\x00\x00\xb3\x0a\x7f\x00\xb3\x07\x50\x00\xc3\x7f\x00\xc3\x01")]
+    for i, data in enumerate(files):
+        p = tmp_path / f"t{i}.mid"
+        p.write_bytes(data)
+        want = fm1c_fit(p, "t", 6)
+        assert want is not None and engine_fit(studio_cli, p, "t", 6, tmp_path) == want, f"file {i}: {want}"

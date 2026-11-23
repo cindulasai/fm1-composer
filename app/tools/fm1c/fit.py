@@ -7,7 +7,9 @@ from dataclasses import dataclass, field
 
 import mido
 
-from .piece import (ROLES, Channel, Note, Piece, PieceError, MAX_BYTES, MAX_CH, MAX_TICKS, PPQ, clean_name, encode)
+from . import sounds
+from .piece import (DEFAULT_SOUND, ROLES, Channel, Note, Piece, PieceError, MAX_BYTES, MAX_CH, MAX_TICKS, PPQ,
+                    clean_name, encode)
 
 MAX_INPUT = 8 * 1024 * 1024
 LOW, HIGH = 24, 96                       # C1 .. C7
@@ -48,10 +50,11 @@ class _Part:
     notes: list[tuple[int, int, int, int]] = field(default_factory=list)   # tick, pitch, dur, vel (source ticks)
     vol: int = 100
     pan: int = 64
+    program: int | None = None           # the first program change of its channel in its track
     role: str = "other"
 
 
-def role_of(name: str, src: int) -> str:
+def role_of(name: str, src: int, program: int | None = None) -> str:
     if src == DRUM_SRC:
         return "drums"
     n = name.lower()
@@ -61,7 +64,7 @@ def role_of(name: str, src: int) -> str:
     for k, r in KEYWORDS:
         if k in n:
             return r
-    return "other"
+    return sounds.role_hint(name, program) or "other"     # (an instrument or a program has a role)
 
 
 def _utf8(s: str) -> str:
@@ -93,6 +96,7 @@ def _parts(mid: mido.MidiFile) -> tuple[list[_Part], int, bool]:
         name, t = "", 0
         held: dict[tuple[int, int], list[tuple[int, int]]] = {}
         cc: dict[int, dict[int, int]] = {}
+        prog: dict[int, int] = {}
         for m in tr:
             t += m.time
             if m.type == "track_name" and not name:
@@ -103,6 +107,8 @@ def _parts(mid: mido.MidiFile) -> tuple[list[_Part], int, bool]:
                 bends = True
             elif m.type == "control_change" and m.control in (7, 10):
                 cc.setdefault(m.channel, {}).setdefault(m.control, m.value)
+            elif m.type == "program_change":
+                prog.setdefault(m.channel, m.program)
             elif m.type == "note_on" and m.velocity:
                 held.setdefault((m.channel, m.note), []).append((t, m.velocity))
             elif m.type in ("note_off", "note_on"):
@@ -120,6 +126,7 @@ def _parts(mid: mido.MidiFile) -> tuple[list[_Part], int, bool]:
                 p.name = p.name or name
                 p.vol = cc.get(ch, {}).get(7, 100)
                 p.pan = cc.get(ch, {}).get(10, 64)
+                p.program = prog.get(ch)
     return [p for p in parts.values() if p.notes], tempo or 500000, bends
 
 
@@ -147,7 +154,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
         rep.add("pitch bends ignored (notes play at the nearest key)")
     tpq = mid.ticks_per_beat or PPQ
     for p in parts:
-        p.role = role_of(p.name, p.src)
+        p.role = role_of(p.name, p.src, p.program)
     # percussion joins the drums when there are drums
     if any(p.role == "drums" for p in parts):
         drums = next(p for p in parts if p.role == "drums")
@@ -161,7 +168,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
     parts = parts[:MAX_CH]
 
     scale = lambda t: (t * PPQ + tpq // 2) // tpq                     # noqa: E731
-    chans, end = [], 1
+    chans, end, unknown, fm6 = [], 1, [], 0
     for p in parts:
         drums = p.role == "drums"
         notes, folded = [], 0
@@ -180,7 +187,20 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None) -> tup
         if dropped:
             rep.add(f"{p.role}: {dropped} notes dropped (more than {limits.drum_poly if drums else limits.poly} at once)")
         end = max([end] + [n.tick + n.dur for n in notes])
-        chans.append(Channel(p.role, notes, vol=min(127, p.vol), pan=min(127, p.pan), src=p.src))
+        snd = sounds.sound(p.name, p.program, p.role)
+        if snd is None:
+            unknown.append(f"'{p.name or p.role}'")
+            snd = DEFAULT_SOUND
+        elif snd >= sounds.FM6_FIRST:
+            fm6 += 1
+            if fm6 > sounds.FM6_POOL:
+                alt = sounds.FM6_ALT[snd - sounds.FM6_FIRST]
+                rep.add(f"{p.role}: {sounds.NAMES[snd]} plays as {sounds.NAMES[alt]} "
+                        f"(the FM-1 plays at most {sounds.FM6_POOL} FM6 sounds at once)")
+                snd = alt
+        chans.append(Channel(p.role, notes, sound=snd, vol=min(127, p.vol), pan=min(127, p.pan), src=p.src))
+    if unknown:
+        rep.add(f"role default sound for {', '.join(unknown)} (no known instrument or GM program)")
 
     bar = PPQ * 4
     length = min(MAX_TICKS, -(-end // bar) * bar)

@@ -5,6 +5,7 @@ pub mod desk;
 pub mod f1p;
 pub mod fit;
 pub mod smf;
+pub mod sounds;
 
 use t2m_core::{Brief, Knowledge, repair, validate};
 use t2m_midi::{ExportOptions, SectionSelection, TrackSelection, TuningProfile};

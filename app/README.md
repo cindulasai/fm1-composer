@@ -107,8 +107,10 @@ EDIT shows one channel as a piano roll: 16 grid steps across, the pitches of the
 step lit, notes in amber (a note begun before the page in grey). `*` after the channel's name means unsaved edits.
 
 The player shows each channel's role (LEAD, BASS, DRUMS…), its sound and M / S, with the position as
-bar:beat. There are 40 sounds from six Felucca engines plus COMPOSER's own drum kits. Each role starts with a
-fitting one.
+bar:beat. There are 40 sounds from six Felucca engines plus COMPOSER's own drum kits. A piece starts each channel
+on its instrument's sound: text2midi's instrument (named in the track), else the part's General MIDI program (an
+electric piano plays TINE EP, an upright bass ROUND BASS, a GM drum kit one of the kits; the one table is
+`tools/fm1c/sounds.py`). A part with neither starts on its role's default sound, and fm1c lists it in its report.
 
 Every channel has SLOOP's effects: sends to a shared reverb (SLOOP's feedback delay network), a delay that follows
 the tempo (1/8 note) and a chorus, plus a low-pass FILTER with RESO and DRIVE (SLOOP's DIST). After them, SLOOP's

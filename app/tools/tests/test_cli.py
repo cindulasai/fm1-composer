@@ -22,7 +22,7 @@ def test_3_1_convert_writes_a_piece_and_reports(tmp_path):
     out = tmp_path / "ten.f1p"
     r = fm1c("convert", mid, "-o", out)
     assert r.returncode == 0, r.stderr
-    assert "8 channels" in r.stdout and "2 reductions" in r.stdout
+    assert "8 channels" in r.stdout and "3 reductions" in r.stdout and "role default sound for" in r.stdout   # (22.6)
     assert "fx" in r.stdout and "merged into the drums" in r.stdout
     p = decode(out.read_bytes())
     assert len(p.channels) == 8 and p.name == "ten"
