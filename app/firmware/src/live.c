@@ -301,6 +301,12 @@ static void lk_key(uint32_t root, uint32_t scale)     /* root 0..11, scale 0..15
 }
 static uint32_t lk_scale(void) { return lk.t.p[P_QUANT] ? (uint32_t)lk.t.p[P_SCALE] : LK_CHROMATIC; }
 
+/* US-26: what plays live is also heard by the recorder (below) */
+static void rc_on(uint32_t ch, uint32_t note, uint32_t vel);
+static void rc_off(uint32_t ch, uint32_t note);
+#define LV_ON(ch, note, vel) do { LK_ON(ch, note, vel); rc_on(ch, note, vel); } while (0)
+#define LV_OFF(ch, note) do { LK_OFF(ch, note); rc_off(ch, note); } while (0)
+
 /* a piece opened: its key (carried, else estimated), chords off, the octave 0, no voice leading yet */
 static void lk_open(const piece_view_t *v)
 {
@@ -334,7 +340,7 @@ static void lk_down(uint32_t k, uint32_t ch)
     else { c[0] = (uint8_t)note; n = 1; }
     lk.held[k][0] = (uint8_t)(ch + 1u);
     lk.held[k][1] = (uint8_t)n;
-    for (i = 0; i < n; i++) { lk.held[k][2u + i] = c[i]; LK_ON(ch, c[i], LK_VEL); }
+    for (i = 0; i < n; i++) { lk.held[k][2u + i] = c[i]; LV_ON(ch, c[i], LK_VEL); }
 }
 
 static void lk_up(uint32_t k)
@@ -343,7 +349,7 @@ static void lk_up(uint32_t k)
     lk.down &= ~(1u << k);
     lk.modkeys &= ~(1u << k);
     if (!lk.held[k][0]) return;
-    for (i = 0; i < lk.held[k][1]; i++) LK_OFF(lk.held[k][0] - 1u, lk.held[k][2u + i]);
+    for (i = 0; i < lk.held[k][1]; i++) LV_OFF(lk.held[k][0] - 1u, lk.held[k][2u + i]);
     lk.held[k][0] = 0;
 }
 
@@ -375,12 +381,12 @@ static void lk_midi(uint32_t st, uint32_t d1, uint32_t d2, uint32_t sel, uint32_
     c = midi_sel_get(mch, d1);
     if (c) {                                    /* its note-off; or the same note again without one: ended first */
         midi_sel_set(mch, d1, 0);
-        LK_OFF(c - 1u, d1);
+        LV_OFF(c - 1u, d1);
     }
     if (type == 0x90u && d2) {                  /* (a note-on at velocity 0 is a note-off) */
         c = mch < nch ? mch : sel;
         midi_sel_set(mch, d1, c + 1u);
-        LK_ON(c, d1, d2);
+        LV_ON(c, d1, d2);
     }
 }
 
@@ -394,7 +400,7 @@ static void lk_midi_off(void)
             uint32_t mch = i >> 6, n = (i & 63u) << 1 | (midi_sel_get(i >> 6, (i & 63u) << 1) ? 0u : 1u);
             uint32_t c = midi_sel_get(mch, n);
             midi_sel_set(mch, n, 0);
-            LK_OFF(c - 1u, n);
+            LV_OFF(c - 1u, n);
         }
 }
 
@@ -407,4 +413,262 @@ static void lk_label(char *b, uint32_t max)
     if (s == LK_CHROMATIC) ui_fmt(b, max, "KEYS CHROMATIC%s%s%s", lk.t.p[P_CHORD] ? " " : "", LK_CHORD_NAME[lk.t.p[P_CHORD]], o);
     else ui_fmt(b, max, "KEYS %s %s%s%s%s", LK_ROOT_NAME[lk.t.p[P_ROOT]], LK_SCALE_NAME[s], lk.t.p[P_CHORD] ? " " : "",
                 LK_CHORD_NAME[lk.t.p[P_CHORD]], o);
+}
+
+/* ---- US-26: REC, live play recorded into the selected channel ----
+ * PLAYER: REC, then a bar of clicks (the count-in: playing, the next whole bar; stopped, a bar at the tempo, then it
+ * plays from the start), then each note played live on the channel selected at REC (the keys, or MIDI IN that plays
+ * on it) goes into the piece where it was heard: SLOOP's rec_target takes the key-to-ear latency (REC_LAT) back and
+ * picks the grid step (or, quantize OFF, the step and its nudge: the tick it was heard at). It is written when its key
+ * comes up (its velocity, the length it was held), once the playhead is past it (it must not sound twice). OVERDUB
+ * keeps what is there; REPLACE clears the channel's notes just ahead of the playhead as it goes (each lap replaces the
+ * last one). A full piece (32 KB) or a pass too long to undo stops the pass: what fits is kept, the footer says so.
+ * The pass is one undo (edit.c's pass log; FX in EDIT or STEPS). The edits go through edit.c, held from the player. */
+/* COMPOSER: the shim for SLOOP's rec_target. Its units: a sample adds song.g[G_BPM] (SLOOP: the BPM; here the
+ * tempo x10, so a beat is 60 x 10 x 44100 and a tick RC_TICK); trk_grid: the step playing, how far into it, its length */
+#define MICRO_MIN (-32)                         /* (SLOOP core.h) a step's nudge, in 1/64 of the step */
+#define MICRO_MAX 31
+#define RC_TICK (PL_TICK_UNITS / PIECE_PPQ)     /* 275625 */
+enum { G_BPM };
+typedef struct { uint32_t seq_abs; } rc_track_t;
+static struct { int16_t g[1]; } rc_song;
+static uint32_t rc_grid_at(uint32_t *into, uint32_t *slen);
+#define song rc_song                            /* COMPOSER: fx.c has a song of its own */
+#define track_t rc_track_t
+#define trk_grid(t, into, slen) rc_grid_at(into, slen)
+
+/* ---- SLOOP firmware/src/seq.c @ bac9c05, unchanged (recording) ---- */
+/* key to ear, in samples: the key's debounce (~3 ms) and the audio out buffer (HALF_FRAMES to
+ * 2 x HALF_FRAMES, ~9 ms on average). A note played in time with what the player hears reaches
+ * the sequencer this much later than the sound it was played to: recording takes it back. */
+#define REC_LAT 512u
+
+/* the step a note played now goes into (as heard: REC_LAT earlier): the one playing, or the next one
+ * when it is past the middle of the playing one; *later: it has not played yet (it must not sound twice) */
+static int8_t rec_m;                     /* (2.7) the last rec_target's note off the grid, as a nudge (rec_micro_set) */
+static uint32_t rec_target(const track_t *t, uint32_t *later)
+{
+    uint32_t into, slen, abs = trk_grid(t, &into, &slen), half = slen / 2u, lat = REC_LAT * (uint32_t)song.g[G_BPM];
+    int32_t off = (int32_t)into - (int32_t)lat, m;  /* where it was heard, from the start of the playing step */
+    if (into > half + (lat < half ? lat : half)) {  /* (32 bits: a step is 8 beats at most, 8 x FS x 60 x 64 < 2^31) */
+        abs++;
+        off -= (int32_t)slen;                       /* (before the next one: early) */
+    }
+    if (off < -(int32_t)slen)
+        off = -(int32_t)slen;
+    m = slen ? (off * 64 + (off >= 0 ? (int32_t)(slen / 2u) : -(int32_t)(slen / 2u))) / (int32_t)slen : 0;
+    rec_m = (int8_t)(m < MICRO_MIN ? MICRO_MIN : m > MICRO_MAX ? MICRO_MAX : m);
+    *later = abs != t->seq_abs;
+    return abs;
+}
+/* ---- end of SLOOP's code (recording) ---- */
+#undef song
+#undef track_t
+#undef trk_grid
+
+#define RC_HELD 32u                             /* notes held (or waiting for the playhead) at once */
+#define RC_BAR (4u * PIECE_PPQ)
+#define RC_CLICK 882u                           /* a click: 20 ms */
+#define RC_AMP 9000u
+enum { RC_OFF, RC_COUNT, RC_ON };
+static const uint8_t RC_GRID[5] = {0, 12, 24, 48, 96};
+static const char *const RC_GRID_NAME[5] = {"OFF", "1/32", "1/16", "1/8", "1/4"};
+typedef struct { uint32_t tick, on, dur; uint8_t pitch, vel, open; } rc_note_t;
+static struct {
+    uint32_t mode, ch, quant, replace, start;   /* start: counted in from stopped, the player not seen playing yet */
+    uint32_t pos, acc;                          /* the playhead rec_target sees */
+    uint32_t h, last;                           /* REPLACE: cleared up to tick h; the playhead the last pass */
+    uint32_t n, ops, beat, nheld;               /* notes recorded this pass; edits ever; count-in beats left */
+    const char *msg;                            /* for the footer */
+    char txt[40];
+    rc_note_t held[RC_HELD];
+} rc = {.quant = 2};
+static rc_track_t rc_trk;
+/* the audio interrupt: ticks at the tempo since boot (the count-in's and the lengths' clock), the click */
+static volatile uint32_t rc_clock, rc_go, rc_next, rc_counting;
+static uint32_t rc_acc, rc_ck, rc_ph, rc_hz;
+
+static uint32_t rc_g(void) { return RC_GRID[rc.quant] ? RC_GRID[rc.quant] : PL_STEPT; }   /* (OFF: SLOOP's 1/16 + nudge) */
+
+static uint32_t rc_grid_at(uint32_t *into, uint32_t *slen)
+{
+    uint32_t g = rc_g();
+    *slen = g * RC_TICK;
+    *into = rc.pos % g * RC_TICK + rc.acc / PIECE_PPQ;
+    return rc.pos / g;
+}
+
+/* the tick a note played now goes to */
+static uint32_t rc_where(void)
+{
+    uint32_t later, g = rc_g(), abs;
+    int32_t t;
+    rc.pos = player_pos();
+    rc.acc = pl_acc;
+    rc_song.g[G_BPM] = (int16_t)pl_tempo;
+    rc_trk.seq_abs = rc.pos / g;
+    abs = rec_target(&rc_trk, &later);
+    t = (int32_t)(abs * g);
+    if (!RC_GRID[rc.quant]) t += (rec_m * (int32_t)g + (rec_m < 0 ? -32 : 32)) / 64;   /* the nudge, in ticks */
+    return t < 0 ? 0u : (uint32_t)t % pl_v.len_ticks;   /* (before the top: on it; past the end: the loop's start) */
+}
+
+static void rc_close(rc_note_t *n)
+{
+    uint32_t d = rc_clock - n->on;
+    n->dur = d < 1u ? 1u : d > 65535u ? 65535u : d;
+    n->open = 0;
+}
+
+static void rc_off(uint32_t ch, uint32_t note)
+{
+    uint32_t i;
+    if (ch != rc.ch) return;
+    for (i = 0; i < rc.nheld; i++)
+        if (rc.held[i].open && rc.held[i].pitch == note) { rc_close(&rc.held[i]); return; }
+}
+
+static void rc_on(uint32_t ch, uint32_t note, uint32_t vel)
+{
+    if (rc.mode != RC_ON || ch != rc.ch || !player_playing()) return;
+    rc_off(ch, note);                           /* (the same note again, not let go: that one ends) */
+    if (rc.nheld < RC_HELD) rc.held[rc.nheld++] = (rc_note_t){rc_where(), rc_clock, 0, (uint8_t)note, (uint8_t)vel, 1};
+}
+
+/* the notes let go into the piece (all: every one, now); the first refusal */
+static int rc_flush(uint8_t *b, int all)
+{
+    uint32_t i = 0, g = rc_g(), pos = player_pos(), len = pl_v.len_ticks;
+    int r = ED_OK;
+    while (i < rc.nheld) {
+        rc_note_t *n = &rc.held[i];
+        uint32_t ahead = (n->tick + len - pos) % len;
+        if (all && n->open) rc_close(n);
+        if (n->open || (!all && ahead && ahead <= g)) { i++; continue; }   /* held; or the playhead not there yet */
+        if (r == ED_OK) {
+            player_hold();
+            r = edit_pass_insert(b, rc.ch, n->tick, n->pitch, n->dur, n->vel);
+            player_edited();
+            if (r == ED_OK) { rc.n++; rc.ops++; }
+            else if (r == ED_EXISTS) r = ED_OK; /* (that very note is there already) */
+        }
+        rc.held[i] = rc.held[--rc.nheld];
+    }
+    return r;
+}
+
+/* REPLACE: the channel's notes from h to a step ahead of the playhead go (a jump, a loop: from the playhead) */
+static int rc_erase(uint8_t *b)
+{
+    uint32_t pos = player_pos(), to = pos + rc_g();
+    int r = ED_OK;
+    if (pos < rc.last || pos > rc.last + PIECE_PPQ) rc.h = pos;
+    rc.last = pos;
+    if (to > pl_v.len_ticks) to = pl_v.len_ticks;
+    while (r == ED_OK && rc.h < to) {
+        piece_cur_t c;
+        piece_note_t x;
+        int hit = 0;
+        piece_cursor(&pl_v.ch[rc.ch], &c);
+        while (!hit && piece_next(&c, &x) && x.tick < to) hit = x.tick >= rc.h;
+        if (!hit) break;
+        player_hold();
+        r = edit_pass_delete(b, rc.ch, x.tick, x.pitch);
+        player_edited();
+        if (r == ED_OK) rc.ops++;
+    }
+    if (rc.h < to) rc.h = to;
+    return r;
+}
+
+static void rc_label(void)                      /* "REC 1/16 OVERDUB" */
+{
+    ui_fmt(rc.txt, sizeof rc.txt, "REC %s %s", RC_GRID_NAME[rc.quant], rc.replace ? "REPLACE" : "OVERDUB");
+    rc.msg = rc.txt;
+}
+
+/* the pass ends (r: why, ED_OK when asked): the notes held go in as they are now */
+static void rc_end(uint8_t *b, int r)
+{
+    if (rc.mode == RC_ON && r == ED_OK) r = rc_flush(b, 1);
+    rc_counting = 0;
+    rc.nheld = 0;
+    if (r == ED_FULL) ui_fmt(rc.txt, sizeof rc.txt, "PIECE FULL: %u NOTES KEPT", rc.n);
+    else if (r == ED_PASS) ui_fmt(rc.txt, sizeof rc.txt, "PASS FULL: %u NOTES KEPT", rc.n);
+    else if (r != ED_OK) ui_fmt(rc.txt, sizeof rc.txt, "CANNOT RECORD THERE");
+    else if (rc.mode == RC_COUNT) ui_fmt(rc.txt, sizeof rc.txt, "REC OFF");
+    else ui_fmt(rc.txt, sizeof rc.txt, "REC OFF: %u NOTES", rc.n);
+    rc.msg = rc.txt;
+    rc.mode = RC_OFF;
+}
+
+/* REC: channel ch; the count-in: playing, the next whole bar (this one, at its line); stopped, a bar from now */
+static void rc_arm(uint32_t ch)
+{
+    rc.ch = ch;
+    rc.n = rc.nheld = rc.beat = 0;
+    rc.start = !player_playing();
+    rc_go = rc_clock + (rc.start ? 0u : (RC_BAR - player_pos() % RC_BAR) % RC_BAR) + RC_BAR;
+    rc_next = rc_go - RC_BAR;
+    rc.mode = RC_COUNT;
+    rc_counting = 1;
+    edit_pass_begin();
+}
+
+static uint32_t rc_beats(uint32_t left)        /* the count-in's beats to go: 4 until its bar begins */
+{
+    uint32_t b = (left + PIECE_PPQ - 1u) / PIECE_PPQ;
+    return b > 4u ? 4u : b;
+}
+
+/* the main loop, every pass: the count-in ends (stopped: the player starts), REPLACE clears ahead, notes go in */
+static void rc_poll(uint8_t *b)
+{
+    int r = ED_OK;
+    if (rc.mode == RC_COUNT) {
+        int32_t left = (int32_t)(rc_go - rc_clock);
+        if (left <= 0) {
+            rc_counting = 0;
+            if (rc.start) player_play();
+            rc.mode = RC_ON;
+            rc.h = rc.last = player_pos();
+            if (rc.h % RC_BAR <= 2u) rc.h -= rc.h % RC_BAR;   /* (the bar line the count-in ended on, the clock's tick aside) */
+            ui_fmt(rc.txt, sizeof rc.txt, "RECORDING %s %s", RC_GRID_NAME[rc.quant], rc.replace ? "REPLACE" : "OVERDUB");
+            rc.msg = rc.txt;
+        } else if (rc_beats((uint32_t)left) != rc.beat) {
+            rc.beat = rc_beats((uint32_t)left);
+            ui_fmt(rc.txt, sizeof rc.txt, "REC IN %u", rc.beat);
+            rc.msg = rc.txt;
+        }
+    } else if (rc.mode == RC_ON) {
+        if (player_playing()) {
+            rc.start = 0;
+            if (rc.replace) r = rc_erase(b);
+            if (r == ED_OK) r = rc_flush(b, 0);
+            if (r != ED_OK) rc_end(b, r);
+        } else if (!rc.start) {
+            rc_end(b, ED_OK);                   /* (stopped) */
+        }
+    }
+}
+
+/* the audio interrupt, a block of n frames into out (before the synth adds to it): the clock, the count-in's clicks
+ * (the bar's first one higher) */
+static void rc_audio(int32_t *out, uint32_t n)
+{
+    uint32_t i;
+    rc_acc += pl_tempo * PIECE_PPQ * n;
+    while (rc_acc > PL_TICK_UNITS) { rc_acc -= PL_TICK_UNITS; rc_clock++; }
+    if (rc_counting && (int32_t)(rc_clock - rc_next) >= 0 && (int32_t)(rc_go - rc_next) > 0) {
+        rc_hz = rc_go - rc_next == RC_BAR ? 2000u : 1000u;
+        rc_next += PIECE_PPQ;
+        rc_ck = RC_CLICK;
+        rc_ph = 0;
+    }
+    for (i = 0; i < n && rc_ck; i++, rc_ck--) {
+        int32_t v = (int32_t)(rc_ck * RC_AMP / RC_CLICK);
+        rc_ph = (rc_ph + rc_hz) % 44100u;
+        out[2u * i] += rc_ph < 22050u ? v : -v;
+        out[2u * i + 1u] += rc_ph < 22050u ? v : -v;
+    }
 }

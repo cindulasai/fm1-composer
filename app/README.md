@@ -97,6 +97,9 @@ the page to this computer only (127.0.0.1).
 | | EDIT | opens the selected channel in EDIT |
 | | FX | opens the selected channel's effects |
 | | LFO | opens STEPS, from the playing section's start |
+| | REC | records live play into the selected channel: a bar of clicks first (playing: the next whole bar, or this one from its line; stopped: one bar at the tempo, then it plays from the start), the footer counting `REC IN 4` .. `REC IN 1`, then `RECORDING 1/16 OVERDUB` and a red REC by the playhead. Each note played on that channel (the keys with KEYS on, or MIDI IN that plays on it) goes into the piece where you heard it: SLOOP's latency compensation takes the key-to-ear delay (512 samples) back, then the grid snaps it (or not). It keeps its velocity and the length you held it. REC again, PLAY (stop), or leaving the PLAYER ends the pass (`REC OFF: 4 NOTES`). Recording past the end wraps with the loop. A full piece (32 KB) or a pass of more than 640 changes stops it, keeps what fits and says so (`PIECE FULL: 7 NOTES KEPT`). A pass is one undo (FX in EDIT or STEPS; only the last pass is kept). SAVE keeps it, as an edit |
+| | GLO | REC's mode: OVERDUB (the notes there stay) / REPLACE (the channel's notes are cleared just ahead of the playhead while recording: each lap replaces the last) |
+| | ALGORITHM | REC's grid: OFF (the tick it was heard at), 1/32, 1/16 (the default), 1/8, 1/4 |
 | FX | SELECT | picks the row: REVERB, DELAY, CHORUS, FILTER, RESO, DRIVE |
 | | KNOB1 | sets it (0 to 127; RESO 0 to 10), heard at once |
 | | KNOB2 | the next / previous channel |

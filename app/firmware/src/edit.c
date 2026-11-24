@@ -4,16 +4,26 @@
  * fm1c's encode() makes of the same notes (in a gap, rests of 65535 ticks first; notes in tick, pitch order);
  * after an error the bytes are untouched. Each change is logged in the current group (edit_mark() starts one: a
  * key, a knob turn); edit_undo() takes back the last group, of the last ED_UNDO changes kept. edit_chan() sets a
- * channel's loop length or swing (US-25), logged the same way.
+ * channel's loop length or swing (US-25), logged the same way. A recording pass (US-26, live.c) can be longer than
+ * the history: edit_pass_insert / edit_pass_delete log into a pass log of their own (ED_PASSN changes, then ED_PASS),
+ * and one history entry stands for the whole pass; only the last pass is kept (a new one drops the one before, and
+ * what is older than it, from the history).
  * Edit only while the player is stopped (the bytes move), then player_refresh(). */
 #define ED_UNDO 64u
 #define ED_GAP 65535u
-enum { ED_OK = 0, ED_ARG = 1, ED_FULL = 2, ED_EXISTS = 3, ED_NONE = 4 };
-enum { EO_INS = 1, EO_DEL = 2, EO_SET = 3, EO_CHAN = 4 };   /* EO_CHAN: tick = the record byte, pitch = its value */
+#define ED_PASSN 640u                           /* a recording pass's changes (8 B each) */
+#ifndef POOL
+#define POOL
+#endif
+enum { ED_OK = 0, ED_ARG = 1, ED_FULL = 2, ED_EXISTS = 3, ED_NONE = 4, ED_PASS = 6 };   /* (5: steps.c's) */
+enum { EO_INS = 1, EO_DEL = 2, EO_SET = 3, EO_CHAN = 4, EO_PASS = 5 };   /* EO_CHAN: tick = the record byte, pitch = its value */
 
 typedef struct { uint32_t tick, grp; uint16_t dur; uint8_t op, ch, pitch, vel; } ed_op_t;
 static ed_op_t ed_log[ED_UNDO];
 static uint32_t ed_top, ed_n, ed_grp;           /* a ring: ed_n entries ending at ed_top; the group now */
+typedef struct { uint32_t tick; uint16_t dur; uint8_t pitch, vel; } ed_pn_t;   /* vel 0: inserted, else deleted */
+static ed_pn_t ed_pass[ED_PASSN] POOL;
+static uint32_t ed_pn, ed_pnew;                 /* the pass log's entries; the next pass change starts a pass */
 
 static void ed_w16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
 static void ed_w32(uint8_t *p, uint32_t v) { ed_w16(p, v & 0xFFFFu); ed_w16(p + 2, v >> 16); }
@@ -24,7 +34,7 @@ static void ed_ev(uint8_t *e, uint32_t delta, uint32_t dur, uint32_t pitch, uint
 }
 static void ed_seal(uint8_t *b) { uint32_t n = pc_u32(b + 40); ed_w32(b + n - 4u, piece_crc32(b, n - 4u)); }
 
-static void edit_forget(void) { ed_n = 0; }     /* a new piece: nothing to undo */
+static void edit_forget(void) { ed_n = ed_pn = 0; }   /* a new piece: nothing to undo */
 static void edit_mark(void) { ed_grp++; }       /* what follows is one gesture: undone together */
 static uint32_t edit_undoable(void) { return ed_n; }
 
@@ -166,8 +176,58 @@ static int edit_delete(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch) {
 static int edit_set(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch, uint32_t dur, uint32_t vel) { return ed_set(b, ch, tick, pitch, dur, vel, 1); }
 static int edit_chan(uint8_t *b, uint32_t ch, uint32_t at, uint32_t v) { return ed_chan(b, ch, at, v, 1); }
 
+/* ---- a recording pass: one undo ---- */
+static void edit_pass_begin(void) { ed_pnew = 1; }
+
+static void ed_pass_add(uint32_t ch, uint32_t tick, uint32_t pitch, uint32_t dur, uint32_t vel)
+{
+    uint32_t i;
+    if (ed_pnew) {                              /* the pass's first change: the last pass leaves the history */
+        for (i = 0; i < ed_n; i++)
+            if (ed_log[(ed_top + ED_UNDO - i) % ED_UNDO].op == EO_PASS) { ed_n = i; break; }
+        ed_pnew = ed_pn = 0;
+        edit_mark();
+        ed_push(EO_PASS, ch, tick, 0, 0, 0);
+    }
+    ed_pass[ed_pn].tick = tick; ed_pass[ed_pn].dur = (uint16_t)dur; ed_pass[ed_pn].pitch = (uint8_t)pitch; ed_pass[ed_pn].vel = (uint8_t)vel;
+    ed_pn++;
+}
+
+static int edit_pass_insert(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch, uint32_t dur, uint32_t vel)
+{
+    int r;
+    if (!ed_pnew && ed_pn >= ED_PASSN) return ED_PASS;
+    r = ed_insert(b, ch, tick, pitch, dur, vel, 0);
+    if (r == ED_OK) ed_pass_add(ch, tick, pitch, 0, 0);
+    return r;
+}
+
+static int edit_pass_delete(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch)
+{
+    uint32_t at, dur, vel;
+    if (!ed_pnew && ed_pn >= ED_PASSN) return ED_PASS;
+    if (ch >= b[5] || pitch > 127u || !(at = ed_find(b, ch, tick, pitch))) return ED_NONE;
+    dur = pc_u16(b + at + 2);
+    vel = b[at + 5];
+    ed_delete(b, ch, tick, pitch, 0);
+    ed_pass_add(ch, tick, pitch, dur, vel);
+    return ED_OK;
+}
+
+static int ed_pass_undo(uint8_t *b, uint32_t ch)   /* the pass taken back, last change first */
+{
+    while (ed_pn) {
+        const ed_pn_t *e = &ed_pass[ed_pn - 1u];
+        int r = e->vel ? ed_insert(b, ch, e->tick, e->pitch, e->dur, e->vel, 0) : ed_delete(b, ch, e->tick, e->pitch, 0);
+        if (r) return r;
+        ed_pn--;
+    }
+    return ED_OK;
+}
+
 static int ed_replay(uint8_t *b, const ed_op_t *o)
 {
+    if (o->op == EO_PASS) return ed_pass_undo(b, o->ch);
     if (o->op == EO_DEL) return ed_delete(b, o->ch, o->tick, o->pitch, 0);
     if (o->op == EO_INS) return ed_insert(b, o->ch, o->tick, o->pitch, o->dur, o->vel, 0);
     if (o->op == EO_CHAN) return ed_chan(b, o->ch, o->tick, o->pitch, 0);

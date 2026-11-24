@@ -182,3 +182,5 @@ app/firmware/src/composer.c | ed_octs = ed_octs < -3 ? -3 : ed_octs > 3 ? 3 : ed
 app/tools/fm1c/piece.py | raise PieceError(BAD_VERSION, f"piece version {b[4]}; this fm1c reads versions {VERSION} and {VERSION_SECT}") | the "and" is in the message's words, not code
 app/firmware/src/piece.h | static void piece_sect_name(const piece_view_t *v, uint32_t i, char *out)   /* out: PIECE_SNAME + 1 */ | the + is in the comment
 app/firmware/src/composer.c | while (sq_w - sq_r <= 32u - 2u && midi_get(&st, &d1, &d2)) | < leaves 3 slots free instead of 2: either keeps what one message posts inside the queue; only how soon the next is read differs
+app/firmware/src/live.c | n->dur = d < 1u ? 1u : d > 65535u ? 65535u : d; | equivalent: d == 1 gives 1 either way
+app/firmware/src/composer.c | st_base = s < pl_v.nsect ? piece_sect_start(&pl_v, s) : 0u; | unreachable: player_section() is a section index below nsect or PL_NONE (255), never nsect itself

@@ -7,6 +7,7 @@
  *   STEPS    the 8 channels x 16 steps of a page (a note starts amber, sounds on grey, the playing step blue, the cursor
  *            framed white), then the cursor's step: its notes, length, velocity, the channel's loop and swing */
 #define C_ACC RGB(255, 165, 0)                  /* amber */
+#define C_REC RGB(255, 48, 48)                  /* REC's red */
 #define C_GREY RGB(120, 120, 120)
 #define C_MUTE RGB(70, 70, 70)
 #define LIB_ROWS 9u
@@ -100,6 +101,7 @@ typedef struct {
     const uint8_t *role, *sound;
     const piece_view_t *v;                      /* its sections */
     uint32_t sec, queued, sloop;                /* playing, queued (PL_NONE: none), section loop on */
+    uint32_t rec;                               /* REC: 0 off, 1 counting in, 2 recording */
 } ui_player_t;
 
 /* the sections strip: from the one before the playing one, as many as fit: "N NAME"; LOOP first when it is on */
@@ -141,6 +143,7 @@ static void ui_player(uint32_t dirty, const ui_player_t *p)
             ui_fmt(b, sizeof b, "%u:%u", p->pos / (4u * PIECE_PPQ) + 1u, p->pos / PIECE_PPQ % 4u + 1u);
         }
         ui_text(0, 26, 240, &FONT_L, b, C_WHITE, 1);
+        if (p->rec) ui_text(4, 30, 36, &FONT_S, p->rec == 1u ? "IN" : "REC", C_REC, 0);
     }
     if (dirty & (D_ALL | D_STRIPS)) {
         for (ch = 0; ch < PIECE_MAX_CH; ch++) {

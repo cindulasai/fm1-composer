@@ -2,13 +2,23 @@
 /* US-24: live.c (the live keyboard in the piece's key, auto-chords, MIDI IN) and synth.c's live voices, through their
  * interfaces: SLOOP's scales and chords as copied (24.1, 24.2), 4 of the 16 voices kept for live notes (24.3), and
  * hostile input: every key at once, MIDI's edges, running status, lost note-offs (24.5). The host e2e is
- * tools/tests/test_live.py. */
+ * tools/tests/test_live.py. US-26: REC (live.c's recorder over player.c and edit.c): the count-in and its click,
+ * SLOOP's latency compensation and the grid (26.1), overdub / replace and one undo a pass (26.2), the loop, a full
+ * piece, REC while stopped, 500 notes (26.4); its host e2e (26.3) is tools/tests/test_record.py. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #define VCHK(k) ((k) < NVOICE ? (k) : (abort(), 0u))   /* every voice index in range */
 #include "synth.c"
+static uint32_t pon[NPART][128];                /* US-26: the player's note-ons, per channel and pitch */
+static void p_on(uint32_t ch, uint32_t p, uint32_t v) { pon[ch % NPART][p & 127u]++; synth_on(ch, p, v); }
+#define PL_NOTE_ON p_on
+#define PL_NOTE_OFF synth_off
+#define PL_CH_OFF synth_ch_off
+#define PL_HUSH synth_hush
+#include "player.c"
+#include "edit.c"
 
 static void ui_fmt(char *b, uint32_t max, const char *f, ...)   /* (ui.c's: %s %u %c, as vsnprintf does them) */
 {
@@ -649,6 +659,482 @@ static void test_24_5_all_27_keys_at_once(void)
     CHECK(held_on() == 0, "nothing held");
 }
 
+/* ------------------------------------------------------------------ 26 --- */
+typedef struct { uint32_t tick, dur; uint8_t pitch, vel; } rn_t;
+static uint8_t rb[PIECE_MAX_BYTES], rb0[PIECE_MAX_BYTES], rwant[PIECE_MAX_BYTES];
+static int32_t rout[2 * CTL];
+static char rmsg[64][40];
+static uint32_t nmsg;
+
+static int rn_cmp(const void *x, const void *y)
+{
+    const rn_t *a = x, *b = y;
+    return a->tick != b->tick ? (a->tick < b->tick ? -1 : 1) : (int)a->pitch - (int)b->pitch;
+}
+/* a v1 piece as fm1c's encode() writes it: channel 1 LEAD with a[] (sorted here), channel 2 BASS with c[] */
+static uint32_t rbuild(uint8_t *b, uint32_t tempo, uint32_t len, rn_t *a, uint32_t na, rn_t *c, uint32_t nc)
+{
+    uint32_t off = PIECE_HDR + 2u * PIECE_CHREC, ch, i;
+    memset(b, 0, PIECE_MAX_BYTES);
+    memcpy(b, "F1P1", 4); b[4] = 1; b[5] = 2; put16(b + 8, tempo); put16(b + 10, 96); put32(b + 12, len);
+    memcpy(b + 16, "rec", 3);
+    if (na) qsort(a, na, sizeof *a, rn_cmp);
+    for (ch = 0; ch < 2u; ch++) {
+        uint8_t *r = b + PIECE_HDR + ch * PIECE_CHREC;
+        const rn_t *x = ch ? c : a;
+        uint32_t n = ch ? nc : na, t = 0;
+        r[0] = ch ? ROLE_BASS : ROLE_LEAD; r[1] = 255; r[2] = 100; r[3] = 64;
+        put32(r + 8, n); put32(r + 12, off);
+        for (i = 0; i < n; i++, off += 6) {
+            put16(b + off, x[i].tick - t); put16(b + off + 2, x[i].dur); b[off + 4] = x[i].pitch; b[off + 5] = x[i].vel;
+            t = x[i].tick;
+        }
+    }
+    put32(b + 40, off + 4);
+    put32(b + off, piece_crc32(b, off));
+    return off + 4;
+}
+static uint32_t rlen(const uint8_t *b) { return pc_u32(b + 40); }
+static uint32_t rnotes(const uint8_t *b, uint32_t ch, rn_t *out, uint32_t max)   /* channel ch's notes */
+{
+    piece_view_t v;
+    piece_cur_t c;
+    piece_note_t n;
+    uint32_t k = 0;
+    piece_view(b, &v);
+    piece_cursor(&v.ch[ch], &c);
+    while (piece_next(&c, &n)) { if (k < max) out[k] = (rn_t){n.tick, n.dur, n.pitch, n.vel}; k++; }
+    return k;
+}
+static void rcap(void) { if (rc.msg) { if (nmsg < 64u) { strncpy(rmsg[nmsg], rc.msg, 39); rmsg[nmsg++][39] = 0; } rc.msg = 0; } }
+/* a block of 32 frames (the player, the clock and the click into rout), then a main-loop pass; the footer's lines */
+static void radv(void)
+{
+    memset(rout, 0, sizeof rout);
+    player_tick(CTL);
+    rc_audio(rout, CTL);
+    rc_poll(rb);
+    rcap();
+}
+static void rend(void) { rc_end(rb, ED_OK); rcap(); }   /* REC again */
+static int seen(const char *m) { uint32_t i; for (i = 0; i < nmsg; i++) if (!strcmp(rmsg[i], m)) return 1; return 0; }
+static void rto(uint32_t tick)                  /* until the playhead has just reached tick */
+{
+    uint32_t guard = 3000000;
+    while (player_pos() != tick && guard--) radv();
+    CHECK(player_pos() == tick, "the playhead reaches %u", tick);
+}
+static void rload(void)                         /* rb into the player, stopped; nothing to undo, REC off */
+{
+    uint32_t guard = 1000;
+    player_stop();
+    while (player_playing() && guard--) radv();
+    CHECK(!player_playing() && player_load(rb) == 0, "loads");
+    edit_forget();
+    rc.mode = RC_OFF; rc.quant = 2; rc.replace = 0; rc.nheld = 0;
+    rc_counting = 0;
+    nmsg = 0;
+    memset(pon, 0, sizeof pon);
+}
+static void rrecord(uint32_t ch)                /* REC, through the count-in */
+{
+    uint32_t guard = 100000;
+    rc_arm(ch);
+    while (rc.mode == RC_COUNT && guard--) radv();
+    CHECK(rc.mode == RC_ON, "recording after the count-in");
+}
+static void mon(uint32_t p, uint32_t v) { lk_midi(0x90, p, v, 0, 2); }   /* MIDI ch 1: plays (and records) on channel 1 */
+static void moff(uint32_t p) { lk_midi(0x80, p, 0, 0, 2); }
+
+static void test_26_1_count_in_a_bar_of_clicks_then_recording(void)
+{
+    uint32_t clicks = 0, at[8] = {0}, hz[8] = {0}, nx, guard = 100000, go;
+    int32_t peak = 0, quiet = 0;
+    rbuild(rb, 1200, 8u * 384u, 0, 0, 0, 0);
+    rload();
+    player_play();
+    rto(100);
+    rc_arm(0);
+    CHECK(rc.mode == RC_COUNT && rc_go - rc_clock == 284u + 384u, "playing at 100: the next whole bar (384..768) counts in: %u", rc_go - rc_clock);
+    nx = rc_next;
+    while (rc.mode == RC_COUNT && guard--) {
+        uint32_t i;
+        radv();
+        for (i = 0; i < 2u * CTL; i++) if (rout[i] > peak) peak = rout[i];
+        if (rc_next != nx) { if (clicks < 8u) { at[clicks] = player_pos(); hz[clicks] = rc_hz; } clicks++; nx = rc_next; }
+    }
+    CHECK(clicks == 4u, "4 clicks: %u", clicks);
+    for (go = 0; go < 4u; go++)
+        CHECK(at[go] + 1u >= 384u + 96u * go && at[go] <= 385u + 96u * go && hz[go] == (go ? 1000u : 2000u),
+              "click %u on beat %u of the count-in bar (%u, %u Hz)", go, go + 1u, at[go], hz[go]);
+    CHECK(peak >= 8000, "the click is heard: %d", peak);
+    CHECK(rc.mode == RC_ON && player_pos() + 1u >= 768u && player_pos() <= 769u, "recording from the bar line: %u", player_pos());
+    CHECK(seen("REC IN 4") && seen("REC IN 3") && seen("REC IN 2") && seen("REC IN 1") && seen("RECORDING 1/16 OVERDUB"),
+          "the footer counts in: %s / %s", nmsg ? rmsg[0] : "", nmsg ? rmsg[nmsg - 1u] : "");
+    for (guard = 0; guard < 4000u; guard++) {   /* no click while recording */
+        uint32_t i;
+        radv();
+        for (i = 0; i < 2u * CTL; i++) if (rout[i]) quiet++;
+    }
+    CHECK(!quiet && rc_next == nx, "no click once recording: %d", quiet);
+    rend();
+    CHECK(rc.mode == RC_OFF && seen("REC OFF: 0 NOTES") && edit_undoable() == 0u, "nothing played, nothing recorded");
+    rto(1536);                                  /* REC on a bar line: that bar counts in */
+    rc_arm(0);
+    CHECK(rc_go - rc_clock == 384u, "on the line: one bar: %u", rc_go - rc_clock);
+    radv();
+    rend();
+    CHECK(seen("REC OFF") && rc.mode == RC_OFF && !rc_counting, "REC during the count-in: off");
+}
+
+/* where a note heard now belongs, in rec_target's units (the latency taken back), against where it went */
+static void test_26_1_latency_compensated_tick_quantized_or_not_velocity_length(void)
+{
+    static const uint32_t TEMPO[3] = {600, 1200, 2400};
+    uint32_t ti, q;
+    for (ti = 0; ti < 3u; ti++)
+        for (q = 0; q < 5u; q++) {
+            rn_t got[16];
+            int64_t heard[8];
+            uint32_t on[8], off[8], vel[8], i, n, g = RC_GRID[q] ? RC_GRID[q] : 1u, base;
+            rbuild(rb, TEMPO[ti], 16u * 384u, 0, 0, 0, 0);
+            rload();
+            rc.quant = q;
+            player_play();
+            rto(10);
+            rrecord(0);
+            base = player_pos();
+            for (i = 0; i < 8u; i++) {
+                uint32_t p = base + 40u + i * 131u, k;
+                rto(p);
+                for (k = 0; k < i % 5u; k++) radv();   /* (some way into the tick) */
+                heard[i] = (int64_t)player_pos() * RC_TICK + pl_acc / PIECE_PPQ - (int64_t)REC_LAT * TEMPO[ti];
+                vel[i] = 20u + 13u * i;
+                on[i] = rc_clock;
+                mon(60u + i, vel[i]);
+                rto(p + 5u + 9u * i);
+                off[i] = rc_clock;
+                moff(60u + i);
+                lk_midi(0x91, 70, 100, 0, 2);   /* (MIDI ch 2 plays on channel 2: not recorded) */
+                lk_midi(0x81, 70, 0, 0, 2);
+            }
+            rend();
+            CHECK(piece_check(rb, rlen(rb)) == PE_OK, "a sound piece");
+            n = rnotes(rb, 0, got, 16);
+            CHECK(n == 8u && rnotes(rb, 1, got + 8, 8) == 0u, "8 notes on channel 1, none on 2: tempo %u q %u: %u", TEMPO[ti], q, n);
+            for (i = 0; i < n && i < 8u; i++) {
+                const rn_t *x = 0;
+                uint32_t j;
+                int64_t err;
+                for (j = 0; j < n; j++) if (got[j].pitch == 60u + i) x = &got[j];
+                if (!x) { CHECK(0, "note %u recorded", i); continue; }
+                err = (int64_t)x->tick * RC_TICK - heard[i];
+                CHECK(x->tick % g == 0u, "on the grid %u: %u", g, x->tick);
+                CHECK(err <= (int64_t)(RC_GRID[q] ? g * RC_TICK / 2u + 1u : RC_TICK) && -err <= (int64_t)(RC_GRID[q] ? g * RC_TICK / 2u + 1u : RC_TICK),
+                      "tempo %u q %u note %u: tick %u, heard %.2f", TEMPO[ti], q, i, x->tick, (double)heard[i] / RC_TICK);
+                CHECK(x->vel == vel[i] && x->dur == off[i] - on[i], "velocity %u (%u), held %u ticks (%u)", x->vel, vel[i], x->dur, off[i] - on[i]);
+            }
+        }
+    rbuild(rb, 1200, 16u * 384u, 0, 0, 0, 0); /* quantize OFF at 120: REC_LAT 512 samples = 2.23 ticks earlier */
+    rload();
+    rc.quant = 0;
+    player_play();
+    rrecord(0);
+    rto(1000);
+    mon(64, 99);
+    rto(1010);
+    moff(64);
+    rend();
+    {
+        rn_t x;
+        CHECK(rnotes(rb, 0, &x, 1) == 1u && (x.tick == 998u || x.tick == 997u), "played at 1000, heard at 997.8: %u", x.tick);
+    }
+}
+
+static void test_26_1_keys_record_and_a_note_ahead_never_sounds_twice(void)
+{
+    rn_t x[4];
+    uint32_t n, lap;
+    rbuild(rb, 1200, 4u * 384u, 0, 0, 0, 0);
+    rload();
+    lk_open(&pl_v);                             /* (an empty piece: C major, C4 the root) */
+    player_play();
+    rrecord(0);
+    rto(500);
+    lk_keys(1u << 7, 1u << 7, 0);               /* C4 on the keys */
+    rto(560);
+    lk_keys(0, 0, 0);
+    rto(980);                                   /* 980 = 40 x 24 + 20: past the step's middle (and the latency): 984 */
+    mon(67, 90);
+    rto(982);
+    moff(67);
+    rto(983);
+    n = rnotes(rb, 0, x, 4);
+    CHECK(n == 1u && x[0].pitch == 60u && x[0].vel == LK_VEL && x[0].tick == 504u, "C4 at 504 (the 1/16 grid), velocity 100: %u %u", n, x[0].tick);
+    CHECK(pon[0][67] == 0u, "G4 waits: the player has not reached 984");
+    rto(985);
+    n = rnotes(rb, 0, x, 4);
+    CHECK(n == 2u && x[1].tick == 984u && x[1].pitch == 67u, "past 984, it is in: %u", n);
+    CHECK(pon[0][67] == 0u && pon[0][60] == 0u, "and has not sounded from the piece in this lap");
+    for (lap = 0; lap < 2u; lap++) { rto(0); rto(990); }
+    CHECK(pon[0][67] == 2u && pon[0][60] == 2u, "the next laps play them, once each: %u %u", pon[0][67], pon[0][60]);
+    rend();
+    CHECK(seen("REC OFF: 2 NOTES"), "the footer: %s", nmsg ? rmsg[nmsg - 1u] : "");
+}
+
+static void test_26_2_overdub_keeps_replace_clears_one_pass_one_undo(void)
+{
+    rn_t a[64], c[2] = {{0, 96, 40, 90}, {800, 96, 41, 90}}, got[96], w[96];
+    uint32_t i, n, k, ch, t, endp;
+    for (i = 0; i < 32u; i++) a[i] = (rn_t){i * 96u, 48, 50, 80};
+    rbuild(rb, 1200, 8u * 384u, a, 32, c, 2);
+    memcpy(rb0, rb, sizeof rb);
+    rload();
+    rc.quant = 3;                               /* 1/8 */
+    player_play();
+    rto(100);
+    rrecord(0);
+    for (i = 0; i < 3u; i++) { rto(840u + 96u * i); mon(70u + i, 100); rto(860u + 96u * i); moff(70u + i); }
+    rend();
+    n = rnotes(rb, 0, got, 96);
+    memcpy(w, a, sizeof(rn_t) * 32u);
+    for (i = 0; i < 3u; i++) w[32u + i] = (rn_t){816u + 96u * i, got[0].dur, (uint8_t)(70u + i), 100};
+    for (i = 0; i < n; i++) if (got[i].pitch >= 70u) w[32u + got[i].pitch - 70u].dur = got[i].dur;
+    rbuild(rwant, 1200, 8u * 384u, w, 35, c, 2);
+    CHECK(n == 35u && rlen(rb) == rlen(rwant) && !memcmp(rb, rwant, rlen(rb)), "OVERDUB: the 32 notes kept, 3 at 816 864 912: encode()'s bytes (%u)", n);
+    player_stop();
+    radv(); radv();
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && ch == 0u && !memcmp(rb, rb0, rlen(rb0)) && rlen(rb) == rlen(rb0), "one undo: the pass is gone");
+    CHECK(edit_undo(rb, &ch, &t) == ED_NONE, "and only the pass");
+    player_refresh();
+
+    edit_mark();                                /* REPLACE, after an edit */
+    CHECK(edit_insert(rb, 1, 1500, 45, 24, 70) == ED_OK, "an edit first");
+    memcpy(rwant, rb, sizeof rb);
+    player_refresh();
+    rc.replace = 1;
+    rc.quant = 2;
+    player_play();
+    rto(100);
+    rrecord(0);
+    rto(830);
+    mon(72, 100);
+    rto(850);
+    moff(72);
+    rto(1250);
+    endp = player_pos() + rc_g();
+    rend();
+    CHECK(piece_check(rb, rlen(rb)) == PE_OK, "sound");
+    n = rnotes(rb, 0, got, 96);
+    for (i = k = 0; i < n; i++) {
+        if (got[i].pitch == 72u) { k++; CHECK(got[i].tick == 816u, "the new note at 816: %u", got[i].tick); continue; }
+        CHECK(got[i].tick < 768u || got[i].tick > endp, "REPLACE cleared 768..%u: a note at %u", endp, got[i].tick);
+    }
+    CHECK(k == 1u && n == 1u + 32u - (1248u - 768u) / 96u - 1u, "1 new, the 6 old in the span gone: %u notes", n);
+    CHECK(rnotes(rb, 1, got, 96) == 3u, "the other channel untouched");
+    player_stop();
+    radv(); radv();
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && !memcmp(rb, rwant, rlen(rwant)) && rlen(rb) == rlen(rwant), "one undo: back to before the pass");
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && ch == 1u && !memcmp(rb, rb0, rlen(rb0)), "then the edit before it");
+    player_refresh();
+
+    rc.replace = 0;                             /* a new pass drops the last pass from the history */
+    player_play();
+    rrecord(0);
+    rto(1300); mon(80, 100); rto(1310); moff(80);
+    rend();
+    memcpy(rwant, rb, sizeof rb);
+    rrecord(0);
+    rto(2900); mon(81, 100); rto(2910); moff(81);
+    rto(2950);
+    rend();
+    player_stop();
+    radv(); radv();
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && !memcmp(rb, rwant, rlen(rwant)), "undo: the last pass");
+    CHECK(edit_undo(rb, &ch, &t) == ED_NONE, "the pass before it is not kept");
+    rrecord(0);                                 /* (REC while stopped) a pass that records nothing keeps the last one */
+    radv();
+    rend();
+    CHECK(edit_undoable() == 0u && !memcmp(rb, rwant, rlen(rwant)), "an empty pass: nothing changed");
+}
+
+static void test_26_4_past_the_end_wraps_with_the_loop(void)
+{
+    rn_t got[8];
+    uint32_t n, i, gotw = 0, goth = 0;
+    rbuild(rb, 1200, 2u * 384u, 0, 0, 0, 0);
+    rload();
+    player_play();
+    rrecord(0);
+    rto(700);
+    mon(62, 100);                               /* held over the loop */
+    rto(760);
+    mon(64, 100);                               /* 760: the next step is 768, the end: the loop's 0 */
+    rto(767);
+    moff(64);
+    rto(100);
+    moff(62);
+    rto(300);
+    mon(65, 100);
+    rto(320);
+    moff(65);
+    rto(400);
+    CHECK(rc.mode == RC_ON, "still recording, lap 2");
+    rend();
+    CHECK(piece_check(rb, rlen(rb)) == PE_OK, "sound");
+    n = rnotes(rb, 0, got, 8);
+    for (i = 0; i < n; i++) {
+        if (got[i].pitch == 64u) gotw = got[i].tick == 0u;
+        if (got[i].pitch == 62u) goth = got[i].tick == 696u && got[i].dur >= 160u && got[i].dur <= 170u;
+    }
+    CHECK(n == 3u && gotw && goth, "past the end: at 0; held over the loop: 696, its whole length: %u", n);
+    rc.replace = 1;                             /* REPLACE over the loop: each lap clears what is ahead */
+    rrecord(0);
+    rto(700);
+    rto(300);
+    rend();
+    CHECK(rnotes(rb, 0, got, 8) == 0u, "a lap of REPLACE with nothing played: an empty channel");
+}
+
+static void test_26_4_a_full_piece_stops_keeps_what_fits_says_so(void)
+{
+    static rn_t big[5440], got[16];
+    uint32_t i, n, ch, t;
+    for (i = 0; i < 5440u; i++) big[i] = (rn_t){i, 1, 40, 90};
+    rbuild(rb, 1200, 16u * 384u, 0, 0, big, 5440);
+    CHECK(rlen(rb) == 32724u, "44 bytes left: %u", rlen(rb));
+    memcpy(rb0, rb, sizeof rb);
+    rload();
+    rc.quant = 0;
+    player_play();
+    rrecord(0);
+    for (i = 0; i < 12u && rc.mode == RC_ON; i++) { rto(800u + 40u * i); mon(60u + i, 100); rto(810u + 40u * i); moff(60u + i); }
+    rto(1400);
+    CHECK(rc.mode == RC_OFF && seen("PIECE FULL: 7 NOTES KEPT"), "stopped at the 8th: %s", nmsg ? rmsg[nmsg - 1u] : "");
+    n = rnotes(rb, 0, got, 16);
+    CHECK(n == 7u && piece_check(rb, rlen(rb)) == PE_OK && rlen(rb) == 32766u, "7 kept, sound, 32766 bytes: %u %u", n, rlen(rb));
+    mon(90, 100);
+    rto(1420);
+    moff(90);
+    CHECK(rnotes(rb, 0, got, 16) == 7u, "nothing more once stopped");
+    player_stop();
+    radv(); radv();
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && rlen(rb) == rlen(rb0) && !memcmp(rb, rb0, rlen(rb0)), "the kept part undoes");
+}
+
+static void test_26_4_rec_while_stopped_and_stops(void)
+{
+    rn_t got[4];
+    uint32_t clicks = 0, nx, guard = 100000;
+    rbuild(rb, 1200, 8u * 384u, 0, 0, 0, 0);
+    rload();
+    mon(60, 100);                               /* not recording: nothing */
+    moff(60);
+    rc_arm(0);                                  /* stopped: a bar of clicks at the tempo, then it plays */
+    CHECK(rc.start && rc_go - rc_clock == 384u, "a bar from now");
+    nx = rc_next;
+    while (rc.mode == RC_COUNT && guard--) {
+        CHECK(!player_playing(), "silent during the count-in");
+        radv();
+        if (rc_next != nx) { clicks++; nx = rc_next; }
+        mon(61, 100);                           /* (played during the count-in: heard, not recorded) */
+        moff(61);
+    }
+    CHECK(clicks == 4u && rc.mode == RC_ON, "4 clicks, then recording: %u", clicks);
+    radv();
+    CHECK(player_playing() && player_pos() <= 1u, "playing from the start");
+    rto(200);
+    mon(62, 100);
+    rto(230);                                   /* still held when it stops */
+    player_stop();
+    radv(); radv();
+    CHECK(rc.mode == RC_OFF && seen("REC OFF: 1 NOTES"), "stopping ends the pass: %s", nmsg ? rmsg[nmsg - 1u] : "");
+    CHECK(rnotes(rb, 0, got, 4) == 1u && got[0].pitch == 62u && got[0].tick == 192u && got[0].dur >= 29u && got[0].dur <= 31u,
+          "the note held at the stop: in, its length so far: %u %u", got[0].tick, got[0].dur);
+    moff(62);
+    rc_arm(0);                                  /* REC, REC: nothing */
+    rend();
+    radv();
+    CHECK(!player_playing() && rc.mode == RC_OFF && rnotes(rb, 0, got, 4) == 1u, "REC twice while stopped: off, nothing changed");
+}
+
+static void test_26_4_500_notes_in_a_pass_and_a_pass_too_long(void)
+{
+    static rn_t got[800], w[800];
+    uint32_t i, n, ch, t, ok = 1;
+    rbuild(rb, 3000, 32u * 384u, 0, 0, 0, 0);
+    memcpy(rb0, rb, sizeof rb);
+    rload();
+    rc.quant = 1;                               /* 1/32: 12 ticks */
+    player_play();
+    rrecord(0);
+    t = player_pos() - player_pos() % 12u + 24u;
+    for (i = 0; i < 500u; i++) { rto(t + 12u * i); mon(36u + i % 80u, 1u + i % 127u); rto(t + 12u * i + 6u); moff(36u + i % 80u); }
+    rto(t + 12u * 500u + 20u);
+    rend();
+    n = rnotes(rb, 0, got, 800);
+    for (i = 0; i < n; i++) { w[i] = got[i]; ok &= got[i].dur >= 5u && got[i].dur <= 7u && got[i].tick == t + 12u * i; }
+    rbuild(rwant, 3000, 32u * 384u, w, n, 0, 0);
+    CHECK(n == 500u && ok && piece_check(rb, rlen(rb)) == PE_OK && !memcmp(rb, rwant, rlen(rb)) && seen("REC OFF: 500 NOTES"),
+          "500 notes, encode()'s bytes: %u", n);
+    player_stop();
+    radv(); radv();
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && !memcmp(rb, rb0, rlen(rb0)), "500 notes: one undo");
+    player_refresh();
+    player_play();
+    rrecord(0);                                 /* 700 notes: the pass log holds 640 */
+    t = player_pos() - player_pos() % 12u + 24u;
+    for (i = 0; i < 700u && rc.mode == RC_ON; i++) {
+        uint32_t at = (t + 8u * i) % (32u * 384u);
+        rto(at); mon(36u + i % 90u, 100); rto((at + 4u) % (32u * 384u)); moff(36u + i % 90u);
+    }
+    rto((t + 8u * i + 30u) % (32u * 384u));
+    CHECK(rc.mode == RC_OFF && seen("PASS FULL: 640 NOTES KEPT") && rnotes(rb, 0, got, 800) == 640u, "PASS FULL at 640: %s", nmsg ? rmsg[nmsg - 1u] : "");
+    CHECK(piece_check(rb, rlen(rb)) == PE_OK, "sound");
+    player_stop();
+    radv(); radv();
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && !memcmp(rb, rb0, rlen(rb0)), "and undoes whole");
+}
+
+static void test_26_4_pass_log_full_refuses_inserts_and_deletes(void)
+{
+    rn_t c[1] = {{100, 24, 40, 90}}, got[2];
+    uint32_t i, ch, t;
+    rbuild(rb, 1200, 16u * 384u, 0, 0, c, 1);
+    memcpy(rb0, rb, sizeof rb);
+    edit_forget();
+    edit_pass_begin();
+    for (i = 0; i < ED_PASSN; i++) CHECK(edit_pass_insert(rb, 0, i, 60, 1, 100) == ED_OK, "change %u fits", i);
+    CHECK(edit_pass_insert(rb, 0, 5000, 61, 1, 100) == ED_PASS && edit_pass_delete(rb, 1, 100, 40) == ED_PASS, "the 641st: refused");
+    CHECK(rnotes(rb, 1, got, 2) == 1u && rnotes(rb, 0, got, 2) == ED_PASSN, "nothing changed by it");
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && !memcmp(rb, rb0, rlen(rb0)), "the 640 undo");
+    edit_pass_begin();
+    CHECK(edit_pass_delete(rb, 1, 100, 41) == ED_NONE && edit_pass_delete(rb, 2, 100, 40) == ED_NONE, "no such note, no such channel");
+    CHECK(edit_pass_delete(rb, 1, 100, 40) == ED_OK && rnotes(rb, 1, got, 2) == 0u, "a delete");
+    CHECK(edit_undo(rb, &ch, &t) == ED_OK && ch == 1u && !memcmp(rb, rb0, rlen(rb0)), "undone: the note back as it was");
+}
+
+static void test_26_4_held_notes_lost_note_offs_and_more_than_32_at_once(void)
+{
+    rn_t got[64];
+    uint32_t i;
+    nev = 0;
+    rbuild(rb, 1200, 8u * 384u, 0, 0, 0, 0);
+    rload();
+    rc.quant = 0;
+    player_play();
+    rrecord(0);
+    rto(900);
+    for (i = 0; i < 40u; i++) mon(40u + i, 100);   /* 40 at once: 32 are held for the recording */
+    mon(40, 100);                               /* (the same note again: the first ends) */
+    rto(950);
+    lk_midi_off();                              /* a lost note-off: every MIDI note ends */
+    rto(1000);
+    rend();
+    CHECK(rnotes(rb, 0, got, 64) == 32u && piece_check(rb, rlen(rb)) == PE_OK && held_on() == 0u, "32 kept, sound, none stuck: %u",
+          rnotes(rb, 0, got, 64));
+}
+
 int main(void)
 {
     test_24_1_carried_key_white_keys_walk_the_scale();
@@ -666,6 +1152,16 @@ int main(void)
     test_24_5_midi_in_routing_edges_running_status();
     test_24_5_lost_and_never_sent_note_offs();
     test_24_5_all_27_keys_at_once();
+    test_26_1_count_in_a_bar_of_clicks_then_recording();
+    test_26_1_latency_compensated_tick_quantized_or_not_velocity_length();
+    test_26_1_keys_record_and_a_note_ahead_never_sounds_twice();
+    test_26_2_overdub_keeps_replace_clears_one_pass_one_undo();
+    test_26_4_past_the_end_wraps_with_the_loop();
+    test_26_4_a_full_piece_stops_keeps_what_fits_says_so();
+    test_26_4_rec_while_stopped_and_stops();
+    test_26_4_500_notes_in_a_pass_and_a_pass_too_long();
+    test_26_4_held_notes_lost_note_offs_and_more_than_32_at_once();
+    test_26_4_pass_log_full_refuses_inserts_and_deletes();
     printf("%s: %d failure(s)\n", fails ? "FAIL" : "ok", fails);
     return fails != 0;
 }

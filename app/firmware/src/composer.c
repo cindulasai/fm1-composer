@@ -14,7 +14,9 @@
  * plays on any screen but LIBRARY, as sent.
  * STEPS (US-25, steps.c): LFO opens it from PLAYER: the 8 channels x 16 steps from the playing section's start (4
  * pages, 64 steps); SELECT moves, KNOB1 the channel, a note key adds / removes that note in the step, KNOB2 / KNOB3
- * length (steps) / velocity, KNOB4 the channel's loop length, ALGORITHM its swing; edits also while playing. */
+ * length (steps) / velocity, KNOB4 the channel's loop length, ALGORITHM its swing; edits also while playing.
+ * REC (US-26, live.c): from PLAYER, a bar of clicks, then what is played live on the selected channel goes into it
+ * (GLO: OVERDUB / REPLACE, ALGORITHM: the quantize grid); REC again, PLAY or leaving the PLAYER ends the pass. */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
 #include <stdint.h>
@@ -66,6 +68,7 @@ static uint32_t fxrow;
 static uint32_t sloop, spage;                   /* PLAYER: section loop on; the sections the keys launch (14 a page) */
 static char snext[24];                          /* "NEXT VERSE1" */
 static uint32_t st_step, st_base, st_len = 1, st_vel = 100, st_play;   /* STEPS: cursor, start tick, next note; playhead */
+static uint32_t rc_seen, rc_shown;              /* REC: the recorder's edits taken in; its state on screen */
 #define SECT_KEY0 13u                           /* F#4: the first key above the mute keys */
 #define SECT_KEYS 14u
 static const char *status = "";
@@ -77,6 +80,7 @@ static void app_audio(int32_t *out, uint32_t n)
     for (i = 0; i + CTL <= n; i += CTL) {
         synth_apply();
         player_tick(CTL);
+        rc_audio(out + 2u * i, CTL);            /* (the count-in's click) */
         synth_render(out + 2u * i, CTL);
     }
 }
@@ -233,12 +237,27 @@ static void play_save(uint32_t pressed)         /* PLAY, SAVE: as in PLAYER */
     }
 }
 
+/* REC: what the recorder did shows (the piece edited, the footer, the REC mark) */
+static void rc_sync(void)
+{
+    if (rc.ops != rc_seen) { rc_seen = rc.ops; edited = 1; discard = 0; }
+    if (rc.msg) { set_status(rc.msg); rc.msg = 0; }
+    if (rc.mode != rc_shown) { rc_shown = rc.mode; dirty |= D_POS; }
+}
+
 static const uint8_t WHITE_KEY[8] = {0, 2, 4, 6, 7, 9, 11, 12};   /* F3 G3 A3 B3 C4 D4 E4 F4: fm1_in.notes bits */
 
 static void player_input(uint32_t pressed, uint32_t keys)
 {
     int32_t d;
     uint32_t k;
+    if (rc.mode && (pressed & (1u << BTN_PLAY | 1u << BTN_REC))) {   /* the pass (or its count-in) ends */
+        rc_end(play_buf, ED_OK);
+        pressed &= ~(1u << BTN_REC);
+    }
+    if (pressed & 1u << BTN_REC) rc_arm(sel);
+    if (pressed & 1u << BTN_GLO) { rc.replace ^= 1u; rc_label(); }
+    if ((d = fm1_enc_take(ENC_ALGORITHM))) { rc.quant = (uint32_t)clamp((int32_t)rc.quant + d, 0, 4); rc_label(); }
     if (pressed & 1u << BTN_PLAY) {
         if (player_playing()) { player_stop(); set_status("STOPPED"); }
         else { player_play(); set_status("PLAYING"); }
@@ -580,6 +599,9 @@ static void app_main(void)
         pressed = fm1_input_edges(&rel);
         keys = fm1_input_note_edges() | (fm1_in.notes & ~held);   /* (also a press shorter than a pass) */
         held = fm1_in.notes;
+        if (scr == 1u && rc.mode && (pressed & (1u << BTN_HOME | 1u << BTN_EDIT | 1u << BTN_LFO | 1u << BTN_FX)))
+            rc_end(play_buf, ED_OK);            /* leaving the PLAYER ends a pass, before HOME asks about edits */
+        rc_sync();
         if (scr == 0) {
             fm1_enc_take(ENC_KNOB1); fm1_enc_take(ENC_PRESETS); fm1_enc_take(ENC_KNOB2); fm1_enc_take(ENC_KNOB3);
             library_input(pressed);
@@ -607,6 +629,8 @@ static void app_main(void)
                 player_input(pressed, keys);
             }
         }
+        rc_poll(play_buf);
+        rc_sync();
         if (was_playing && !playing) {
             if (save_pending) { save_pending = 0; save_all(); }
             else if (scr) set_status("STOPPED");
@@ -647,7 +671,7 @@ static void app_main(void)
                 ui_fx(dirty, &f);
             } else {
                 ui_player_t p = {title, status, pl_v.nch, sel, mute, solo, tempo_x10, player_pos(), role, snd,
-                                 &pl_v, player_section(), player_queued(), sloop};
+                                 &pl_v, player_section(), player_queued(), sloop, rc.mode};
                 ui_player(dirty, &p);
             }
             idle_ok = 0;
