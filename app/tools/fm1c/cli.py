@@ -108,31 +108,46 @@ COMPOSER_ENTRY = {"id": "composer", "name": "COMPOSER", "version": "", "author":
                   "repo": "https://github.com/cindulasai/fm1-composer", "package": "../firmware/composer.fwsc"}
 
 
+def _fwsc() -> str:
+    """the firmware CI built (or $FM1C_FWSC)"""
+    return os.environ.get("FM1C_FWSC") or os.path.join(os.path.dirname(STUDIO), "build", "composer.fwsc")
+
+
+def _cabled(page: str) -> str:
+    """fm1-emu's own page with Studio's MIDI cable: one script before its own"""
+    at = page.index("<script")
+    return page[:at] + STUDIO_CABLE + page[at:]
+
+
+def _composer_first(catalog: dict) -> str:
+    """fm1-emu's firmware list with COMPOSER first and the default"""
+    catalog["firmwares"] = [COMPOSER_ENTRY] + [x for x in catalog["firmwares"] if x.get("id") != "composer"]
+    catalog["default"] = "composer"
+    return json.dumps(catalog)
+
+
+def _read(path: str) -> str:
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
 class _StudioHandler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".wasm": "application/wasm",
                       ".js": "text/javascript", ".mjs": "text/javascript"}
 
     def translate_path(self, path):
-        if path.split("?", 1)[0] == "/firmware/composer.fwsc":   # the firmware CI built (or $FM1C_FWSC)
-            return os.environ.get("FM1C_FWSC") or os.path.join(os.path.dirname(STUDIO), "build", "composer.fwsc")
+        if path.split("?", 1)[0] == "/firmware/composer.fwsc":
+            return _fwsc()
         return super().translate_path(path)
 
     def do_GET(self):
-        """fm1-emu's own page with Studio's MIDI cable (one script before its own), and fm1-emu's firmware list with
-        COMPOSER first; every other file as it is."""
+        """fm1-emu's page with the cable and its firmware list with COMPOSER first; every other file as it is"""
         path = self.path.split("?", 1)[0]
         emu = os.path.join(self.directory, "emu")
         if path in ("/emu/", "/emu/index.html") and os.path.isfile(os.path.join(emu, "index.html")):
-            with open(os.path.join(emu, "index.html"), encoding="utf-8") as f:
-                page = f.read()
-            at = page.index("<script")
-            return self._send(page[:at] + STUDIO_CABLE + page[at:], "text/html; charset=utf-8")
+            return self._send(_cabled(_read(os.path.join(emu, "index.html"))), "text/html; charset=utf-8")
         if path == "/emu/firmwares.json" and os.path.isfile(os.path.join(emu, "firmwares.json")):
-            with open(os.path.join(emu, "firmwares.json"), encoding="utf-8") as f:
-                catalog = json.load(f)
-            catalog["firmwares"] = [COMPOSER_ENTRY] + [x for x in catalog["firmwares"] if x.get("id") != "composer"]
-            catalog["default"] = "composer"
-            return self._send(json.dumps(catalog), "application/json")
+            return self._send(_composer_first(json.loads(_read(os.path.join(emu, "firmwares.json")))), "application/json")
         return super().do_GET()
 
     def _send(self, text, ctype):
@@ -151,11 +166,70 @@ class _StudioHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def _built(web: str) -> bool:
+    return os.path.isfile(os.path.join(web, "engine", "studio.js")) and os.path.isfile(os.path.join(web, "t2m", "index.html"))
+
+
+def _export(out: str, force: bool) -> int:
+    """Studio as static files: what `fm1c studio` serves, its rewrites baked in; never local/ (the AI key) or dotfiles"""
+    web = os.path.realpath(os.environ.get("FM1C_STUDIO_WEB") or os.path.join(STUDIO, "web"))   # (tests: a copy)
+    emu = os.path.join(web, "emu")
+    if not _built(web):
+        raise UsageError(f"COMPOSER Studio is not built in {web}: run sh app/studio/build.sh (needs Rust and npm)")
+    if not (os.path.isfile(os.path.join(emu, "index.html")) and os.path.isfile(os.path.join(emu, "firmwares.json"))):
+        raise UsageError(f"fm1-emu's page is not in {emu}: run sh app/tools/get_web_emu.sh")
+    fwsc = _fwsc()
+    if not os.path.isfile(fwsc):
+        raise UsageError(f"no COMPOSER firmware at {fwsc}: put CI's composer-fwsc artifact there (or set FM1C_FWSC)")
+    if os.path.exists(out) and not os.path.isdir(out):
+        raise UsageError(f"{out}: is a file, not a folder")
+    real = os.path.realpath(out)
+    if real == web or web.startswith(real + os.sep) or real.startswith(web + os.sep):
+        raise UsageError(f"{out}: is Studio's own folder (or holds it); export somewhere else")
+    if os.path.isdir(out):
+        if not os.access(out, os.W_OK | os.X_OK):
+            raise UsageError(f"{out}: cannot write there")
+        if os.listdir(out):
+            if not force:
+                raise UsageError(f"{out} is not empty (--force replaces it)")
+            for name in os.listdir(out):
+                p = os.path.join(out, name)
+                if os.path.isdir(p) and not os.path.islink(p):
+                    shutil.rmtree(p)
+                else:
+                    os.unlink(p)
+    os.makedirs(out, exist_ok=True)
+    secret, n = os.path.join(web, "local"), 0
+    for d, dirs, files in os.walk(web):
+        dirs[:] = sorted(x for x in dirs if not x.startswith(".") and os.path.join(d, x) != secret)
+        rel = os.path.relpath(d, web)
+        os.makedirs(os.path.join(out, rel), exist_ok=True)
+        for name in sorted(files):
+            src, dst = os.path.join(d, name), os.path.normpath(os.path.join(out, rel, name))
+            if name.startswith(".") or os.path.realpath(src).startswith(secret + os.sep):   # (no link to the key)
+                continue
+            if src == os.path.join(emu, "index.html"):
+                _write(dst, _cabled(_read(src)).encode("utf-8"), True)
+            elif src == os.path.join(emu, "firmwares.json"):
+                _write(dst, _composer_first(json.loads(_read(src))).encode("utf-8"), True)
+            else:
+                shutil.copyfile(src, dst)
+            n += 1
+    os.makedirs(os.path.join(out, "firmware"), exist_ok=True)
+    shutil.copyfile(fwsc, os.path.join(out, "firmware", "composer.fwsc"))
+    print(f"COMPOSER Studio exported to {out}: {n + 1} files; any static web server can serve it")
+    return 0
+
+
 def cmd_studio(a) -> int:
+    if a.export is not None:
+        return _export(a.export, a.force)
+    if a.force:
+        raise UsageError("--force goes with --export DIR")
     if not 0 <= a.port <= 65535:
         raise UsageError(f"--port must be 0 to 65535, not {a.port}")
     web = os.path.join(STUDIO, "web")
-    if not (os.path.isfile(os.path.join(web, "engine", "studio.js")) and os.path.isfile(os.path.join(web, "t2m", "index.html"))):
+    if not _built(web):
         print("building COMPOSER Studio (once; needs Rust and npm) ...", flush=True)
         if subprocess.run(["sh", os.path.join(STUDIO, "build.sh")]).returncode != 0:
             raise UsageError("COMPOSER Studio's engine could not be built (see above)")
@@ -320,6 +394,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("studio", help="COMPOSER Studio in your browser: an idea in plain English -> a piece")
     s.add_argument("--port", type=int, default=8714, help="the port on 127.0.0.1 (default 8714; 0 = any free one)")
     s.add_argument("--no-open", action="store_true", help="print the address; do not open a browser")
+    s.add_argument("--export", metavar="DIR", help="instead, write Studio as static files into DIR (with the firmware, "
+                   "app/build/composer.fwsc or $FM1C_FWSC) for any web server; never your AI key")
+    s.add_argument("--force", action="store_true", help="with --export: replace what DIR holds")
     s.set_defaults(fn=cmd_studio)
     return p
 

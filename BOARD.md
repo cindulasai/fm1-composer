@@ -27,7 +27,7 @@
 | US-24 | Live keyboard in key, auto-chords, MIDI IN | 1 | done | 1 |
 | US-25 | Step sequencer on 8 tracks | 1 | done | 0 |
 | US-26 | Record live play into a part | 1 | done | 0 |
-| US-27 | Studio as a static site | 1 | todo | 0 |
+| US-27 | Studio as a static site | 1 | proven | 0 |
 | US-28 | Pages from CI, deploy only when public | 1 | todo | 0 |
 
 ## Impediments

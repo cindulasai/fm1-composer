@@ -185,3 +185,4 @@ app/firmware/src/composer.c | while (sq_w - sq_r <= 32u - 2u && midi_get(&st, &d
 app/firmware/src/live.c | n->dur = d < 1u ? 1u : d > 65535u ? 65535u : d; | equivalent: d == 1 gives 1 either way
 app/firmware/src/composer.c | st_base = s < pl_v.nsect ? piece_sect_start(&pl_v, s) : 0u; | unreachable: player_section() is a section index below nsect or PL_NONE (255), never nsect itself
 app/firmware/src/live.c | static uint8_t midi_sel_on[16][64];                   /* per channel and note, a nibble: track + 1, 0 = none (sloop-lab: | the operator is inside the comment: code unchanged
+app/tools/fm1c/cli.py | "app/build/composer.fwsc or $FM1C_FWSC) for any web server; never your AI key") | the operator is inside the --help text: code unchanged
