@@ -44,8 +44,8 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F24 | Live keyboard: the keys play the selected channel's sound over the piece, locked to its key and scale (SLOOP's 16), with voice-led auto-chords; MIDI IN plays as sent, by MIDI channel to channels 1-8; 4 of the 16 voices kept for live play | v6 | shipped |
 | F25 | Step sequencer on all 8 tracks: a track's notes as a step grid (16 a page, up to 64 steps), per-step velocity / length, chords of up to 4, ties, swing, a loop length per track (polymeter); it edits the piece itself | v6 | shipped |
 | F26 | Record live play into a part: what you play (keys or MIDI IN) is written into the selected channel at the grid, overdub or replace, undoable | v6 | shipped |
-| F27 | Studio as a static site: `fm1c studio --export DIR` writes the whole Studio (both windows, the cable, COMPOSER first, the firmware) for any static host, never a key file; the key panel says where the key really is (this browser) | v7 | planned |
-| F28 | Pages from CI: the firmware workflow exports Studio after a green gate, tests the export in a browser, and deploys it to GitHub Pages only when the repo is public (private: deploy skipped, run green) | v7 | planned |
+| F27 | Studio as a static site: `fm1c studio --export DIR` writes the whole Studio (both windows, the cable, COMPOSER first, the firmware) for any static host, never a key file; the key panel says where the key really is (this browser) | v7 | shipped |
+| F28 | Pages from CI: the firmware workflow exports Studio after a green gate, tests the export in a browser, and deploys it to GitHub Pages only when the repo is public (private: deploy skipped, run green) | v7 | shipped |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -127,6 +127,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 ## Backlog
 - Sampled instruments (piano, strings, choir) in the ~430 KB of free code flash (decision 36), if a sound test shows the synthesized ones fall short
 - From the SLOOP reconciliation (research/sloop-reconcile.md §4): MONO / LEGATO voices with glide and SLIDE; transpose, shift and ×2 / ½ for a channel; the other gaps it ranks
+- CI flake 17.2 (Studio Send, test_studio_emu): seen twice on CI runners, never locally; run 45385533188: "the FM-1 did not save", emulator 1.8x real time, load 56% — find why the save is missed, then fix
 - Recording: leaving PLAYER mid-pass keeps the notes but shows no "REC OFF: N NOTES" (v6 Adversary, minor; composer.c)
 - After v6 (decision 37): send from Studio while playing (swap at the next bar), energy + swing macros, setlists chaining pieces, takes switched live
 - Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
@@ -148,4 +149,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v4 — Studio = text2midi's UI + fm1-emu's page, reused unchanged, MIDI cable between (US-16–US-17)
 - v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22) — verified
 - v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
-- v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28)
+- v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
