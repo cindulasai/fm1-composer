@@ -272,3 +272,37 @@ def test_24_6_strict_timing_densest_piece_and_4_live_notes(tmp_path):
     m = _re.search(r"usb audio: .*\((\d+) empty, (\d+) of them underruns\)", report)
     assert m and m[1] == "0" and m[2] == "0", report[-800:]
     assert erms(s, len(s) // 2 - 5 * 44100) > 300, "the densest piece and the live notes, heard"
+
+
+# ---- 24.4 through the jack's parser: raw bytes into fm1-emu's DIN jack (midi_uart.c um_byte, the ISR poll) ----
+@pytest.mark.skipif(os.environ.get("FM1_EMU_RUN") != "1", reason="run by tests/emu_e2e.sh (test_emu.py)")
+def test_24_4_midi_in_raw_bytes_through_the_jack_parser_in_the_emulator(tmp_path):
+    """the real firmware in fm1-emu: a piece open and stopped, then raw MIDI bytes into the DIN jack: a note-on, a
+    second note in running status (data bytes only: only the parser makes it a note), then both released as note-on
+    velocity 0 (the second again in running status): silent before, heard while held, silent after (none stuck)"""
+    from test_emu import emu, replies, rms as erms, usb_script
+    quiet = encode(Piece("jack", 1200, 384, [Channel("lead", [Note(0, 60, 1, 1)])]))
+    usb, t = usb_script([quiet], gap=60)
+    keys = [f"{t + 200}:PLAY", f"{t + 250}:PLAY^", f"{t + 600}:PLAY", f"{t + 650}:PLAY^"]    # open (plays), stop
+    keys += [f"{t + 1500}:m903C64", f"{t + 1550}:m4364"]                                     # C4, then G4 in running status
+    keys += [f"{t + 2500}:m903C00", f"{t + 2550}:m4300"]                                     # released: note-on velocity 0
+    end = t + 4500
+    report, _, s = emu(tmp_path, end, usb=usb, keys=",".join(keys), wav=True)
+    assert replies(report)[-1] == 0x45, "the piece saved"
+    fr = lambda ms: len(s) // 2 - int((end - ms) * 44.1)                                     # (the recording ends at `end`)
+    before, held, after = erms(s, fr(t + 1000), fr(t + 1450)), erms(s, fr(t + 1800), fr(t + 2400)), erms(s, fr(t + 3800), fr(t + 4400))
+    assert held > 300 and held > 20 * max(before, 1), (before, held, after)                  # the jack's notes, heard
+    assert after < held / 20, (before, held, after)                                          # released: none stuck
+
+
+def test_24_1_oct_keys_in_steps_move_the_entered_note_by_octaves(tmp_path):
+    """STEPS (composer.c's ed_octs, shared with KEYS' octave): OCT- then C4's key enters C3 at step 1; OCT+ twice
+    (net +1) then C4's key enters C5 at step 2: OCT- goes down, OCT+ up"""
+    from test_steps import BTN as SB, ENC as SE, blank, keys as skeys, steps_run
+    steps = [(50, "btn 0"), *skeys(100, 7),                                    # OCT-, then the C4 key: C3
+             (200, "btn 1"), (250, "btn 1"), (300, f"enc {SE['SELECT']} 1"), *skeys(350, 7)]   # +2: C5 at step 2
+    (log, _), t0 = steps_run(tmp_path, blank(), steps, 600, "stoct")
+    from test_ui import at as uat
+    assert (166, "STEP 1  C3") in uat(log, t0 + 100, t0 + 190), uat(log, t0 + 100, t0 + 190)
+    assert (166, "STEP 2  C5") in uat(log, t0 + 350, t0 + 590), uat(log, t0 + 350, t0 + 590)
+    assert SB and SE                                                           # (the same screen's maps)
