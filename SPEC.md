@@ -44,6 +44,8 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F24 | Live keyboard: the keys play the selected channel's sound over the piece, locked to its key and scale (SLOOP's 16), with voice-led auto-chords; MIDI IN plays as sent, by MIDI channel to channels 1-8; 4 of the 16 voices kept for live play | v6 | shipped |
 | F25 | Step sequencer on all 8 tracks: a track's notes as a step grid (16 a page, up to 64 steps), per-step velocity / length, chords of up to 4, ties, swing, a loop length per track (polymeter); it edits the piece itself | v6 | shipped |
 | F26 | Record live play into a part: what you play (keys or MIDI IN) is written into the selected channel at the grid, overdub or replace, undoable | v6 | shipped |
+| F27 | Studio as a static site: `fm1c studio --export DIR` writes the whole Studio (both windows, the cable, COMPOSER first, the firmware) for any static host, never a key file; the key panel says where the key really is (this browser) | v7 | planned |
+| F28 | Pages from CI: the firmware workflow exports Studio after a green gate, tests the export in a browser, and deploys it to GitHub Pages only when the repo is public (private: deploy skipped, run green) | v7 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -56,7 +58,7 @@ synth (`app/firmware/src/synth.c`) — interface: `synth_sound(ch,id)`, `synth_o
 player (`app/firmware/src/player.c`) — interface: `player_load(view)`, `player_play/stop()`, `player_tempo(x10)`, `player_mute/solo(ch,on)`, `player_tick(nframes)` (audio ISR, per 32 frames), `player_pos()` — hides: event cursors, note-off queue, loop wrap, stuck-note safety.
 edit (`app/firmware/src/edit.c`) — interface: `edit_insert(b,ch,tick,pitch,dur,vel)`, `edit_delete(b,ch,tick,pitch)`, `edit_set(b,ch,tick,pitch,dur,vel)` → ED_OK|ED_ARG|ED_FULL|ED_EXISTS|ED_NONE; `edit_undo(b)` — hides: event shifting, delta/rest re-encoding, channel offsets, length, CRC, undo log (64 ops).
 studio engine (`app/studio/engine`, Rust → WASM) — interface: `prompt() -> system text`, `brief_from_reply(text) -> brief JSON | error`, `make(brief_json, seed) -> {midi, f1p, report[], channels, notes}` — hides: text2midi's crates (copied from text2midi_v2 @9540490, see PROVENANCE.md), SMF read, fit, encode.
-studio page (`app/studio/web`) — interface: index.html = two frames (t2m/ = text2midi's window, emu/ = fm1-emu's page) + Send to FM-1; cable.js = Web MIDI input "COMPOSER Studio" in fm1-emu's page; fm1link.js = transfer SysEx + library reader — hides: pacing (2.5 B/ms), read-back from fm1-emu's IndexedDB
+studio page (`app/studio/web`) — interface: index.html = two frames (t2m/ = text2midi's window, emu/ = fm1-emu's page) + Send to FM-1; cable.js = Web MIDI input "COMPOSER Studio" in fm1-emu's page; fm1link.js = transfer SysEx + library reader — hides: pacing (2.5 B/ms), read-back from fm1-emu's IndexedDB; `fm1c studio --export DIR [--force]` = the same site as static files
 studio desk (`studio/src/desk.rs` + `t2m-ui/studio/*.js`) — interface: text2midi's Tauri commands (invoke name + args JSON → result JSON) — hides: t2m-session + t2m-audio state, browser AI (text2midi's providers), projects in localStorage
 ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRARY, PLAYER, EDIT, drawn where dirty; prefs in blob 0 keyed by piece id (200, least recently saved replaced).
 
@@ -116,6 +118,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 40 | v6 assumptions: emulator only; SLOOP's sequencer / scale / chord code reused where it fits, with provenance; 4 of 16 voices reserved while playing live; v4/v5 pieces play unchanged | user | yes |
 | 41 | v6 reconciled with SLOOP (craft-anything, `research/sloop-reconcile.md`): SLOOP's 16 scales, chord modifiers and voice leading copied for the live keyboard; MIDI IN plays as sent (no scale lock), routed by MIDI channel to channels 1-8; recording latency-compensated with a count-in; the lost-note-off fix (midi_in_lost) added | council | no |
 | 42 | After v6 ships: fm1-composer goes public (the firmware carries SLOOP's GPL-3.0 code, so a public demo needs public source) and COMPOSER Studio is published on GitHub Pages like fm1-emu's page (free for public repos): a Pages workflow builds, tests and deploys it; README gets a "Try it" link; visitors use their own AI key. First, the full git history is scanned for secrets. Until then the repo stays private | user | yes |
+| 43 | v7 = decision 42's build, made ready while the repo stays private: static export (the server's 3 rewrites baked in), browser wording via Studio's own Vite config (text2midi's files stay unchanged), Pages job in firmware.yml after the gate (one build), deploy guarded by repo visibility; going public itself waits for the user's go | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -145,3 +148,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v4 — Studio = text2midi's UI + fm1-emu's page, reused unchanged, MIDI cable between (US-16–US-17)
 - v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22) — verified
 - v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
+- v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28)
