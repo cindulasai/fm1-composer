@@ -119,6 +119,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 41 | v6 reconciled with SLOOP (craft-anything, `research/sloop-reconcile.md`): SLOOP's 16 scales, chord modifiers and voice leading copied for the live keyboard; MIDI IN plays as sent (no scale lock), routed by MIDI channel to channels 1-8; recording latency-compensated with a count-in; the lost-note-off fix (midi_in_lost) added | council | no |
 | 42 | After v6 ships: fm1-composer goes public (the firmware carries SLOOP's GPL-3.0 code, so a public demo needs public source) and COMPOSER Studio is published on GitHub Pages like fm1-emu's page (free for public repos): a Pages workflow builds, tests and deploys it; README gets a "Try it" link; visitors use their own AI key. First, the full git history is scanned for secrets. Until then the repo stays private | user | yes |
 | 43 | v7 = decision 42's build, made ready while the repo stays private: static export (the server's 3 rewrites baked in), browser wording via Studio's own Vite config (text2midi's files stay unchanged), Pages job in firmware.yml after the gate (one build), deploy guarded by repo visibility; going public itself waits for the user's go | council |
+| 44 | CI flake 17.2's cause: fm1-emu drops MIDI past ~1 s of jack backlog; a stalled emulator (busy runner) took Studio's wall-clock-paced bytes and dropped them. Send now waits on fm1-emu's emulated time (its status line) to stay ≤ ~0.4 s ahead; fm1-emu unchanged | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -127,7 +128,6 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 ## Backlog
 - Sampled instruments (piano, strings, choir) in the ~430 KB of free code flash (decision 36), if a sound test shows the synthesized ones fall short
 - From the SLOOP reconciliation (research/sloop-reconcile.md §4): MONO / LEGATO voices with glide and SLIDE; transpose, shift and ×2 / ½ for a channel; the other gaps it ranks
-- CI flake 17.2 (Studio Send, test_studio_emu): seen twice on CI runners, never locally; run 45385533188: "the FM-1 did not save", emulator 1.8x real time, load 56% — find why the save is missed, then fix
 - Recording: leaving PLAYER mid-pass keeps the notes but shows no "REC OFF: N NOTES" (v6 Adversary, minor; composer.c)
 - After v6 (decision 37): send from Studio while playing (swap at the next bar), energy + swing macros, setlists chaining pieces, takes switched live
 - Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
@@ -150,3 +150,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22) — verified
 - v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
 - v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
+- v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29)
