@@ -24,7 +24,7 @@
 | US-21 | 32 synthesized drum kits | 1 | done | 0 |
 | US-22 | text2midi's instruments, roles, mix | 1 | done | 0 |
 | US-23 | Sections: launch, loop, queue | 1 | done | 0 |
-| US-24 | Live keyboard in key, auto-chords, MIDI IN | 1 | proven | 1 |
+| US-24 | Live keyboard in key, auto-chords, MIDI IN | 1 | done | 1 |
 | US-25 | Step sequencer on 8 tracks | 1 | done | 0 |
 | US-26 | Record live play into a part | 1 | done | 0 |
 

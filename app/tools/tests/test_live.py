@@ -293,6 +293,9 @@ def test_24_4_midi_in_raw_bytes_through_the_jack_parser_in_the_emulator(tmp_path
     before, held, after = erms(s, fr(t + 1000), fr(t + 1450)), erms(s, fr(t + 1800), fr(t + 2400)), erms(s, fr(t + 3800), fr(t + 4400))
     assert held > 300 and held > 20 * max(before, 1), (before, held, after)                  # the jack's notes, heard
     assert after < held / 20, (before, held, after)                                          # released: none stuck
+    a, b = fr(t + 1800) / 44100, fr(t + 2400) / 44100
+    ok, p = peak_at(s, a, b, 67)                                                             # (lead is mono: G4 takes over C4)
+    assert ok, ("G4 (sent in running status: data bytes only) at its pitch, from the parser", p)
 
 
 def test_24_1_oct_keys_in_steps_move_the_entered_note_by_octaves(tmp_path):

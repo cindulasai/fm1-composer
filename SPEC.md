@@ -40,10 +40,10 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F20 | SLOOP's PHYS (physical models), DIGITAL (4-op FM) and VOICE (formant) engines + presets | v5 | shipped |
 | F21 | SLOOP's 32 synthesized drum kits (drum_synth.c) beside COMPOSER's 3 | v5 | shipped |
 | F22 | text2midi's instruments, roles and mix reach the FM-1: each part gets a fitting sound and pan (fm1c and Studio, same bytes) | v5 | shipped |
-| F23 | Sections: a piece carries its sections (text2midi's form; MIDI markers); on the device launch one at the next bar, loop it, queue the next; the playhead names the section | v6 | planned |
-| F24 | Live keyboard: the keys play the selected channel's sound over the piece, locked to its key and scale (SLOOP's 16), with voice-led auto-chords; MIDI IN plays as sent, by MIDI channel to channels 1-8; 4 of the 16 voices kept for live play | v6 | planned |
-| F25 | Step sequencer on all 8 tracks: a track's notes as a step grid (16 a page, up to 64 steps), per-step velocity / length, chords of up to 4, ties, swing, a loop length per track (polymeter); it edits the piece itself | v6 | planned |
-| F26 | Record live play into a part: what you play (keys or MIDI IN) is written into the selected channel at the grid, overdub or replace, undoable | v6 | planned |
+| F23 | Sections: a piece carries its sections (text2midi's form; MIDI markers); on the device launch one at the next bar, loop it, queue the next; the playhead names the section | v6 | shipped |
+| F24 | Live keyboard: the keys play the selected channel's sound over the piece, locked to its key and scale (SLOOP's 16), with voice-led auto-chords; MIDI IN plays as sent, by MIDI channel to channels 1-8; 4 of the 16 voices kept for live play | v6 | shipped |
+| F25 | Step sequencer on all 8 tracks: a track's notes as a step grid (16 a page, up to 64 steps), per-step velocity / length, chords of up to 4, ties, swing, a loop length per track (polymeter); it edits the piece itself | v6 | shipped |
+| F26 | Record live play into a part: what you play (keys or MIDI IN) is written into the selected channel at the grid, overdub or replace, undoable | v6 | shipped |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -144,4 +144,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v3 — COMPOSER Studio in the browser, emulator side by side (US-12–US-15)
 - v4 — Studio = text2midi's UI + fm1-emu's page, reused unchanged, MIDI cable between (US-16–US-17)
 - v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22) — verified
-- v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26)
+- v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
