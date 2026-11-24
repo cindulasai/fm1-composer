@@ -124,6 +124,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 ## Backlog
 - Sampled instruments (piano, strings, choir) in the ~430 KB of free code flash (decision 36), if a sound test shows the synthesized ones fall short
 - From the SLOOP reconciliation (research/sloop-reconcile.md §4): MONO / LEGATO voices with glide and SLIDE; transpose, shift and ×2 / ½ for a channel; the other gaps it ranks
+- Recording: leaving PLAYER mid-pass keeps the notes but shows no "REC OFF: N NOTES" (v6 Adversary, minor; composer.c)
 - After v6 (decision 37): send from Studio while playing (swap at the next bar), energy + swing macros, setlists chaining pieces, takes switched live
 - Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
 - Second core for more voices: after a real-device test (decision 28)
