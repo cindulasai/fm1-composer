@@ -115,6 +115,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 39 | Sequencer depth: core (≤ 64 steps, velocity, length, chords ≤ 4, ties, swing, per-track length); no p-locks / trig conditions / ratchets in v6 | user | yes |
 | 40 | v6 assumptions: emulator only; SLOOP's sequencer / scale / chord code reused where it fits, with provenance; 4 of 16 voices reserved while playing live; v4/v5 pieces play unchanged | user | yes |
 | 41 | v6 reconciled with SLOOP (craft-anything, `research/sloop-reconcile.md`): SLOOP's 16 scales, chord modifiers and voice leading copied for the live keyboard; MIDI IN plays as sent (no scale lock), routed by MIDI channel to channels 1-8; recording latency-compensated with a count-in; the lost-note-off fix (midi_in_lost) added | council | no |
+| 42 | After v6 ships: fm1-composer goes public (the firmware carries SLOOP's GPL-3.0 code, so a public demo needs public source) and COMPOSER Studio is published on GitHub Pages like fm1-emu's page (free for public repos): a Pages workflow builds, tests and deploys it; README gets a "Try it" link; visitors use their own AI key. First, the full git history is scanned for secrets. Until then the repo stays private | user | yes |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -127,7 +128,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
 - Second core for more voices: after a real-device test (decision 28)
 - Versus SLOOP (isod89/sloop-fm1, a mature live groovebox): COMPOSER wins on AI arrangements from plain English, an 8-part arrangement player, and Studio in the browser. To close the gaps, most valuable first: one-click install from the browser; more sounds and engines (FM6 / DX7 patches, physical models); a setlist that chains pieces; piano-roll editing in Studio before pushing; per-channel filter and effects; MIDI out of the playing piece
-- Public Studio page: free / demo AI keys or an in-browser model (no key); public repo or other free static host — user decides
+- Public Studio page (decision 42, after v6): GitHub Pages from the public repo; later, free / demo AI keys or an in-browser model (no key)
 - Desktop app (Studio packaged)
 - Studio: Web MIDI push to a real FM-1 over USB; audio preview before pushing
 - Describe-in-words on the Mac (text2midi LLM path) from `fm1c`
