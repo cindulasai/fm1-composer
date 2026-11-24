@@ -49,7 +49,10 @@ jobs:
         run: python3 -m playwright install --with-deps chromium-headless-shell
       - name: Gate
         run: PY=python3 sh app/check.sh
-      - name: COMPOSER Studio as a static site (the gate tested an export of this same tree in a browser, 27.1)
+      - name: COMPOSER Studio's export, tested in a browser (27.1; a missing piece fails here, never skips)
+        if: github.ref == 'refs/heads/main' && !github.event.repository.private
+        run: cd app && FM1_REQUIRE_STUDIO=1 python3 -m pytest -q -rs -p no:cacheprovider tools/tests/test_export.py -k test_27_1
+      - name: COMPOSER Studio as a static site
         if: github.ref == 'refs/heads/main' && !github.event.repository.private
         run: app/fm1c studio --export _site
       - uses: actions/upload-pages-artifact@v3

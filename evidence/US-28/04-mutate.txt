@@ -1,0 +1,3 @@
+COMMAND: sh prove mutants US-28
+MUTANTS: 0 candidates in US-28's non-test files — nothing to mutate
+EXIT_CODE: 0

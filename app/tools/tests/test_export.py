@@ -11,8 +11,23 @@ from test_studio_emu import AUDIO_TAP, EMU, FWSC, emu, open_example, send, start
 WEB = APP / "studio" / "web"
 FM1C = str(APP / "fm1c")
 FAKE_KEY = "sk-test-FAKE-0123456789abcdef"
-needs_emu = pytest.mark.skipif(not (FWSC.exists() and (EMU / "fm1_web.wasm").exists()),
-                               reason="needs build/composer.fwsc (from CI) and studio/web/emu (sh tools/get_web_emu.sh)")
+REQUIRED = os.environ.get("FM1_REQUIRE_STUDIO") == "1"       # (CI's Pages step: a missing piece fails, never skips)
+NEEDS = "needs build/composer.fwsc (from CI) and studio/web/emu (sh tools/get_web_emu.sh)"
+
+
+def emu_ready():
+    return FWSC.is_file() and (EMU / "fm1_web.wasm").is_file() and (EMU / "index.html").is_file()
+
+
+def need_emu(ready):
+    """skip without the firmware / fm1-emu's page; FM1_REQUIRE_STUDIO=1 makes that a failure"""
+    if not ready:
+        if REQUIRED:
+            pytest.fail("FM1_REQUIRE_STUDIO=1: " + NEEDS)
+        pytest.skip(NEEDS)
+
+
+needs_emu = pytest.mark.skipif(not emu_ready() and not REQUIRED, reason=NEEDS)
 
 
 def export(out, *more, **env):
@@ -26,8 +41,7 @@ def files(d):
 
 @pytest.fixture(scope="module")
 def exported(tmp_path_factory):
-    if not (FWSC.exists() and (EMU / "index.html").exists()):
-        pytest.skip("needs build/composer.fwsc (from CI) and studio/web/emu (sh tools/get_web_emu.sh)")
+    need_emu(emu_ready())
     out = tmp_path_factory.mktemp("export") / "Studio site"                 # (a path with a space)
     r = export(out)
     assert r.returncode == 0, r.stderr
