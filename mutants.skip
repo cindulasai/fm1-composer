@@ -186,3 +186,8 @@ app/firmware/src/live.c | n->dur = d < 1u ? 1u : d > 65535u ? 65535u : d; | equi
 app/firmware/src/composer.c | st_base = s < pl_v.nsect ? piece_sect_start(&pl_v, s) : 0u; | unreachable: player_section() is a section index below nsect or PL_NONE (255), never nsect itself
 app/firmware/src/live.c | static uint8_t midi_sel_on[16][64];                   /* per channel and note, a nibble: track + 1, 0 = none (sloop-lab: | the operator is inside the comment: code unchanged
 app/tools/fm1c/cli.py | "app/build/composer.fwsc or $FM1C_FWSC) for any web server; never your AI key") | the operator is inside the --help text: code unchanged
+app/studio/web/shell.js | if (!desk) return say('Open or make a piece in text2midi first.', 'error'); | the operator is inside the message text: code unchanged
+app/studio/web/shell.js | while (Number.isFinite(e0) && waits < 600 && sent + f.length - (emuMs() - e0) * JACK_PER_MS > AHEAD) { waits++; await sleep(50); } | 600 or 601 waits of 50 ms: the 30 s cap differs by one 50 ms wait, no observable behaviour
+app/studio/web/cable.js | Object.defineProperty(navigator, 'requestMIDIAccess', { value: access, configurable: true }); | nothing in fm1-emu's page redefines requestMIDIAccess after the cable: configurable is never exercised
+app/studio/web/shell.js | if (!cable.connected()) return say(`Press Start on the FM-1, and choose "${cable.name}" in its MIDI in.`, 'error'); | the operator is inside the message text: code unchanged
+app/studio/web/shell.js | for (let i = 0; i < tries && !saved; i++) { // read back from fm1-emu's saved flash (10 s, longer on a slow one) | one read-back try more (500 ms) before 'did not save': no observable difference a test can pin without racing IndexedDB

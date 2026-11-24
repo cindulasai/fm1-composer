@@ -267,6 +267,92 @@ def test_17_2_a_slow_emulator_gets_the_piece_slower_and_saves_it(studio):
     assert rate < 2.5 / 3 * 1.05, f"{rate:.2f} bytes/ms: at most a third of 2.5"
 
 
+def test_29_1_a_stalled_emulator_holds_send_back_and_the_piece_still_saves(studio):
+    """fm1-emu's emulated clock stops for 3 s (a busy computer): Send keeps at most ~0.4 s of bytes ahead of it (1200
+    + one frame), never the second's worth fm1-emu would drop, then finishes, and the piece is read back"""
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    f.wait_for_function("() => Number.isFinite(window.composerCable.emulatedMs())", timeout=30000)
+    text, ms = f.evaluate("() => [document.querySelector('#status').textContent, window.composerCable.emulatedMs()]")
+    assert ms == float(re.search(r"· (\d+(?:\.\d+)?) s$", text.strip())[1]) * 1000, (text, ms)
+    f.evaluate("""() => { const c = window.composerCable, real = c.emulatedMs.bind(c), send = c.send.bind(c);
+        window.sent = []; let frozen = null, t0 = null, off = 0;
+        c.emulatedMs = () => {                      // stopped for 3 s of wall time from the first byte, then on again
+            const now = performance.now(), e = real() - off;
+            if (t0 !== null && now - t0 < 3000) { if (frozen === null) frozen = e; return frozen; }
+            if (frozen !== null && t0 !== null) { off += e - frozen; frozen = null; t0 = -1e12; return real() - off; }
+            return e; };
+        c.send = (b) => { if (t0 === null) t0 = performance.now(); window.sent.push([performance.now(), b.length]); send(b); }; }""")
+    assert send(page, secs=180).startswith("On the FM-1")
+    sent = f.evaluate("() => window.sent")
+    t0 = sent[0][0]
+    during = sum(n for t, n in sent if t - t0 < 3000)
+    biggest = max(n for _, n in sent)
+    assert during <= 1200 + biggest, f"{during} bytes sent while the emulator stood still"
+    assert any(t - t0 >= 3000 for t, _ in sent), "Send went on once the emulator ran again"
+
+
+def test_29_2_no_emulated_time_paces_by_the_wall_clock_as_before(studio):
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    f.evaluate("""() => { const c = window.composerCable, send = c.send.bind(c); window.sent = [];
+        c.emulatedMs = () => NaN; c.load = () => 1;
+        c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""")
+    assert send(page, secs=120).startswith("On the FM-1")
+    sent = f.evaluate("() => window.sent")
+    rate = sum(n for _, n in sent[:-1]) / (sent[-1][0] - sent[0][0])
+    assert 2.5 * 0.7 < rate < 2.5 * 1.05, f"{rate:.2f} bytes/ms: the wall-clock pace, 2.5"
+
+
+def test_29_2_an_emulated_clock_that_never_moves_waits_30_s_in_all_then_ends(studio):
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    f.wait_for_function("() => Number.isFinite(window.composerCable.emulatedMs())", timeout=30000)
+    f.evaluate("""() => { const c = window.composerCable, send = c.send.bind(c), stuck = c.emulatedMs();
+        window.sent = []; c.emulatedMs = () => stuck;
+        c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""")
+    status = send(page, secs=150)
+    assert status.startswith("On the FM-1") or status.startswith("Sending stopped"), status     # a status: no hang
+    sent = f.evaluate("() => window.sent")
+    span = (sent[-1][0] - sent[0][0]) / 1000
+    assert 29 < span < 29 + sum(n for _, n in sent) / 2500 + 5, f"{span:.1f} s: 30 s of waiting in all, then on"
+
+
+def test_29_2_a_press_mid_send_does_nothing_and_the_bar_hides_after(studio):
+    """1.5 s into a Send (Studio's 500 ms timer has run since): another press starts no second transfer; once done,
+    the progress bar is hidden"""
+    page, _, _ = studio()
+    open_example(page)
+    start(page)
+    emu(page).evaluate("""() => { const c = window.composerCable, send = c.send.bind(c); window.__puts = 0;
+        c.send = (b) => { if (b[0] === 0xf0 && b[4] === 3) window.__puts++; return send(b); }; }""")
+    page.click("#send")
+    page.wait_for_timeout(1500)
+    assert not page.is_hidden("#send-progress"), "still sending"
+    assert page.is_disabled("#send"), "Send is disabled while it sends"
+    page.click("#send", force=True)
+    page.wait_for_function("() => /^(On the FM-1|Sending stopped)/.test(document.querySelector('#status').textContent)", timeout=90000)
+    assert page.text_content("#status").startswith("On the FM-1"), diag(page)
+    assert emu(page).evaluate("() => window.__puts") == 1, "one transfer"
+    assert page.is_hidden("#send-progress")
+
+
+def test_29_2_a_slow_emulator_gets_a_longer_read_back_before_did_not_save(studio):
+    """load 300% and nothing arrives: Send reads back for 20 x 3 tries of 500 ms (30 s), not 10 s, before it gives up"""
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    f.evaluate("""() => { const c = window.composerCable; window.sent = [];
+        c.load = () => 3; c.emulatedMs = () => NaN; c.send = (b) => { window.sent.push(performance.now()); }; }""")
+    status = send(page, secs=150)
+    assert status.startswith("Sending stopped: the FM-1 did not save"), status
+    last, end = f.evaluate("() => window.sent[window.sent.length - 1]"), page.evaluate("() => performance.now()")
+    assert end - last >= 28000, f"{(end - last) / 1000:.1f} s of reading back"
+
+
 def test_17_2_a_resend_that_never_arrives_is_not_called_saved(studio):
     page, _, _ = studio()
     open_example(page)

@@ -5,6 +5,8 @@ import { transferFrames, savedLibraries } from './fm1link.js';
 
 const $ = (s) => document.querySelector(s);
 const BYTES_PER_MS = 2.5;                     // under the jack's 3.125 bytes/ms, with room for a slow emulation
+const JACK_PER_MS = 3.125, AHEAD = 1200;     // the jack takes 3.125 bytes per emulated ms; fm1-emu drops past ~1 s of
+                                              // backlog, so Send stays at most ~0.4 s ahead of its emulated time
 const left = () => $('#t2m').contentWindow, right = () => $('#fm1').contentWindow;
 let sending = false;
 
@@ -43,7 +45,12 @@ $('#send').addEventListener('click', async () => {
     const frames = transferFrames(made.f1p), total = frames.reduce((n, f) => n + f.length, 0);
     let sent = 0;
     say(`Sending "${made.name}": ${made.channels} channels, ${made.notes} notes, ${made.bars} bars …`);
+    const emuMs = () => { try { return cable.emulatedMs(); } catch { return NaN; } };
+    const e0 = emuMs();
+    let waits = 0;                             // (50 ms each; 30 s in all, then on as before: no hang)
     for (const f of frames) {
+      // a stalled emulator (a busy computer) takes nothing: wait for it rather than overflow its jack
+      while (Number.isFinite(e0) && waits < 600 && sent + f.length - (emuMs() - e0) * JACK_PER_MS > AHEAD) { waits++; await sleep(50); }
       cable.send(f);
       sent += f.length;
       bar.value = sent / total;

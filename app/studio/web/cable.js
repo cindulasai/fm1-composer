@@ -27,6 +27,11 @@
       const m = /· load (\d+)%/.exec(document.querySelector('#status')?.textContent || '');
       return m ? Math.max(0.01, Number(m[1]) / 100) : 1;
     },
+    // fm1-emu's emulated time in ms (its status line's last figure, "· 16.8 s"); NaN while it is not shown
+    emulatedMs() {
+      const m = /· (\d+(?:\.\d+)?) s$/.exec((document.querySelector('#status')?.textContent || '').trim());
+      return m ? Number(m[1]) * 1000 : NaN;
+    },
     send(bytes) {
       if (typeof input.onmidimessage !== 'function') throw new Error(`choose "${NAME}" in the FM-1's MIDI in`);
       input.onmidimessage({ data: Uint8Array.from(bytes), timeStamp: performance.now() });
