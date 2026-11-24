@@ -96,6 +96,7 @@ the page to this computer only (127.0.0.1).
 | | HOME | stops and goes back to the library |
 | | EDIT | opens the selected channel in EDIT |
 | | FX | opens the selected channel's effects |
+| | LFO | opens STEPS, from the playing section's start |
 | FX | SELECT | picks the row: REVERB, DELAY, CHORUS, FILTER, RESO, DRIVE |
 | | KNOB1 | sets it (0 to 127; RESO 0 to 10), heard at once |
 | | KNOB2 | the next / previous channel |
@@ -110,9 +111,26 @@ the page to this computer only (127.0.0.1).
 | | PLAY | plays from the cursor's bar / stops; edits wait until it is stopped |
 | | SAVE | saves the edited piece in place of the old one, with your sounds, mutes and tempo |
 | | HOME | back to PLAYER; leaving the piece with unsaved edits asks for HOME twice |
+| STEPS | SELECT | moves the cursor one 1/16 step (64 steps, 16 a page) |
+| | KNOB1 | the next / previous channel (row) |
+| | a note key | adds that note at the cursor's step (you hear it), up to 4 a step, or removes it if it is already there |
+| | KNOB2 / KNOB3 | length in steps (1 to 64: a longer note is a tie) / velocity of the step's notes (and of the next new one) |
+| | KNOB4 | the channel's loop length: OFF, 1 to 64 steps; shorter than the section, the channel plays its first steps over and over (polymeter: 12 against 16) |
+| | ALGORITHM | the channel's swing, 0 to 100: every 2nd 1/16 starts late, 100 = half a step (SLOOP's, MPC-style) |
+| | OCT- / OCT+ | the keys an octave down / up |
+| | FX | undo (the last 64 edits, shared with EDIT) |
+| | PLAY | plays / stops; edits go on while it plays; the playing step is blue, `PLAY 5` the selected channel's |
+| | SEQ | section loop on / off, as in PLAYER |
+| | SAVE | as in EDIT: the piece, with its loop lengths and swing |
+| | HOME (or LFO) | back to PLAYER |
 
 EDIT shows one channel as a piano roll: 16 grid steps across, the pitches of the 27 note keys down, the cursor's
 step lit, notes in amber (a note begun before the page in grey). `*` after the channel's name means unsaved edits.
+
+STEPS shows the 8 channels across 16 steps (one page of four): a note starting in a step amber, a note sounding on
+from an earlier step grey, the cursor framed white. Under the grid: the cursor's step and its notes (`STEP 5  E4 G4`),
+their length and velocity, the channel's loop and swing. The steps are the piece's own notes from the section's start
+(no separate patterns): what STEPS changes, EDIT shows, and the other way round.
 
 The player shows each channel's role (LEAD, BASS, DRUMS…), its sound and M / S, with the position as
 bar:beat. There are 135 sounds: 40 from six Felucca engines plus COMPOSER's own drum kits, then SLOOP's (copied

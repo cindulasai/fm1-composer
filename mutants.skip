@@ -176,3 +176,9 @@ app/firmware/src/drum_synth.c | dsu_defaults(); | unreachable: SLOOP's own synth
 app/firmware/src/drum_synth.c | return &dsu.k[k % DSU_N]; | unreachable: SLOOP's own synthesised kits (dsu_*, its web editor's SYN1..4); nothing in COMPOSER calls dsu_kit
 app/firmware/src/synth.c | int32_t xs = (int32_t)(x < -65535 ? -65535 : x > 65535 ? 65535 : x); | equivalent: a clamp; at x = -65535 or 65535 both sides give x
 app/firmware/src/composer.c | step = d > 0 ? 1 : -1; | equivalent: inside for (; d; ...), so d is never 0 here and d > 0 is d >= 0
+app/firmware/src/edit.c | ed_top = (ed_top + ED_UNDO - 1u) % ED_UNDO; | - ED_UNDO - 1 and + ED_UNDO - 1 agree modulo ED_UNDO (64 divides 2^32): the same slot
+app/firmware/src/ui.c | s0 = n.tick > page ? (n.tick - page) / e->grid : 0u; | at n.tick == page both give step 0: >= and > agree
+app/firmware/src/composer.c | ed_octs = ed_octs < -3 ? -3 : ed_octs > 3 ? 3 : ed_octs; | at -3 both give -3: <= and < agree
+app/tools/fm1c/piece.py | raise PieceError(BAD_VERSION, f"piece version {b[4]}; this fm1c reads versions {VERSION} and {VERSION_SECT}") | the "and" is in the message's words, not code
+app/firmware/src/piece.h | static void piece_sect_name(const piece_view_t *v, uint32_t i, char *out)   /* out: PIECE_SNAME + 1 */ | the + is in the comment
+app/firmware/src/composer.c | while (sq_w - sq_r <= 32u - 2u && midi_get(&st, &d1, &d2)) | < leaves 3 slots free instead of 2: either keeps what one message posts inside the queue; only how soon the next is read differs

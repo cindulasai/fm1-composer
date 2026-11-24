@@ -1,6 +1,7 @@
 """The .f1p piece format: v1, and v2 = v1 + a sections table, written only when a piece has sections; the table also
 carries the piece's key (text2midi's, US-24) when it has one (firmware/src/piece.h is the reader; the layout is
-documented there)."""
+documented there). A channel may carry a loop length in 1/16 steps (polymeter) and a swing (US-25), in two bytes of
+its record that were reserved before: a piece without them keeps its bytes."""
 from __future__ import annotations
 
 import struct
@@ -19,6 +20,8 @@ MAX_CH = 8
 MAX_TICKS = 96 * 4 * 999
 NAME_LEN = 24
 REST = 255
+MAX_STEPS = 64
+MAX_SWING = 100
 ROLES = ("lead", "counter", "chords", "pad", "bass", "drums", "percussion", "arp", "drone", "fx", "other")
 DEFAULT_SOUND = 255
 
@@ -48,6 +51,8 @@ class Channel:
     vol: int = 100
     pan: int = 64
     src: int = 0
+    steps: int = 0                       # loop length in 1/16 steps, 0 = none (US-25 polymeter)
+    swing: int = 0                       # 0..100: every 2nd 1/16 late by swing / 200 of a step (US-25)
 
 
 @dataclass(frozen=True)
@@ -96,6 +101,8 @@ def _validate(p: Piece) -> None:
             raise PieceError(BAD_TABLE, f"channel {i + 1}: unknown role {c.role!r}")
         if not (0 <= c.sound <= 255 and 0 <= c.vol <= 127 and 0 <= c.pan <= 127 and 0 <= c.src <= 15):
             raise PieceError(BAD_TABLE, f"channel {i + 1}: sound/volume/pan/source out of range")
+        if not (0 <= c.steps <= MAX_STEPS and 0 <= c.swing <= MAX_SWING):
+            raise PieceError(BAD_TABLE, f"channel {i + 1}: loop length 0 to {MAX_STEPS} steps, swing 0 to {MAX_SWING}")
         for n in c.notes:
             if not (0 <= n.tick < p.len_ticks and 0 <= n.pitch <= 127 and 1 <= n.vel <= 127 and 1 <= n.dur <= 65535):
                 raise PieceError(BAD_EVENT, f"channel {i + 1}: note out of range: {n}")
@@ -135,7 +142,7 @@ def encode(p: Piece) -> bytes:
     off = 48 + 16 * len(p.channels) + len(sect)
     table = bytearray()
     for c, e in zip(p.channels, evs):
-        table += struct.pack("<BBBBB3xII", ROLES.index(c.role), c.sound, c.vol, c.pan, c.src, len(e) // 6, off)
+        table += struct.pack("<BBBBBBBxII", ROLES.index(c.role), c.sound, c.vol, c.pan, c.src, c.steps, c.swing, len(e) // 6, off)
         off += len(e)
     total = off + 4
     if total > MAX_BYTES:
@@ -193,8 +200,8 @@ def decode(b: bytes) -> Piece:
         end += 4 + 12 * ns
     chans = []
     for i in range(nch):
-        role, sound, vol, pan, src, r0, r1, r2, nev, off = struct.unpack_from("<BBBBBBBBII", b, 48 + 16 * i)
-        if role >= len(ROLES) or vol > 127 or pan > 127 or src > 15 or r0 or r1 or r2:
+        role, sound, vol, pan, src, steps, swing, r2, nev, off = struct.unpack_from("<BBBBBBBBII", b, 48 + 16 * i)
+        if role >= len(ROLES) or vol > 127 or pan > 127 or src > 15 or steps > MAX_STEPS or swing > MAX_SWING or r2:
             raise PieceError(BAD_TABLE, f"channel {i + 1}: bad record")
         if off != end or nev > (n - 4 - end) // 6:
             raise PieceError(BAD_TABLE, f"channel {i + 1}: bad events offset/count")
@@ -209,7 +216,7 @@ def decode(b: bytes) -> Piece:
             if pitch > 127 or not 1 <= vel <= 127 or dur < 1:
                 raise PieceError(BAD_EVENT, f"channel {i + 1}: bad note")
             notes.append(Note(t, pitch, dur, vel))
-        chans.append(Channel(ROLES[role], notes, sound, vol, pan, src))
+        chans.append(Channel(ROLES[role], notes, sound, vol, pan, src, steps, swing))
         end = off + 6 * nev
     if end + 4 != n:
         raise PieceError(BAD_TABLE, "trailing bytes after the events")
@@ -225,5 +232,7 @@ def dump(p: Piece) -> str:
         lines.append(f"k {p.key[0]} {p.key[1]}")
     for i, c in enumerate(p.channels):
         lines.append(f"ch {i} {ROLES.index(c.role)} {c.sound} {c.vol} {c.pan} {c.src}")
+        if c.steps or c.swing:
+            lines.append(f"t {c.steps} {c.swing}")
         lines += [f"n {n.tick} {n.dur} {n.pitch} {n.vel}" for n in _sorted_notes(c)]
     return "\n".join(lines) + "\n"

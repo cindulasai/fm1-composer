@@ -33,6 +33,7 @@ int main(int argc, char **argv)
             piece_cur_t c;
             piece_note_t no;
             printf("ch %u %u %u %u %u %u\n", i, v.ch[i].role, v.ch[i].sound, v.ch[i].vol, v.ch[i].pan, v.ch[i].src);
+            if (v.ch[i].steps || v.ch[i].swing) printf("t %u %u\n", v.ch[i].steps, v.ch[i].swing);
             piece_cursor(&v.ch[i], &c);
             while (piece_next(&c, &no)) printf("n %u %u %u %u\n", no.tick, no.dur, no.pitch, no.vel);
         }

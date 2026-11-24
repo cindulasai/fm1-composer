@@ -3,7 +3,9 @@
  *   LIBRARY  the pieces, newest first; SELECT moves, PLAY opens one, playing it
  *   PLAYER   the piece: name, tempo, bar:beat (in a section: its name and the bar:beat in it), then a strip per channel
  *            (role, sound, M / S); a piece with sections: the sections strip under them (playing amber, queued white)
- *   EDIT     one channel as a piano roll: 16 grid steps across, the 27 note keys' pitches down, the cursor's step lit */
+ *   EDIT     one channel as a piano roll: 16 grid steps across, the 27 note keys' pitches down, the cursor's step lit
+ *   STEPS    the 8 channels x 16 steps of a page (a note starts amber, sounds on grey, the playing step blue, the cursor
+ *            framed white), then the cursor's step: its notes, length, velocity, the channel's loop and swing */
 #define C_ACC RGB(255, 165, 0)                  /* amber */
 #define C_GREY RGB(120, 120, 120)
 #define C_MUTE RGB(70, 70, 70)
@@ -255,4 +257,77 @@ static void ui_edit(uint32_t dirty, const ui_edit_t *e)
         ui_text(0, 196, 240, &FONT_S, b, C_WHITE, 1);
         ui_text(0, 222, 240, &FONT_S, e->status, C_GREY, 1);
     }
+}
+
+#define ST_X 24u                                /* STEPS: the grid */
+#define ST_Y 24u
+#define ST_W 13u
+#define ST_H 17u
+#define C_PLAY RGB(80, 160, 255)
+
+typedef struct {
+    const char *status;
+    const uint8_t *piece, *role;                /* checked (piece_view) */
+    const uint32_t *at;                         /* each channel's own tick playing (0xFFFFFFFF: stopped) */
+    const piece_note_t *notes;                  /* the cursor step's first notes (n of them, ST_CHORD at most shown) */
+    uint32_t ch, base, step, n, len, vel, edited;
+} ui_steps_t;
+
+static void ui_steps(uint32_t dirty, const ui_steps_t *s)
+{
+    char b[48];
+    uint32_t page = s->step / ST_PAGE, t0 = s->base + page * ST_PAGE * ST_TICKS, ch, i, o;
+    piece_view_t v;
+    piece_view(s->piece, &v);
+    if (dirty & D_ALL) lcd_fill(0, 0, 240, 240, C_BLACK);
+    if (dirty & (D_ALL | D_HEAD | D_ROLL)) {
+        ui_fmt(b, sizeof b, "STEPS %u %s%s", s->ch + 1u, ROLE_NAME[s->role[s->ch]], s->edited ? " *" : "");
+        ui_text(8, 4, 150, &FONT_S, b, C_ACC, 0);
+        ui_fmt(b, sizeof b, "%u-%u", page * ST_PAGE + 1u, page * ST_PAGE + ST_PAGE);
+        ui_text(158, 4, 76, &FONT_S, b, C_WHITE, 2);
+        for (ch = 0; ch < PIECE_MAX_CH; ch++) {
+            ui_fmt(b, sizeof b, "%u", ch + 1u);
+            ui_text(0, ST_Y + ch * ST_H, 22, &FONT_S, b, ch == s->ch ? C_ACC : ch < v.nch ? C_WHITE : C_MUTE, 0);
+        }
+    }
+    if (dirty & (D_ALL | D_ROLL | D_POS)) {
+        uint32_t x = ST_X + s->step % ST_PAGE * ST_W, y = ST_Y + s->ch * ST_H;
+        lcd_fill(ST_X, ST_Y, ST_PAGE * ST_W + 1u, PIECE_MAX_CH * ST_H + 1u, C_BLACK);
+        for (ch = 0; ch < PIECE_MAX_CH; ch++) {
+            uint8_t cell[ST_PAGE];
+            steps_row(&v, ch, t0, cell);
+            for (i = 0; i < ST_PAGE; i++) {
+                uint32_t t = t0 + i * ST_TICKS;
+                uint16_t c = ch >= v.nch || t >= v.len_ticks ? C_BLACK : cell[i] == 2u ? C_ACC : cell[i] ? C_GREY : i % 4u ? C_ROW : C_BEAT;
+                if (c != C_BLACK && s->at[ch] >= t && s->at[ch] < t + ST_TICKS) c = C_PLAY;
+                lcd_fill(ST_X + i * ST_W + 1u, ST_Y + ch * ST_H + 1u, ST_W - 1u, ST_H - 1u, c);
+            }
+        }
+        lcd_fill(x, y, ST_W + 1u, 1, C_WHITE);  /* the cursor */
+        lcd_fill(x, y + ST_H, ST_W + 1u, 1, C_WHITE);
+        lcd_fill(x, y, 1, ST_H, C_WHITE);
+        lcd_fill(x + ST_W, y, 1, ST_H, C_WHITE);
+        if (s->at[s->ch] >= s->base && s->at[s->ch] < s->base + PIECE_MAX_STEPS * ST_TICKS)
+            ui_fmt(b, sizeof b, "PLAY %u", (s->at[s->ch] - s->base) / ST_TICKS + 1u);
+        else
+            b[0] = 0;
+        ui_text(160, 202, 76, &FONT_S, b, C_PLAY, 2);
+    }
+    if (dirty & (D_ALL | D_ROLL | D_FOOT)) {
+        const uint8_t *rec = s->piece + PIECE_HDR + s->ch * PIECE_CHREC;
+        ui_fmt(b, sizeof b, "STEP %u ", s->step + 1u);
+        for (i = 0; i < s->n && i < ST_CHORD; i++) {
+            for (o = 0; b[o]; o++) {}
+            ui_fmt(b + o, sizeof b - o, " %s%u", NOTE_NAME[s->notes[i].pitch % 12u], s->notes[i].pitch / 12u - 1u);
+        }
+        for (o = 0; b[o]; o++) {}
+        ui_fmt(b + o, sizeof b - o, "%s", !s->n ? " -" : s->n > ST_CHORD ? " +" : "");
+        ui_text(0, 166, 240, &FONT_S, b, C_WHITE, 1);
+        ui_fmt(b, sizeof b, "LEN %u  VEL %u", s->len, s->vel);
+        ui_text(0, 184, 240, &FONT_S, b, C_WHITE, 1);
+        if (rec[PIECE_CH_STEPS]) ui_fmt(b, sizeof b, "LOOP %u  SWING %u", rec[PIECE_CH_STEPS], rec[PIECE_CH_SWING]);
+        else ui_fmt(b, sizeof b, "LOOP OFF  SWING %u", rec[PIECE_CH_SWING]);
+        ui_text(0, 202, 156, &FONT_S, b, C_GREY, 0);
+    }
+    if (dirty & (D_ALL | D_FOOT)) ui_text(0, 222, 240, &FONT_S, s->status, C_GREY, 1);
 }

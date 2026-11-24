@@ -11,7 +11,10 @@
  * launch section 1..14 (OCT+ 15..24), at the next bar line; SEQ loops the playing section.
  * KEYS (US-24, live.c): ARP turns it on / off: the 27 keys then play the selected channel's sound in the piece's key
  * (OCT- / OCT+ move them, ENV cycles the auto-chords, KNOB3 the scale, KNOB4 the root). MIDI IN (USB or the jack)
- * plays on any screen but LIBRARY, as sent. */
+ * plays on any screen but LIBRARY, as sent.
+ * STEPS (US-25, steps.c): LFO opens it from PLAYER: the 8 channels x 16 steps from the playing section's start (4
+ * pages, 64 steps); SELECT moves, KNOB1 the channel, a note key adds / removes that note in the step, KNOB2 / KNOB3
+ * length (steps) / velocity, KNOB4 the channel's loop length, ALGORITHM its swing; edits also while playing. */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
 #include <stdint.h>
@@ -34,6 +37,7 @@ static volatile uint8_t midi_in_lost;           /* (SLOOP 2.8.3) a MIDI note mes
 #include "synth.c"
 #include "player.c"
 #include "edit.c"
+#include "steps.c"
 #include "lib.c"
 #include "xfer.c"
 #include "ui.c"
@@ -61,6 +65,7 @@ static uint8_t fxv[PIECE_MAX_CH][FX_N];          /* FX: each channel's effects; 
 static uint32_t fxrow;
 static uint32_t sloop, spage;                   /* PLAYER: section loop on; the sections the keys launch (14 a page) */
 static char snext[24];                          /* "NEXT VERSE1" */
+static uint32_t st_step, st_base, st_len = 1, st_vel = 100, st_play;   /* STEPS: cursor, start tick, next note; playhead */
 #define SECT_KEY0 13u                           /* F#4: the first key above the mute keys */
 #define SECT_KEYS 14u
 static const char *status = "";
@@ -119,6 +124,12 @@ static uint32_t sound_turn(uint32_t ch, int32_t d)
         do s = (s + step + n) % n; while ((uint32_t)!!sounds[s].e->oneshot != kit);
     }
     return (uint32_t)s;
+}
+
+static void sound_next(int32_t d)               /* PRESETS: the selected channel's next sound, heard at once */
+{
+    snd[sel] = (uint8_t)sound_turn(sel, d);
+    post(SC_SOUND, sel, snd[sel], 0);           /* (0: the role kept) */
 }
 
 /* open library entry i: copy it to RAM, check it, load the player, apply the saved choices */
@@ -203,6 +214,25 @@ static void keys_status(void)                   /* "KEYS D DOR TRIAD OCT+1" / "K
     set_status(b);
 }
 
+static void seq_toggle(void)                    /* SEQ: the section loop */
+{
+    if (!pl_v.nsect) set_status("NO SECTIONS");
+    else { sloop ^= 1u; player_section_loop((int)sloop); set_status(sloop ? "SECTION LOOP ON" : "SECTION LOOP OFF"); }
+    dirty |= D_SECT;
+}
+
+static void play_save(uint32_t pressed)         /* PLAY, SAVE: as in PLAYER */
+{
+    if (pressed & 1u << BTN_PLAY) {
+        if (player_playing()) { player_stop(); set_status("STOPPED"); }
+        else { player_play(); set_status("PLAYING"); }
+    }
+    if (pressed & 1u << BTN_SAVE) {
+        if (player_playing()) { save_pending = 1; set_status("SAVES WHEN STOPPED"); }
+        else save_all();
+    }
+}
+
 static const uint8_t WHITE_KEY[8] = {0, 2, 4, 6, 7, 9, 11, 12};   /* F3 G3 A3 B3 C4 D4 E4 F4: fm1_in.notes bits */
 
 static void player_input(uint32_t pressed, uint32_t keys)
@@ -225,6 +255,18 @@ static void player_input(uint32_t pressed, uint32_t keys)
         dirty = D_ALL;
         lk_keys_off();
         set_status(player_playing() ? "STOP TO EDIT" : "");
+        return;
+    }
+    if (pressed & 1u << BTN_LFO) {              /* STEPS, from the playing section's start */
+        uint32_t s = player_section();
+        st_base = s < pl_v.nsect ? piece_sect_start(&pl_v, s) : 0u;
+        st_step = 0;
+        scr = 4;
+        dirty = D_ALL;
+        lk_keys_off();
+        fm1_enc_take(ENC_ALGORITHM);
+        fm1_enc_take(ENC_KNOB4);
+        set_status("");
         return;
     }
     if (pressed & 1u << BTN_FX) {               /* the selected channel's effects */
@@ -257,22 +299,14 @@ static void player_input(uint32_t pressed, uint32_t keys)
         sel = (uint32_t)(((int32_t)sel + d) % (int32_t)pl_v.nch + (int32_t)pl_v.nch) % pl_v.nch;
         dirty |= D_STRIPS;
     }
-    if ((d = fm1_enc_take(ENC_PRESETS))) {
-        snd[sel] = (uint8_t)sound_turn(sel, d);
-        post(SC_SOUND, sel, snd[sel], role[sel] + 1u);
-        dirty |= D_STRIPS;
-    }
+    if ((d = fm1_enc_take(ENC_PRESETS))) { sound_next(d); dirty |= D_STRIPS; }
     if ((d = fm1_enc_take(ENC_KNOB2))) {
         int32_t t = (int32_t)tempo_x10 + d * 10;
         tempo_x10 = (uint32_t)(t < 300 ? 300 : t > 3000 ? 3000 : t);
         set_tempo(tempo_x10);
         dirty |= D_HEAD;
     }
-    if (pressed & 1u << BTN_SEQ) {
-        if (!pl_v.nsect) set_status("NO SECTIONS");
-        else { sloop ^= 1u; player_section_loop((int)sloop); set_status(sloop ? "SECTION LOOP ON" : "SECTION LOOP OFF"); }
-        dirty |= D_SECT;
-    }
+    if (pressed & 1u << BTN_SEQ) seq_toggle();
     if (lk.on) {                                /* KEYS: the keys play, nothing else */
         lk_keys(fm1_in.notes, keys, sel);
         return;
@@ -304,14 +338,7 @@ static void player_input(uint32_t pressed, uint32_t keys)
 static void fx_input(uint32_t pressed)
 {
     int32_t d;
-    if (pressed & 1u << BTN_PLAY) {
-        if (player_playing()) { player_stop(); set_status("STOPPED"); }
-        else { player_play(); set_status("PLAYING"); }
-    }
-    if (pressed & 1u << BTN_SAVE) {
-        if (player_playing()) { save_pending = 1; set_status("SAVES WHEN STOPPED"); }
-        else save_all();
-    }
+    play_save(pressed);
     fm1_enc_take(ENC_PRESETS);
     fm1_enc_take(ENC_KNOB3);
     if ((d = fm1_enc_take(ENC_SELECT))) {
@@ -343,6 +370,13 @@ static uint32_t cell_notes(piece_note_t *out)
 }
 
 static uint32_t ed_low(void) { return (uint32_t)(53 + 12 * ed_octs); }   /* F3 key's pitch */
+
+static void previews_end(void)                  /* EDIT, STEPS: a preview ends with its key */
+{
+    uint32_t k;
+    for (k = 0; preview >> k; k++)
+        if ((preview >> k & 1u) && !(fm1_in.notes >> k & 1u)) { post(SC_NOTE_OFF, sel, ed_low() + k, 0); preview &= ~(1u << k); }
+}
 
 static void edited_now(int r)
 {
@@ -379,12 +413,8 @@ static void edit_input(uint32_t pressed, uint32_t keys)
         ed_octs = ed_octs < -3 ? -3 : ed_octs > 3 ? 3 : ed_octs;
         dirty |= D_ROLL;
     }
-    if ((d = fm1_enc_take(ENC_PRESETS))) {
-        snd[sel] = (uint8_t)sound_turn(sel, d);
-        post(SC_SOUND, sel, snd[sel], role[sel] + 1u);
-    }
-    for (k = 0; k < ROLL_KEYS; k++)             /* a preview ends with its key */
-        if ((preview >> k & 1u) && !(fm1_in.notes >> k & 1u)) { post(SC_NOTE_OFF, sel, ed_low() + k, 0); preview &= ~(1u << k); }
+    if ((d = fm1_enc_take(ENC_PRESETS))) sound_next(d);
+    previews_end();
     {
         int32_t dl = fm1_enc_take(ENC_KNOB2), dv = fm1_enc_take(ENC_KNOB3);
         if ((dl || dv || keys) && playing) { set_status("STOP TO EDIT"); return; }
@@ -426,6 +456,82 @@ static void edit_input(uint32_t pressed, uint32_t keys)
             dirty |= D_ROLL | D_HEAD;
             set_status("UNDONE");
         } else set_status("NOTHING TO UNDO");
+    }
+}
+
+/* STEPS: a change went through edit.c (r), the player told */
+static void steps_now(int r)
+{
+    static const char *const WHY[6] = {"", "PAST THE END", "PIECE FULL", "", "EMPTY STEP", "4 NOTES A STEP"};
+    if (r == ED_OK) { edited = 1; discard = 0; dirty |= D_ROLL | D_HEAD | D_FOOT; set_status(""); }
+    else set_status(WHY[r]);
+}
+
+static int32_t clampi(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+/* STEPS: every change also while playing (player_hold / player_edited around it); one gesture, one undo */
+static void steps_input(uint32_t pressed, uint32_t keys)
+{
+    piece_note_t cn[ST_CHORD];
+    const uint8_t *rec;
+    uint32_t k, n, t0;
+    int32_t d, dl, dv;
+    int r;
+    play_save(pressed);
+    if (pressed & 1u << BTN_SEQ) seq_toggle();
+    if ((d = fm1_enc_take(ENC_SELECT))) {
+        st_step = (uint32_t)clampi((int32_t)st_step + d, 0, (int32_t)PIECE_MAX_STEPS - 1);
+        dirty |= D_ROLL | D_HEAD | D_FOOT;
+    }
+    if ((d = fm1_enc_take(ENC_KNOB1))) {
+        sel = (uint32_t)(((int32_t)sel + d) % (int32_t)pl_v.nch + (int32_t)pl_v.nch) % pl_v.nch;
+        dirty |= D_ROLL | D_HEAD | D_FOOT;
+    }
+    if ((d = fm1_enc_take(ENC_PRESETS))) sound_next(d);
+    if (pressed & (1u << BTN_OCT_DOWN | 1u << BTN_OCT_UP)) {
+        ed_octs += (pressed & 1u << BTN_OCT_UP ? 1 : 0) - (pressed & 1u << BTN_OCT_DOWN ? 1 : 0);
+        ed_octs = clampi(ed_octs, -3, 3);
+    }
+    previews_end();
+    t0 = st_base + st_step * ST_TICKS;
+    n = steps_cell(play_buf, sel, t0, cn);
+    dl = fm1_enc_take(ENC_KNOB2);
+    dv = fm1_enc_take(ENC_KNOB3);
+    if (dl || dv) {                             /* length / velocity: of the step's notes, also of new ones */
+        st_len = (uint32_t)clampi((int32_t)(n ? (cn[0].dur + ST_TICKS - 1u) / ST_TICKS : st_len) + dl, 1, (int32_t)PIECE_MAX_STEPS);
+        st_vel = (uint32_t)clampi((int32_t)(n ? cn[0].vel : st_vel) + dv * 4, 1, 127);
+        if (n) { edit_mark(); player_hold(); r = steps_set(play_buf, sel, t0, st_len, st_vel); player_edited(); steps_now(r); }
+        dirty |= D_FOOT;
+    }
+    rec = play_buf + PIECE_HDR + sel * PIECE_CHREC;
+    dl = fm1_enc_take(ENC_KNOB4);
+    dv = fm1_enc_take(ENC_ALGORITHM);
+    if (dl || dv) {                             /* the channel's loop length (0: none), its swing */
+        edit_mark();
+        player_hold();
+        r = dl ? edit_chan(play_buf, sel, PIECE_CH_STEPS, (uint32_t)clampi(rec[PIECE_CH_STEPS] + dl, 0, (int32_t)PIECE_MAX_STEPS)) : ED_OK;
+        if (dv && r == ED_OK) r = edit_chan(play_buf, sel, PIECE_CH_SWING, (uint32_t)clampi(rec[PIECE_CH_SWING] + dv, 0, (int32_t)PIECE_MAX_SWING));
+        player_edited();
+        steps_now(r);
+    }
+    for (k = 0; k < ROLL_KEYS; k++) {           /* a key: its note in the step goes, else it starts there */
+        uint32_t p = ed_low() + k, was = n;
+        if (!(keys >> k & 1u)) continue;
+        edit_mark();
+        player_hold();
+        r = steps_key(play_buf, sel, t0, p, st_len, st_vel);
+        player_edited();
+        n = steps_cell(play_buf, sel, t0, cn);
+        if (n > was) { post(SC_NOTE_ON, sel, p, st_vel); preview |= 1u << k; }
+        steps_now(r);
+    }
+    if (pressed & 1u << BTN_FX) {               /* undo */
+        uint32_t ch, t;
+        player_hold();
+        r = edit_undo(play_buf, &ch, &t);
+        player_edited();
+        if (r == ED_OK) { sel = ch; edited = 1; dirty |= D_ROLL | D_HEAD | D_FOOT; set_status("UNDONE"); }
+        else set_status("NOTHING TO UNDO");
     }
 }
 
@@ -484,6 +590,9 @@ static void app_main(void)
             } else if (scr == 3) {
                 if (pressed & (1u << BTN_HOME | 1u << BTN_FX)) { scr = 1; dirty = D_ALL; }
                 else fx_input(pressed);
+            } else if (scr == 4) {
+                if (pressed & (1u << BTN_HOME | 1u << BTN_LFO)) { scr = 1; dirty = D_ALL; }
+                else steps_input(pressed, keys);
             } else if (pressed & 1u << BTN_HOME) {
                 lk_keys_off();                  /* (only the PLAYER plays the keys) */
                 if (edited && !discard) { discard = 1; set_status("UNSAVED EDITS: HOME AGAIN TO DISCARD"); }
@@ -507,6 +616,10 @@ static void app_main(void)
             last_sect = player_section() | player_queued() << 8;
             dirty |= D_SECT;
         }
+        if (scr == 4u) {                        /* STEPS: the selected channel's playing step */
+            uint32_t ps = playing ? player_local(sel) / ST_TICKS + 1u : 0u;
+            if (ps != st_play) { st_play = ps; dirty |= D_POS; }
+        }
         if (scr && playing) {
             uint32_t pos = player_pos(), beat = pos / PIECE_PPQ;
             if (beat != last_beat) { last_beat = beat; last_pos = pos; dirty |= D_POS; }
@@ -522,6 +635,13 @@ static void app_main(void)
                 ui_edit_t e = {status, play_buf, sel, role[sel], ed_tick, GRID[ed_gi], ed_gi, ed_low(),
                                n ? cn[0].dur : ed_len, n ? cn[0].vel : ed_vel, n, n ? cn[0].pitch : 0, edited};
                 ui_edit(dirty, &e);
+            } else if (scr == 4) {
+                piece_note_t cn[ST_CHORD];
+                uint32_t at[PIECE_MAX_CH], ch, n = steps_cell(play_buf, sel, st_base + st_step * ST_TICKS, cn);
+                for (ch = 0; ch < PIECE_MAX_CH; ch++) at[ch] = playing ? player_local(ch) : 0xFFFFFFFFu;
+                ui_steps_t u = {status, play_buf, role, at, cn, sel, st_base, st_step, n,
+                                n ? (cn[0].dur + ST_TICKS - 1u) / ST_TICKS : st_len, n ? cn[0].vel : st_vel, edited};
+                ui_steps(dirty, &u);
             } else if (scr == 3) {
                 ui_fx_t f = {status, sel, role[sel], snd[sel], fxrow, fxv[sel]};
                 ui_fx(dirty, &f);

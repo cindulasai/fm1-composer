@@ -3,12 +3,13 @@
  * start tick and pitch. After a call that returns ED_OK the piece passes piece_check() and is byte for byte what
  * fm1c's encode() makes of the same notes (in a gap, rests of 65535 ticks first; notes in tick, pitch order);
  * after an error the bytes are untouched. Each change is logged in the current group (edit_mark() starts one: a
- * key, a knob turn); edit_undo() takes back the last group, of the last ED_UNDO changes kept.
+ * key, a knob turn); edit_undo() takes back the last group, of the last ED_UNDO changes kept. edit_chan() sets a
+ * channel's loop length or swing (US-25), logged the same way.
  * Edit only while the player is stopped (the bytes move), then player_refresh(). */
 #define ED_UNDO 64u
 #define ED_GAP 65535u
 enum { ED_OK = 0, ED_ARG = 1, ED_FULL = 2, ED_EXISTS = 3, ED_NONE = 4 };
-enum { EO_INS = 1, EO_DEL = 2, EO_SET = 3 };
+enum { EO_INS = 1, EO_DEL = 2, EO_SET = 3, EO_CHAN = 4 };   /* EO_CHAN: tick = the record byte, pitch = its value */
 
 typedef struct { uint32_t tick, grp; uint16_t dur; uint8_t op, ch, pitch, vel; } ed_op_t;
 static ed_op_t ed_log[ED_UNDO];
@@ -149,14 +150,27 @@ static int ed_set(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch, uint32
     return ED_OK;
 }
 
+/* a channel record byte: PIECE_CH_STEPS (0..PIECE_MAX_STEPS) or PIECE_CH_SWING (0..PIECE_MAX_SWING) */
+static int ed_chan(uint8_t *b, uint32_t ch, uint32_t at, uint32_t v, int log)
+{
+    if (ch >= b[5] || (at != PIECE_CH_STEPS && at != PIECE_CH_SWING)) return ED_ARG;
+    if (v > (at == PIECE_CH_STEPS ? PIECE_MAX_STEPS : PIECE_MAX_SWING)) return ED_ARG;
+    if (log) ed_push(EO_CHAN, ch, at, ed_rec(b, ch)[at], 0, 0);
+    ed_rec(b, ch)[at] = (uint8_t)v;
+    ed_seal(b);
+    return ED_OK;
+}
+
 static int edit_insert(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch, uint32_t dur, uint32_t vel) { return ed_insert(b, ch, tick, pitch, dur, vel, 1); }
 static int edit_delete(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch) { return ed_delete(b, ch, tick, pitch, 1); }
 static int edit_set(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch, uint32_t dur, uint32_t vel) { return ed_set(b, ch, tick, pitch, dur, vel, 1); }
+static int edit_chan(uint8_t *b, uint32_t ch, uint32_t at, uint32_t v) { return ed_chan(b, ch, at, v, 1); }
 
 static int ed_replay(uint8_t *b, const ed_op_t *o)
 {
     if (o->op == EO_DEL) return ed_delete(b, o->ch, o->tick, o->pitch, 0);
     if (o->op == EO_INS) return ed_insert(b, o->ch, o->tick, o->pitch, o->dur, o->vel, 0);
+    if (o->op == EO_CHAN) return ed_chan(b, o->ch, o->tick, o->pitch, 0);
     return ed_set(b, o->ch, o->tick, o->pitch, o->dur, o->vel, 0);
 }
 

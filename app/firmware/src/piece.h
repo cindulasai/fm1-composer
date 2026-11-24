@@ -5,7 +5,9 @@
  *   12 length in ticks (1..PIECE_MAX_TICKS)   16 name[24] printable ASCII, NUL padded, not empty
  *   40 total length (whole file, CRC included)   44 reserved (0)
  *   48 channels, 16 B each: role, sound (255 = the role's default), volume 0..127, pan 0..127, source MIDI
- *      channel 0..15, 3 reserved, event count u32, event offset u32
+ *      channel 0..15, loop length in 1/16 steps (0: none, else 1..64; US-25 polymeter), swing 0..100 (US-25),
+ *      1 reserved (0), event count u32, event offset u32. (Before US-25 loop and swing were reserved, 0: such pieces
+ *      read the same, in either version.)
  *   v2 only, after the channels: sections: count 1..24, key (0: none, else its root + 1, 1..12 = C..B), scale
  *      (SLOOP's 0..15, 0 when there is no key; US-24), 1 reserved (0), then 12 B each: start tick u32 (rising,
  *      < length; a section ends where the next starts, the last at the end), name[8] printable ASCII, NUL padded,
@@ -30,12 +32,16 @@
 #define PIECE_MAX_SECT 24u
 #define PIECE_SECT 12u
 #define PIECE_SNAME 8u
+#define PIECE_CH_STEPS 5u                       /* a channel record's loop length, its swing */
+#define PIECE_CH_SWING 6u
+#define PIECE_MAX_STEPS 64u
+#define PIECE_MAX_SWING 100u
 
 enum { PE_OK, PE_SHORT, PE_MAGIC, PE_VERSION, PE_CRC, PE_NCH, PE_HEADER, PE_TABLE, PE_EVENT, PE_SIZE, PE_SECT };
 enum { ROLE_LEAD, ROLE_COUNTER, ROLE_CHORDS, ROLE_PAD, ROLE_BASS, ROLE_DRUMS, ROLE_PERC, ROLE_ARP, ROLE_DRONE,
        ROLE_FX, ROLE_OTHER, ROLE_COUNT };
 
-typedef struct { uint8_t role, sound, vol, pan, src; uint32_t nev; const uint8_t *ev; } piece_ch_t;
+typedef struct { uint8_t role, sound, vol, pan, src, steps, swing; uint32_t nev; const uint8_t *ev; } piece_ch_t;
 typedef struct {
     char name[PIECE_NAME + 1]; uint16_t tempo_x10; uint32_t len_ticks; uint8_t nch, nsect;
     uint8_t key, scale;                         /* text2midi's key (v2): root + 1 (0: none), SLOOP's scale 0..15 */
@@ -101,7 +107,8 @@ static int piece_check(const uint8_t *b, uint32_t len)
     for (i = 0; i < nch; i++) {
         const uint8_t *c = b + PIECE_HDR + i * PIECE_CHREC;
         uint32_t nev = pc_u32(c + 8), off = pc_u32(c + 12), t = 0;
-        if (c[0] >= ROLE_COUNT || c[2] > 127u || c[3] > 127u || c[4] > 15u || c[5] || c[6] || c[7]) return PE_TABLE;
+        if (c[0] >= ROLE_COUNT || c[2] > 127u || c[3] > 127u || c[4] > 15u || c[5] > PIECE_MAX_STEPS || c[6] > PIECE_MAX_SWING || c[7])
+            return PE_TABLE;
         if (off != end || nev > (len - 4u - end) / PIECE_EV) return PE_TABLE;   /* packed in order, no gaps */
         for (j = 0; j < nev; j++) {
             const uint8_t *e = b + off + j * PIECE_EV;
@@ -130,8 +137,8 @@ static void piece_view(const uint8_t *b, piece_view_t *v)       /* only after pi
     for (i = 0; i < PIECE_MAX_CH; i++) {
         const uint8_t *c = b + PIECE_HDR + i * PIECE_CHREC;
         piece_ch_t *d = &v->ch[i];
-        if (i >= v->nch) { d->role = ROLE_OTHER; d->sound = 255u; d->vol = d->pan = d->src = 0; d->nev = 0; d->ev = 0; continue; }
-        d->role = c[0]; d->sound = c[1]; d->vol = c[2]; d->pan = c[3]; d->src = c[4];
+        if (i >= v->nch) { d->role = ROLE_OTHER; d->sound = 255u; d->vol = d->pan = d->src = d->steps = d->swing = 0; d->nev = 0; d->ev = 0; continue; }
+        d->role = c[0]; d->sound = c[1]; d->vol = c[2]; d->pan = c[3]; d->src = c[4]; d->steps = c[5]; d->swing = c[6];
         d->nev = pc_u32(c + 8); d->ev = b + pc_u32(c + 12);
     }
 }
