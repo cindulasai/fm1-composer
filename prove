@@ -161,6 +161,7 @@ if [ "${1:-}" = "mutants" ]; then
   total=$(wc -l < "$cands" | tr -d ' ')
   if [ "$total" -eq 0 ]; then echo "MUTANTS: 0 candidates in $story's non-test files — nothing to mutate"; exit 0; fi
   cp -Rc "$app" "$work/app" 2>/dev/null || { rm -rf "$work/app"; cp -R "$app" "$work/app"; }   # (APFS: copy-on-write clones, no space until written)
+  [ -d .github ] && cp -R .github "$work/.github"   # (the gate's tests may read the build root's CI workflow, beside app/)
   appabs=$(cd "$app" && pwd)                     # cargo's target dirs (CACHEDIR.TAG) are shared, not copied: a copy at a new
   find "$work/app" -path '*/target/CACHEDIR.TAG' 2>/dev/null | while read -r t; do   # path rebuilds every crate (GBs)
     d=${t%/CACHEDIR.TAG}; rm -rf "$d"; ln -s "$appabs/${d#"$work/app/"}" "$d"
