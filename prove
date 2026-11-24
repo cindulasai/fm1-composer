@@ -132,7 +132,9 @@ if [ "${1:-}" = "mutants" ]; then
     /^### US-[0-9]+/ { on = ($2 == S) }
     on && /Files:/ { f = $0; sub(/.*Files:[ \t]*/, "", f); gsub(/,/, " ", f); print f }' stories/*.md)
   work=$(mktemp -d); cands=$(mktemp)
-  trap 'rm -rf "$work" "$cands"' EXIT
+  pid=; dog=
+  trap 'kill -9 -- "-$pid" 2>/dev/null; kill "$dog" 2>/dev/null; rm -rf "$work" "$cands"' EXIT
+  trap 'exit 130' INT TERM HUP
   for f in $files; do
     case "$f" in "$app"/*) ;; *) continue ;; esac
     case "$(printf '%s' "$f" | tr 'A-Z' 'a-z')" in
@@ -174,9 +176,11 @@ if [ "${1:-}" = "mutants" ]; then
     i=$((i + 1)); [ $(( (i - 1) % step )) -eq 0 ] || continue
     rel=${f#"$app"/}; tried=$((tried + 1))
     awk -v L="$line" -v A="$from" -v B="$to" 'NR == L { k = index($0, A); $0 = substr($0, 1, k - 1) B substr($0, k + length(A)) } { print }' "$f" > "$work/app/$rel"
-    ( cd "$work/app" && sh -c "$gate" ) > /dev/null 2>&1 < /dev/null &
+    # its own process group (perl setpgrp), so the watchdog and an interrupted close kill all it started; a file it
+    # writes is capped at 1 GB (ulimit -f, 512-byte blocks): a mutant that loops forever can't fill the disk
+    ( cd "$work/app" && ulimit -f 2097152 && exec perl -e 'setpgrp(0, 0); exec @ARGV' sh -c "$gate" ) > /dev/null 2>&1 < /dev/null &
     pid=$!
-    ( sleep "$limit"; kill -9 "$pid" 2>/dev/null ) > /dev/null 2>&1 &
+    ( sleep "$limit"; kill -9 -- "-$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null ) > /dev/null 2>&1 &
     dog=$!
     if wait "$pid" 2>/dev/null; then
       printf 'SURVIVED %s:%s  "%s" -> "%s"  | %s\n' "$f" "$line" "$from" "$to" "$(sed -n "${line}p" "$f" | sed 's/^[[:space:]]*//')" >> "$work/survivors"
