@@ -1,0 +1,3 @@
+COMMAND: sh prove mutants US-29
+MUTANTS: 10 tried, 10 killed, 0 survived (of 20 candidates in US-29)
+EXIT_CODE: 0

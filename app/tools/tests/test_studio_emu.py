@@ -75,7 +75,12 @@ def diag(page):
             return (await m.savedLibraries()).map((l) => l.map((p) => [p.seq, p.name, p.bytes.length])); }""")
     except Exception as e:                       # (diagnostics never hide the failure itself)
         libs = f"unreadable: {e}"
-    return f"studio: {page.text_content('#status')!r}; emulator: {emu(page).text_content('#status')!r}; saved: {libs}"
+    try:
+        log = page.evaluate("() => window.studioSendLog || null")
+    except Exception as e:
+        log = f"unreadable: {e}"
+    return (f"studio: {page.text_content('#status')!r}; emulator: {emu(page).text_content('#status')!r}; saved: {libs}; "
+            f"send: {log}")
 
 
 def send(page, secs=90):
@@ -351,6 +356,24 @@ def test_29_2_a_slow_emulator_gets_a_longer_read_back_before_did_not_save(studio
     assert status.startswith("Sending stopped: the FM-1 did not save"), status
     last, end = f.evaluate("() => window.sent[window.sent.length - 1]"), page.evaluate("() => performance.now()")
     assert end - last >= 28000, f"{(end - last) / 1000:.1f} s of reading back"
+
+
+def test_29_3_the_read_back_lasts_10_s_of_the_emulators_own_time(studio):
+    """fm1-emu runs at a third of real time (a computer too busy for it) and nothing arrives: Send reads back until
+    fm1-emu has run 10 s of its own time (~30 s here), not 10 s of the wall clock, then says it did not save"""
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    f.wait_for_function("() => Number.isFinite(window.composerCable.emulatedMs())", timeout=30000)
+    f.evaluate("""() => { const c = window.composerCable, t0 = performance.now(), e0 = c.emulatedMs(); window.sent = [];
+        c.emulatedMs = () => e0 + (performance.now() - t0) / 3;      // a third of real time
+        c.send = (b) => { window.sent.push(performance.now()); }; }""")
+    status = send(page, secs=150)
+    assert status.startswith("Sending stopped: the FM-1 did not save"), status
+    last, end = f.evaluate("() => window.sent[window.sent.length - 1]"), page.evaluate("() => performance.now()")
+    assert 28000 <= end - last <= 40000, f"{(end - last) / 1000:.1f} s of reading back: 10 s of fm1-emu's time"
+    log = page.evaluate("() => window.studioSendLog")
+    assert log["eEnd"] - log["eSent"] >= 10000 and log["bytes"] > 0, log
 
 
 def test_17_2_a_resend_that_never_arrives_is_not_called_saved(studio):

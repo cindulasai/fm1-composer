@@ -58,11 +58,17 @@ $('#send').addEventListener('click', async () => {
     }
     const same = (p) => p.seq > before && p.bytes.length === made.f1p.length && p.bytes.every((x, k) => x === made.f1p[k]);
     let saved = false;
-    const tries = Math.ceil(20 * slow());
-    for (let i = 0; i < tries && !saved; i++) { // read back from fm1-emu's saved flash (10 s, longer on a slow one)
+    const eSent = emuMs(), t1 = performance.now();
+    const log = window.studioSendLog = { e0, eSent, waits, bytes: sent, reads: 0 };   // (what a failed Send leaves to look at)
+    const more = Number.isFinite(eSent)        // read back from fm1-emu's saved flash: until it has run 10 s of its own time
+      ? () => emuMs() - eSent < 10000 && performance.now() - t1 < 90000     // (90 s at most: a computer too busy to run it)
+      : ((tries) => () => log.reads < tries)(Math.ceil(20 * slow()));      // (no emulated time shown: 10 s, longer on a slow one)
+    while (!saved && more()) {
       await sleep(500);
+      log.reads++;
       try { saved = (await savedLibraries()).some((lib) => lib.some(same)); } catch { /* not saved yet */ }
     }
+    log.eEnd = emuMs();
     if (!saved) throw new Error(`the FM-1 did not save "${made.name}" (if a piece is playing, it is saved when it stops; then Send again)`);
     say(`On the FM-1: "${made.name}" (read back from its flash; ${made.channels} channels, ${made.notes} notes, ${made.bars} bars, ${report.length ? `${report.length} changes to fit` : 'nothing had to change'}). It is at the top of LIBRARY: press PLAY.`);
   } catch (e) {
