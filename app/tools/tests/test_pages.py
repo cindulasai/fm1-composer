@@ -71,6 +71,27 @@ def test_28_1_required_mode_turns_a_missing_firmware_into_a_failure(tmp_path):
     assert r.returncode == 0 and "1 skipped" in r.stdout, r.stdout[-600:]
 
 
+def test_28_1_the_pages_test_step_runs_as_written_in_a_fresh_process():
+    """firmware.yml's test step, its command as written (python3 = this Python), from app/, no PYTHONPATH: it loads
+    and passes (the firmware and fm1-emu's page here), or, without them, fails on FM1_REQUIRE_STUDIO, never on loading"""
+    step = next(s for s in steps(job("build")) if "tools/tests/test_export.py -k test_27_1" in s)
+    cmd = re.search(r"run: (.+)", step)[1]
+    assert cmd.startswith("cd app && "), cmd
+    argv = shlex.split(cmd[len("cd app && "):])
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "FM1_REQUIRE_STUDIO")}
+    while "=" in argv[0]:
+        k, v = argv.pop(0).split("=", 1)
+        env[k] = v
+    assert env.get("FM1_REQUIRE_STUDIO") == "1" and argv[0] == "python3"
+    r = subprocess.run([sys.executable, *argv[1:]], capture_output=True, text=True, env=env, cwd=APP)
+    out = r.stdout + r.stderr
+    assert "ModuleNotFoundError" not in out and "ImportError" not in out and r.returncode != 2, out[-800:]
+    if emu_ready():
+        assert r.returncode == 0 and "1 passed" in out, out[-800:]
+    else:
+        assert r.returncode == 1 and "FM1_REQUIRE_STUDIO=1: needs" in out, out[-800:]
+
+
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))

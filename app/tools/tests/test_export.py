@@ -4,8 +4,9 @@ import functools, http.server, json, os, re, subprocess, sys, threading, urllib.
 from pathlib import Path
 import pytest
 from conftest import APP
-from fm1c import cli
-from test_studio import browser, studio  # noqa: F401  (fixtures; studio_url is this module's: the static export)
+sys.path.insert(0, str(APP / "tools"))                    # (run alone, as CI's Pages step does)
+from fm1c import cli  # noqa: E402
+from test_studio import browser, studio  # noqa: F401,E402  (fixtures; studio_url is this module's: the static export)
 from test_studio_emu import AUDIO_TAP, EMU, FWSC, emu, open_example, send, start, t2m
 
 WEB = APP / "studio" / "web"
