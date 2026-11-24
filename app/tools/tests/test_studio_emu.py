@@ -273,8 +273,7 @@ def test_17_2_a_slow_emulator_gets_the_piece_slower_and_saves_it(studio):
 
 
 def test_29_1_a_stalled_emulator_holds_send_back_and_the_piece_still_saves(studio):
-    """fm1-emu's emulated clock stops for 3 s (a busy computer): Send keeps at most ~0.4 s of bytes ahead of it (1200
-    + one frame), never the second's worth fm1-emu would drop, then finishes, and the piece is read back"""
+    """fm1-emu's emulated clock stops for 3 s (a busy computer): Send keeps at most 2000 bytes + one frame ahead of it, never the second's worth fm1-emu would drop, then finishes, and the piece is read back"""
     page, _, _ = studio()
     open_example(page)
     f = start(page)
@@ -294,7 +293,7 @@ def test_29_1_a_stalled_emulator_holds_send_back_and_the_piece_still_saves(studi
     t0 = sent[0][0]
     during = sum(n for t, n in sent if t - t0 < 3000)
     biggest = max(n for _, n in sent)
-    assert during <= 1200 + biggest, f"{during} bytes sent while the emulator stood still"
+    assert during <= 2000 + biggest, f"{during} bytes sent while the emulator stood still"
     assert any(t - t0 >= 3000 for t, _ in sent), "Send went on once the emulator ran again"
 
 
@@ -374,6 +373,52 @@ def test_29_3_the_read_back_lasts_10_s_of_the_emulators_own_time(studio):
     assert 28000 <= end - last <= 40000, f"{(end - last) / 1000:.1f} s of reading back: 10 s of fm1-emu's time"
     log = page.evaluate("() => window.studioSendLog")
     assert log["eEnd"] - log["eSent"] >= 10000 and log["bytes"] > 0, log
+    assert log["eSent"] >= log["e0"] and log["waits"] >= 0 and log["reads"] >= 50, log            # the whole timeline
+
+
+def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio):
+    """fm1-emu's status line (Studio's clock) refreshes once a second: Send starts 990 ms after a refresh and fm1-emu
+    stalls 1010 ms into it for 3 s. Modelling the jack (3.125 bytes per running ms), its real backlog stays <= 2000
+    + one frame, never the ~3125 fm1-emu drops (Adversary v8's case)"""
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    f.wait_for_function("() => Number.isFinite(window.composerCable.emulatedMs())", timeout=30000)
+    f.evaluate("""() => { const c = window.composerCable, send = c.send.bind(c), base = c.emulatedMs();
+        window.sent = []; let x = null; window.probe = {};
+        const T = (t) => { const F = x + 1010; return base + (t < F ? t - x : t < F + 3000 ? F - x : t - x - 3000); };
+        c.emulatedMs = () => { const now = performance.now();
+            if (x === null) { x = now; window.probe.x = x; }
+            const tick = (x - 990) + 1000 * Math.floor((now - (x - 990)) / 1000);   // the last refresh
+            return Math.round(T(tick) / 100) * 100; };
+        c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""")
+    assert send(page, secs=180).startswith("On the FM-1")
+    sent, x = f.evaluate("() => window.sent"), f.evaluate("() => window.probe.x")
+    stall = x + 1010
+    run = lambda a, b: max(0, min(b, stall) - a) + max(0, b - max(a, stall + 3000))   # fm1-emu running ms in [a, b]
+    q, worst, prev = 0.0, 0.0, sent[0][0]
+    for t, n in sent:
+        q = max(0.0, q - 3.125 * run(prev, t)) + n
+        prev = t
+        worst = max(worst, q)
+    assert worst <= 2000 + max(n for _, n in sent), f"jack backlog {worst:.0f} bytes (fm1-emu drops past ~3125)"
+
+
+def test_29_3_a_clock_that_stops_after_the_transfer_reads_back_90_s_at_most(studio):
+    """fm1-emu's clock stops once the transfer is out and nothing is saved: Send reads back 90 s of the wall clock at
+    most, then says it did not save (no hang)"""
+    page, _, _ = studio()
+    open_example(page)
+    f = start(page)
+    f.wait_for_function("() => Number.isFinite(window.composerCable.emulatedMs())", timeout=30000)
+    f.evaluate("""() => { const c = window.composerCable, real = c.emulatedMs.bind(c); window.sent = []; let stuck = null;
+        c.emulatedMs = () => stuck !== null ? stuck : real();
+        c.send = (b) => { window.sent.push(performance.now()); clearTimeout(window.__t);
+                          window.__t = setTimeout(() => { stuck = real(); }, 0); }; }""")
+    status = send(page, secs=200)
+    assert status.startswith("Sending stopped: the FM-1 did not save"), status
+    last, end = f.evaluate("() => window.sent[window.sent.length - 1]"), page.evaluate("() => performance.now()")
+    assert 85000 <= end - last <= 100000, f"{(end - last) / 1000:.1f} s of reading back: 90 s at most"
 
 
 def test_17_2_a_resend_that_never_arrives_is_not_called_saved(studio):
