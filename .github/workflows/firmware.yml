@@ -1,5 +1,6 @@
 # Build COMPOSER's .fwsc with JieLi's toolchain (Linux x86-64 only) and run the gate. The package is an artifact;
-# a local run downloads it (gh run download) to test it in fm1-emu. No release, no publishing.
+# a local run downloads it (gh run download) to test it in fm1-emu. No release. COMPOSER Studio goes to GitHub Pages
+# only from main, after a green gate, and only once the repo is public (decision 42; private: the pages job is skipped).
 name: firmware
 on:
   push:
@@ -48,6 +49,13 @@ jobs:
         run: python3 -m playwright install --with-deps chromium-headless-shell
       - name: Gate
         run: PY=python3 sh app/check.sh
+      - name: COMPOSER Studio as a static site (the gate tested an export of this same tree in a browser, 27.1)
+        if: github.ref == 'refs/heads/main' && !github.event.repository.private
+        run: app/fm1c studio --export _site
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main' && !github.event.repository.private
+        with:
+          path: _site
       - uses: actions/upload-artifact@v4
         if: always()        # (a red gate still fails the run; the package is kept to look into it)
         with:
@@ -56,3 +64,16 @@ jobs:
             app/build/composer.fwsc
             app/build/composer.dis
           if-no-files-found: error
+  pages:
+    needs: build
+    if: github.ref == 'refs/heads/main' && !github.event.repository.private
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

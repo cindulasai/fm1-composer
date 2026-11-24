@@ -68,9 +68,22 @@ sh tools/studio_key.sh              # optional: your MiniMax key into a git-igno
 ```
 
 text2midi's **Settings** (⚙) takes a key for any of its providers instead. In this page the key stays in this browser
-(text2midi's window says "system keychain": that is its desktop app), and it is sent only to the provider you picked.
+(its local storage), and it is sent only to the provider you picked.
 `tools/studio_key.sh` writes `studio/web/local/ai.json` (git-ignored, readable only by you). `fm1c studio` serves
 the page to this computer only (127.0.0.1).
+
+### Try it in your browser
+
+Once this repo is public, CI publishes Studio at **https://cindulasai.github.io/fm1-composer/** after every green
+build of `main` (until then that link does not work: the Pages step is skipped while the repo is private). You bring
+your own AI key; it stays in your browser.
+
+To host Studio yourself, export it as plain files (after the steps above) and put them on any static web server:
+
+```sh
+./fm1c studio --export site         # the whole Studio, with the firmware; never your AI key
+python3 -m http.server -d site 8000 # then open http://127.0.0.1:8000/
+```
 
 ## Playing
 
@@ -158,6 +171,7 @@ fm1c push FILES... [--no-wait]                                     each piece re
 fm1c list | delete ID | pull ID [-o OUT]
 fm1c emu [--fwsc FILE] [--flash FILE]
 fm1c studio [--port N] [--no-open]                                 COMPOSER Studio in your browser
+fm1c studio --export DIR [--force]                                 the same Studio as static files
 ```
 
 By default fm1c finds the FM-1 by its USB name ("Felucca", as with every Felucca-based firmware), else
