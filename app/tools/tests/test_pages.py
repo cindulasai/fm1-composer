@@ -130,7 +130,7 @@ def studio_url(tmp_path_factory):
 
 def test_28_3_readme_try_it_section_and_its_commands_open_studio(studio, studio_url):
     sec, lines = readme_commands()
-    assert "https://cindulasai.github.io/fm1-composer/" in sec and "Once this repo is public" in sec
+    assert "https://cindulasai.github.io/fm1-composer/" in sec and "after every green build of `main`" in sec
     assert lines[0] == "./fm1c studio --export site" and lines[1] == "python3 -m http.server -d site 8000"
     page, _, _ = studio()
     assert t2m(page).url.startswith(studio_url) and emu(page).url.startswith(studio_url)    # both windows, in a browser

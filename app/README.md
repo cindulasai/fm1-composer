@@ -74,9 +74,9 @@ the page to this computer only (127.0.0.1).
 
 ### Try it in your browser
 
-Once this repo is public, CI publishes Studio at **https://cindulasai.github.io/fm1-composer/** after every green
-build of `main` (until then that link does not work: the Pages step is skipped while the repo is private). You bring
-your own AI key; it stays in your browser.
+Studio runs at **https://cindulasai.github.io/fm1-composer/**: CI publishes it after every green build of `main`
+(the exported page is tested in a browser first). You bring your own AI key; it stays in your browser. Without a key
+you can still open text2midi's example pieces and send them to the FM-1.
 
 To host Studio yourself, export it as plain files (after the steps above) and put them on any static web server:
 
