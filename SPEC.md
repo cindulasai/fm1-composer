@@ -150,4 +150,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v5 — SLOOP's sound engine on 8 channels: effects, FM6, PHYS/DIGITAL/VOICE, 32 kits; text2midi's instruments mapped (US-18–US-22) — verified
 - v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
 - v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
-- v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29)
+- v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29) — verified
