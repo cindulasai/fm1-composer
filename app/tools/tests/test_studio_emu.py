@@ -376,25 +376,27 @@ def test_29_3_the_read_back_lasts_10_s_of_the_emulators_own_time(studio):
     assert log["eSent"] >= log["e0"] and log["waits"] >= 0 and log["reads"] >= 50, log            # the whole timeline
 
 
-def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio):
-    """fm1-emu's status line (Studio's clock) refreshes once a second: Send starts 990 ms after a refresh and fm1-emu
-    stalls 1010 ms into it for 3 s. Modelling the jack (3.125 bytes per running ms), its real backlog stays <= 2000
-    + one frame, never the ~3125 fm1-emu drops (Adversary v8's case)"""
+@pytest.mark.parametrize("after_refresh, stall_at", [(990, 1010), (400, 0)])
+def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio, after_refresh, stall_at):
+    """fm1-emu's status line (Studio's clock) refreshes once a second: Send starts `after_refresh` ms after a refresh
+    and fm1-emu stalls `stall_at` ms into it for 3 s (stalling at once, the stale start counts most). Modelling the jack
+    (3.125 bytes per running ms), its real backlog stays <= 2000 + one frame, never the ~3125 fm1-emu drops (the
+    Adversary's v8 cases)"""
     page, _, _ = studio()
     open_example(page)
     f = start(page)
     f.wait_for_function("() => Number.isFinite(window.composerCable.emulatedMs())", timeout=30000)
     f.evaluate("""() => { const c = window.composerCable, send = c.send.bind(c), base = c.emulatedMs();
         window.sent = []; let x = null; window.probe = {};
-        const T = (t) => { const F = x + 1010; return base + (t < F ? t - x : t < F + 3000 ? F - x : t - x - 3000); };
+        const T = (t) => { const F = x + %d; return base + (t < F ? t - x : t < F + 3000 ? F - x : t - x - 3000); };
         c.emulatedMs = () => { const now = performance.now();
             if (x === null) { x = now; window.probe.x = x; }
-            const tick = (x - 990) + 1000 * Math.floor((now - (x - 990)) / 1000);   // the last refresh
+            const tick = (x - %d) + 1000 * Math.floor((now - (x - %d)) / 1000);   // the last refresh
             return Math.round(T(tick) / 100) * 100; };
-        c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""")
+        c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""" % (stall_at, after_refresh, after_refresh))
     assert send(page, secs=180).startswith("On the FM-1")
     sent, x = f.evaluate("() => window.sent"), f.evaluate("() => window.probe.x")
-    stall = x + 1010
+    stall = x + stall_at
     run = lambda a, b: max(0, min(b, stall) - a) + max(0, b - max(a, stall + 3000))   # fm1-emu running ms in [a, b]
     q, worst, prev = 0.0, 0.0, sent[0][0]
     for t, n in sent:
