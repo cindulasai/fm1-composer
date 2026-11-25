@@ -30,6 +30,8 @@
 | US-27 | Studio as a static site | 1 | done | 0 |
 | US-28 | Pages from CI, deploy only when public | 1 | done | 2 |
 | US-29 | Send survives a stalled emulator | 1 | done | 2 |
+| US-30 | MONO / LEGATO voices with glide + SLIDE | 1 | todo | 0 |
+| US-31 | Part tools in EDIT: shift, ×2 / ½, transpose | 1 | todo | 0 |
 
 ## Impediments
 - US-14, US-15: done-self: v3 Adversary FAILs were on criteria replaced by v4 (US-16, US-17, done); their remaining criteria (14.4 key file, 14.5 server, 15.5 emulator pin) were not re-reviewed fresh

@@ -46,6 +46,8 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F26 | Record live play into a part: what you play (keys or MIDI IN) is written into the selected channel at the grid, overdub or replace, undoable | v6 | shipped |
 | F27 | Studio as a static site: `fm1c studio --export DIR` writes the whole Studio (both windows, the cable, COMPOSER first, the firmware) for any static host, never a key file; the key panel says where the key really is (this browser) | v7 | shipped |
 | F28 | Pages from CI: the firmware workflow exports Studio after a green gate, tests the export in a browser, and deploys it to GitHub Pages only when the repo is public (private: deploy skipped, run green) | v7 | shipped |
+| F29 | Voice modes: a channel plays POLY, MONO or LEGATO with glide (SLOOP's voice code); each sound brings SLOOP's own mode + glide, overridable per channel on the device and saved in the piece; SLIDE on a step glides into the next | v9 | planned |
+| F30 | Part tools in EDIT (SLOOP-style): hold a button and turn KNOB1 shift (every note a step later / earlier), KNOB2 ×2 / ½ (the part copied after itself / halved), KNOB3 transpose (a semitone); one hold = one undo | v9 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -121,6 +123,9 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 43 | v7 = decision 42's build, made ready while the repo stays private: static export (the server's 3 rewrites baked in), browser wording via Studio's own Vite config (text2midi's files stay unchanged), Pages job in firmware.yml after the gate (one build), deploy guarded by repo visibility; going public itself waits for the user's go | council |
 | 44 | CI flake 17.2's cause: fm1-emu drops MIDI past ~1 s of jack backlog; a stalled emulator (busy runner) took Studio's wall-clock-paced bytes and dropped them. Send now waits on fm1-emu's emulated time (its status line) to stay ≤ ~0.4 s ahead; fm1-emu unchanged | council |
 | 45 | Went public 2026-11-24 (user's go): full-history secret scan clean (157 commits; only the tests' fake key), repo public, Pages from GitHub Actions; CI 45521407008 deployed (export tested in a browser first); live page checked in Chromium: both windows, COMPOSER boots, Send read back, audio heard; local/ai.json 404 | user |
+| 46 | v9 voice mode: the sound's own SLOOP mode + glide by default, a per-channel override on the FM-1, saved in the piece (pieces from v8 open unchanged: POLY, as before) | user |
+| 47 | v9 part tools live in EDIT, SLOOP-style (hold + KNOB1 shift / KNOB2 ×2·½ / KNOB3 transpose; FX undo) | user |
+| 48 | v9 assumptions: emulator only; SLOOP voice.c mono/legato/glide copied with provenance; POLY renders bit-identical to v8; SLIDE in STEPS; UNISON out (voice budget) | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -152,3 +157,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
 - v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
 - v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29) — verified
+- v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose (US-30–US-31)
