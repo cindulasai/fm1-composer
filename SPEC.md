@@ -133,6 +133,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 51 | CI 17.2-style Send flake, root cause (2026-11-24): the jack's SysEx receiver (uart_sysex.c) held one finished frame; Studio queues up to 2000 B (~6 frames) in the jack, so a main-loop pause > ~100 ms dropped a frame → ESEQ → not saved (~1 in 3 runs of test_29_1 [990-1010]; 0/10 with one frame ahead). Fix in the firmware (queue frames), not by slowing Send (one frame ahead ≈ 4× slower: the status clock ticks once a second) | council |
 | 52 | v10 live send (council, within decision 50): swap in RAM at the next bar (the player already plays from play_buf; xfer stages a checked piece), save to flash only when stopped (erase silences audio); the newer of two pending pieces wins; device-side channel changes carry over | council |
 | 53 | v10 live send never drops work: if the playing piece has unsaved device edits, the sent piece waits and switches when playback stops (footer `NEXT AT STOP: <name>`); otherwise at the next bar | council |
+| 54 | (v9 Adversary) SLIDE glides on every voice mode, not only MONO / LEGATO as in SLOOP: new pieces are AUTO and most sounds POLY, so SLOOP's rule made SLIDE silently do nothing; the slid note's voice glides into the next note. The README documents voice modes + SLIDE. 33.3: 5 runs locally, 20 on CI | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
