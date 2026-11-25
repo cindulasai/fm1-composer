@@ -104,7 +104,7 @@ def cmd_compose(a) -> int:
 
 STUDIO_CABLE = '<script src="../cable.js"></script>\n'
 COMPOSER_ENTRY = {"id": "composer", "name": "COMPOSER", "version": "", "author": "cindulasai", "license": "GPL-3.0-only",
-                  "about": "Plays multi-part arrangements; COMPOSER Studio sends them in over MIDI IN.",
+                  "about": "Plays whole arrangements, up to 8 parts, made from a sentence in COMPOSER Studio (this site's home page) and sent in over MIDI IN: then play the keys in key, edit notes, sequence steps, record.",
                   "repo": "https://github.com/cindulasai/fm1-composer", "package": "../firmware/composer.fwsc"}
 
 
