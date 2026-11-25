@@ -129,6 +129,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 48 | v9 assumptions: emulator only; SLOOP voice.c mono/legato/glide copied with provenance; POLY renders bit-identical to v8; SLIDE in STEPS; UNISON out (voice budget) | user |
 | 49 | (user) the README and COMPOSER's emulator tile must show Studio's value: a guide on the tile added by Studio's own cable.js (fm1-emu's page unchanged: it renders only plain about text + fixed links), Studio as the repo's homepage link | user |
 | 50 | (user, 2026-11-24) v10 = live send while playing (Studio sends, the FM-1 swaps at the next bar); then sampled instruments, energy/swing + setlists; verified work is pushed to main overnight (CI gates the Pages deploy) | user |
+| 51 | CI 17.2-style Send flake, root cause (2026-11-24): the jack's SysEx receiver (uart_sysex.c) held one finished frame; Studio queues up to 2000 B (~6 frames) in the jack, so a main-loop pause > ~100 ms dropped a frame → ESEQ → not saved (~1 in 3 runs of test_29_1 [990-1010]; 0/10 with one frame ahead). Fix in the firmware (queue frames), not by slowing Send (one frame ahead ≈ 4× slower: the status clock ticks once a second) | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -170,4 +171,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
 - v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
 - v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29) — verified
-- v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile (US-30–US-32)
+- v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile ; Send never loses a frame (US-30–US-33)
