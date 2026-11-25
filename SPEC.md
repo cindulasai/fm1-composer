@@ -142,7 +142,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
   - B3 Transport: play from anywhere (click the timeline / piano roll to seek), loop a region, position display
   - B4 Edit the AI result: change notes/parts on top of the generation; regenerate one portion (a bar range) of one layer/channel only, keeping the rest
   - B5 Mobile: the same Studio experience on a phone browser (touch-friendly composing, responsive layout); no separate native app needed unless research says otherwise
-  - B6 Research soundcraft (https://getartcraft.com/apps/soundcraft; built with craft-anything): check its licence; reuse it as a component or copy its good parts if allowed, else learn from it — do not rebuild from scratch what can be reused
+  - B6 soundcraft (https://getartcraft.com/apps/soundcraft): researched (local note research/soundcraft.md) — MIT OR Apache-2.0 (GPL-compatible), Rust + egui + WebAssembly DAW, no AI, no mobile; reuse its DSP (EQ/effects/mixer) with notices, borrow its track-strip/timeline ideas in HTML; do not rebuild what can be reused
   - B7 Seamless push to the FM-1 emulator: everything made in Studio stays fully tweakable on the FM-1 (channels editable, added, removed there)
   - B8 Beautify COMPOSER's home screen (LIBRARY) on the FM-1: a better way to browse and pick songs
   - B9 Performance + reliability first (user, 2026-11-24): faster than today everywhere (Studio, Send, emulator), no flaky paths
