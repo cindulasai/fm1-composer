@@ -128,6 +128,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 47 | v9 part tools live in EDIT, SLOOP-style (hold + KNOB1 shift / KNOB2 ×2·½ / KNOB3 transpose; FX undo) | user |
 | 48 | v9 assumptions: emulator only; SLOOP voice.c mono/legato/glide copied with provenance; POLY renders bit-identical to v8; SLIDE in STEPS; UNISON out (voice budget) | user |
 | 49 | (user) the README and COMPOSER's emulator tile must show Studio's value: a guide on the tile added by Studio's own cable.js (fm1-emu's page unchanged: it renders only plain about text + fixed links), Studio as the repo's homepage link | user |
+| 50 | (user, 2026-11-24) v10 = live send while playing (Studio sends, the FM-1 swaps at the next bar); then sampled instruments, energy/swing + setlists; verified work is pushed to main overnight (CI gates the Pages deploy) | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
