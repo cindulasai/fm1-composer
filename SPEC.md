@@ -48,6 +48,7 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F28 | Pages from CI: the firmware workflow exports Studio after a green gate, tests the export in a browser, and deploys it to GitHub Pages only when the repo is public (private: deploy skipped, run green) | v7 | shipped |
 | F29 | Voice modes: a channel plays POLY, MONO or LEGATO with glide (SLOOP's voice code); each sound brings SLOOP's own mode + glide, overridable per channel on the device and saved in the piece; SLIDE on a step glides into the next | v9 | planned |
 | F30 | Part tools in EDIT (SLOOP-style): hold a button and turn KNOB1 shift (every note a step later / earlier), KNOB2 ×2 / ½ (the part copied after itself / halved), KNOB3 transpose (a semitone); one hold = one undo | v9 | planned |
+| F31 | Show the way: the root README leads with the live Studio (screenshot + 3 steps); COMPOSER's tile on fm1-emu's page explains itself and links to Studio (Studio's cable script; fm1-emu's files unchanged) | v9 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -126,6 +127,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 46 | v9 voice mode: the sound's own SLOOP mode + glide by default (a channel's mode byte AUTO; new pieces), a per-channel override on the FM-1, saved in the piece; pieces from v8 (no mode bytes) open unchanged: POLY | user |
 | 47 | v9 part tools live in EDIT, SLOOP-style (hold + KNOB1 shift / KNOB2 ×2·½ / KNOB3 transpose; FX undo) | user |
 | 48 | v9 assumptions: emulator only; SLOOP voice.c mono/legato/glide copied with provenance; POLY renders bit-identical to v8; SLIDE in STEPS; UNISON out (voice budget) | user |
+| 49 | (user) the README and COMPOSER's emulator tile must show Studio's value: a guide on the tile added by Studio's own cable.js (fm1-emu's page unchanged: it renders only plain about text + fixed links), Studio as the repo's homepage link | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -157,4 +159,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v6 — live play + step sequencer on 8 tracks: sections, key-aware keyboard + MIDI IN, steps, record (US-23–US-26) — verified
 - v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
 - v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29) — verified
-- v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose (US-30–US-31)
+- v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile (US-30–US-32)
