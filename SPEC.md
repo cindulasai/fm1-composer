@@ -135,6 +135,16 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 "16 voices" → narrowed to the measured number in README.
 
 ## Backlog
+- **User's Studio wishlist (2026-11-24, to drill into stories together before specs; user: "best of the best", production / professional quality, free, made for creators publishing AI songs):**
+  - B1 Modern 2026 look for Studio (https://cindulasai.github.io/fm1-composer/): keep today's simplicity, drop the dated 1990s feel (scrollbars, controls, typography, spacing); polished, professional
+  - B2 Left side becomes a light DAW: per-channel volume faders, mute/solo, pan; per-channel graphic EQ; per-channel effects; a master volume beside Play
+  - B3 Transport: play from anywhere (click the timeline / piano roll to seek), loop a region, position display
+  - B4 Edit the AI result: change notes/parts on top of the generation; regenerate one portion (a bar range) of one layer/channel only, keeping the rest
+  - B5 Mobile: the same Studio experience on a phone browser (touch-friendly composing, responsive layout); no separate native app needed unless research says otherwise
+  - B6 Research soundcraft (https://getartcraft.com/apps/soundcraft; built with craft-anything): check its licence; reuse it as a component or copy its good parts if allowed, else learn from it — do not rebuild from scratch what can be reused
+  - B7 Seamless push to the FM-1 emulator: everything made in Studio stays fully tweakable on the FM-1 (channels editable, added, removed there)
+  - B8 Beautify COMPOSER's home screen (LIBRARY) on the FM-1: a better way to browse and pick songs
+  - B9 Performance + reliability first (user, 2026-11-24): faster than today everywhere (Studio, Send, emulator), no flaky paths
 - Sampled instruments (piano, strings, choir) in the ~430 KB of free code flash (decision 36), if a sound test shows the synthesized ones fall short
 - From the SLOOP reconciliation (research/sloop-reconcile.md §4): MONO / LEGATO voices with glide and SLIDE; transpose, shift and ×2 / ½ for a channel; the other gaps it ranks
 - Recording: leaving PLAYER mid-pass keeps the notes but shows no "REC OFF: N NOTES" (v6 Adversary, minor; composer.c)
