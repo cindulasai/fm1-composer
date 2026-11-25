@@ -1,5 +1,6 @@
 //! The .f1p piece format (v1; v2 = v1 + a sections table, only when a piece has sections; the table also carries the
-//! piece's key, US-24), as app/tools/fm1c/piece.py writes it (firmware/src/piece.h reads it).
+//! piece's key, US-24; US-30: each channel's voice mode and glide), as app/tools/fm1c/piece.py writes it
+//! (firmware/src/piece.h reads it).
 use unicode_normalization::UnicodeNormalization;
 
 pub const PPQ: u32 = 96;
@@ -11,13 +12,21 @@ pub const ROLES: [&str; 11] = ["lead", "counter", "chords", "pad", "bass", "drum
 const REST: u8 = 255;
 pub const MAX_SECT: usize = 24;
 pub const SECT_NAME: usize = 8;
+/// A channel's voice mode (US-30): POLY 0, AUTO 1 (the sound's SLOOP mode + glide), MONO 2, LEGATO 3 (piece.py's).
+pub const AUTO: u8 = 1;
+const LEGATO: u8 = 3;
+const MAX_GLIDE: u8 = 127;
 
 /// Ordered as piece.py's Note: tick, pitch, dur, vel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Note { pub tick: u32, pub pitch: u8, pub dur: u16, pub vel: u8 }
 
 #[derive(Clone, Debug)]
-pub struct Channel { pub role: &'static str, pub notes: Vec<Note>, pub sound: u8, pub vol: u8, pub pan: u8, pub src: u8 }
+pub struct Channel {
+    pub role: &'static str, pub notes: Vec<Note>, pub sound: u8, pub vol: u8, pub pan: u8, pub src: u8,
+    /// voice mode (a nibble of the header's word at 44) and glide 0..127 (the record's byte 7)
+    pub mode: u8, pub glide: u8,
+}
 
 /// A section starts at `tick` and ends where the next starts (the last at the piece's end).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -66,7 +75,7 @@ fn validate(p: &Piece) -> Result<(), EncodeError> {
     if !(1..=MAX_TICKS).contains(&p.len_ticks) { return bad(format!("length must be 1 to {MAX_TICKS} ticks")); }
     if p.name != clean_name(&p.name) { return bad(format!("name must be printable ASCII, 1 to {NAME_LEN} characters: {:?}", p.name)); }
     for (i, c) in p.channels.iter().enumerate() {
-        if !ROLES.contains(&c.role) || c.vol > 127 || c.pan > 127 || c.src > 15 {
+        if !ROLES.contains(&c.role) || c.vol > 127 || c.pan > 127 || c.src > 15 || c.mode > LEGATO || c.glide > MAX_GLIDE {
             return bad(format!("channel {}: bad record", i + 1));
         }
         if c.notes.iter().any(|n| n.tick >= p.len_ticks || n.pitch > 127 || n.vel == 0 || n.vel > 127 || n.dur == 0) {
@@ -139,7 +148,7 @@ pub fn encode(p: &Piece) -> Result<Vec<u8>, EncodeError> {
     let mut table = Vec::new();
     for (c, e) in p.channels.iter().zip(&evs) {
         let role = ROLES.iter().position(|r| *r == c.role).unwrap_or(10) as u8;
-        table.extend_from_slice(&[role, c.sound, c.vol, c.pan, c.src, 0, 0, 0]);
+        table.extend_from_slice(&[role, c.sound, c.vol, c.pan, c.src, 0, 0, c.glide]);
         table.extend_from_slice(&((e.len() / 6) as u32).to_le_bytes());
         table.extend_from_slice(&(off as u32).to_le_bytes());
         off += e.len();
@@ -156,7 +165,8 @@ pub fn encode(p: &Piece) -> Result<Vec<u8>, EncodeError> {
     name.resize(NAME_LEN, 0);
     b.extend_from_slice(&name);
     b.extend_from_slice(&(total as u32).to_le_bytes());
-    b.extend_from_slice(&0u32.to_le_bytes());
+    let modes = p.channels.iter().enumerate().fold(0u32, |m, (i, c)| m | (c.mode as u32) << (4 * i));
+    b.extend_from_slice(&modes.to_le_bytes());
     b.extend_from_slice(&table);
     b.extend_from_slice(&sect);
     for e in &evs { b.extend_from_slice(e); }

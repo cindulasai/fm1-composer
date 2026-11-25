@@ -4,7 +4,8 @@
  * fm1c's encode() makes of the same notes (in a gap, rests of 65535 ticks first; notes in tick, pitch order);
  * after an error the bytes are untouched. Each change is logged in the current group (edit_mark() starts one: a
  * key, a knob turn); edit_undo() takes back the last group, of the last ED_UNDO changes kept. edit_chan() sets a
- * channel's loop length or swing (US-25), logged the same way. A recording pass (US-26, live.c) can be longer than
+ * channel's loop length or swing (US-25), or its voice mode or glide (US-30), logged the same way. A velocity may carry
+ * PIECE_SLIDE (US-30). A recording pass (US-26, live.c) can be longer than
  * the history: edit_pass_insert / edit_pass_delete log into a pass log of their own (ED_PASSN changes, then ED_PASS),
  * and one history entry stands for the whole pass; only the last pass is kept (a new one drops the one before, and
  * what is older than it, from the history).
@@ -89,7 +90,7 @@ static void ed_push(uint32_t op, uint32_t ch, uint32_t tick, uint32_t pitch, uin
     o->op = (uint8_t)op; o->ch = (uint8_t)ch; o->tick = tick; o->pitch = (uint8_t)pitch; o->dur = (uint16_t)dur; o->vel = (uint8_t)vel;
 }
 
-static int ed_ok_note(uint32_t dur, uint32_t vel) { return dur >= 1u && dur <= 65535u && vel >= 1u && vel <= 127u; }
+static int ed_ok_note(uint32_t dur, uint32_t vel) { return dur >= 1u && dur <= 65535u && (vel & 127u) >= 1u && vel <= 255u; }
 
 static uint32_t ed_rests(uint32_t gap) { return gap > ED_GAP ? (gap - 1u) / ED_GAP : 0u; }
 
@@ -160,11 +161,22 @@ static int ed_set(uint8_t *b, uint32_t ch, uint32_t tick, uint32_t pitch, uint32
     return ED_OK;
 }
 
-/* a channel record byte: PIECE_CH_STEPS (0..PIECE_MAX_STEPS) or PIECE_CH_SWING (0..PIECE_MAX_SWING) */
+/* a channel record byte: PIECE_CH_STEPS (0..PIECE_MAX_STEPS), PIECE_CH_SWING (0..PIECE_MAX_SWING), PIECE_CH_GLIDE
+ * (0..PIECE_MAX_GLIDE); or PIECE_CH_MODE, the channel's nibble of the header's voice modes (VM_*) */
 static int ed_chan(uint8_t *b, uint32_t ch, uint32_t at, uint32_t v, int log)
 {
-    if (ch >= b[5] || (at != PIECE_CH_STEPS && at != PIECE_CH_SWING)) return ED_ARG;
-    if (v > (at == PIECE_CH_STEPS ? PIECE_MAX_STEPS : PIECE_MAX_SWING)) return ED_ARG;
+    uint32_t sh = 4u * ch, m;
+    if (ch >= b[5]) return ED_ARG;
+    if (at == PIECE_CH_MODE) {
+        if (v >= VM_N) return ED_ARG;
+        m = pc_u32(b + PIECE_VOICES);
+        if (log) ed_push(EO_CHAN, ch, at, piece_mode(b, ch), 0, 0);   /* (a corrupt one: undone to POLY, as it read) */
+        ed_w32(b + PIECE_VOICES, (m & ~(15u << sh)) | v << sh);
+        ed_seal(b);
+        return ED_OK;
+    }
+    if (at != PIECE_CH_STEPS && at != PIECE_CH_SWING && at != PIECE_CH_GLIDE) return ED_ARG;
+    if (v > (at == PIECE_CH_STEPS ? PIECE_MAX_STEPS : at == PIECE_CH_SWING ? PIECE_MAX_SWING : PIECE_MAX_GLIDE)) return ED_ARG;
     if (log) ed_push(EO_CHAN, ch, at, ed_rec(b, ch)[at], 0, 0);
     ed_rec(b, ch)[at] = (uint8_t)v;
     ed_seal(b);

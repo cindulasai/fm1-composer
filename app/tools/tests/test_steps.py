@@ -213,7 +213,8 @@ def test_25_5_hostile_bytes_same_verdict_in_c_and_python(tmp_path, cdump):
 
     def put(off, v):
         b = bytearray(good); b[off] = v; b[-4:] = struct.pack("<I", zlib.crc32(bytes(b[:-4])) & 0xFFFFFFFF); return bytes(b)
-    for off, v, ok in ((64 + 5, 65, False), (64 + 6, 101, False), (64 + 7, 1, False), (64 + 5, 64, True), (64 + 6, 100, True),
+    for off, v, ok in ((64 + 5, 65, False), (64 + 6, 101, False), (64 + 7, 128, False),   # (US-30: byte 7 = glide 0..127)
+                       (64 + 5, 64, True), (64 + 6, 100, True),
                        (48 + 5, 255, False)):
         f = tmp_path / "h.f1p"
         f.write_bytes(put(off, v))

@@ -18,12 +18,16 @@
  * section loops (or a piece without sections), each such channel keeps its place in its own loop. A channel's swing
  * (0..100) starts each note on an odd 1/16 late by SLOOP's swing_units (100: half a step) in the accumulator's
  * units, not ticks; it still ends where it would have (the step is shorter, as on SLOOP). player_hold() /
- * player_edited() let the main loop change the bytes while playing: the interrupt waits meanwhile. */
+ * player_edited() let the main loop change the bytes while playing: the interrupt waits meanwhile. A SLIDE note (US-30)
+ * is held PL_SLIDE_T ticks past its end (into the next note, also a swung one) and tells the synth: the next glides. */
 #ifndef PL_NOTE_ON
 #define PL_NOTE_ON synth_on
 #define PL_NOTE_OFF synth_off
 #define PL_CH_OFF synth_ch_off
 #define PL_HUSH synth_hush
+#endif
+#ifndef PL_SLIDE
+#define PL_SLIDE synth_slide
 #endif
 
 #define PL_TICK_UNITS (60u * 10u * 44100u)      /* accumulator units a tick (tempo x10, per frame) */
@@ -34,6 +38,7 @@
 #define PL_SUB 1000u                            /* swing in 1/1000 ticks (PL_TICK_UNITS / PL_SUB units each) */
 #define PL_NOWRAP 0xFFFFFFFFu
 #define PL_SWQ 32u                              /* swung notes waiting: 8 channels x 4-note chords */
+#define PL_SLIDE_T (PL_STEPT / 2u + 1u)         /* a SLIDE note's hold past its end: past the latest swung start */
 #define PL_BARRIER() __asm__ volatile("" ::: "memory")
 #ifndef POOL
 #define POOL
@@ -43,7 +48,7 @@
 #endif
 
 typedef struct { uint32_t off; uint8_t ch, pitch; } pl_off_t;
-typedef struct { uint32_t tick, acc, end; uint8_t ch, pitch, vel; } pl_swn_t;   /* starts acc units into its tick */
+typedef struct { uint32_t tick, acc, end; uint8_t ch, pitch, vel, slide; } pl_swn_t;   /* starts acc units into its tick */
 
 static piece_view_t pl_v;
 static piece_cur_t pl_cur[PIECE_MAX_CH];
@@ -233,11 +238,12 @@ static void pl_seek(uint32_t t)                 /* (just started, at tick 0) ski
     pl_tick = pl_pos = t;
 }
 
-static void pl_on(uint32_t ch, uint32_t pitch, uint32_t vel, uint32_t end)
+static void pl_on(uint32_t ch, uint32_t pitch, uint32_t vel, uint32_t end, uint32_t slide)
 {
     if (pl_noff < PL_MAXOFF) {
         PL_NOTE_ON(ch, pitch, vel);
-        pl_offs[pl_noff].off = end;            /* (already past, for a swung note: it ends at the next tick) */
+        if (slide) PL_SLIDE(ch);
+        pl_offs[pl_noff].off = end + (slide ? PL_SLIDE_T : 0u);   /* (already past, for a swung note: the next tick) */
         pl_offs[pl_noff].ch = (uint8_t)ch;
         pl_offs[pl_noff].pitch = (uint8_t)pitch;
         pl_noff++;
@@ -261,7 +267,7 @@ static void pl_swung(void)
     for (i = 0; i < pl_nsw;) {
         const pl_swn_t *q = &pl_swq[i];
         if (q->tick < pl_tick || (q->tick == pl_tick && q->acc <= pl_acc)) {
-            pl_on(q->ch, q->pitch, q->vel, q->end);
+            pl_on(q->ch, q->pitch, q->vel, q->end, q->slide);
             pl_swq[i] = pl_swq[--pl_nsw];
         } else {
             i++;
@@ -296,9 +302,9 @@ static void pl_events(void)
                     q->tick = pl_tick + d / PL_TICK_UNITS;
                     q->acc = d % PL_TICK_UNITS;
                     q->end = pl_tick + n->dur;
-                    q->ch = (uint8_t)ch; q->pitch = n->pitch; q->vel = n->vel;
+                    q->ch = (uint8_t)ch; q->pitch = n->pitch; q->vel = n->vel; q->slide = n->slide;
                 } else {
-                    pl_on(ch, n->pitch, n->vel, pl_tick + n->dur);
+                    pl_on(ch, n->pitch, n->vel, pl_tick + n->dur, n->slide);
                 }
             }
             pl_has[ch] = (uint8_t)piece_next(&pl_cur[ch], &pl_next[ch]);

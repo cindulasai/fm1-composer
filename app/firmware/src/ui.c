@@ -5,7 +5,7 @@
  *            (role, sound, M / S); a piece with sections: the sections strip under them (playing amber, queued white)
  *   EDIT     one channel as a piano roll: 16 grid steps across, the 27 note keys' pitches down, the cursor's step lit
  *   STEPS    the 8 channels x 16 steps of a page (a note starts amber, sounds on grey, the playing step blue, the cursor
- *            framed white), then the cursor's step: its notes, length, velocity, the channel's loop and swing */
+ *            framed white), then the cursor's step: its notes, length, velocity, SLIDE (US-30), the channel's loop and swing */
 #define C_ACC RGB(255, 165, 0)                  /* amber */
 #define C_REC RGB(255, 48, 48)                  /* REC's red */
 #define C_GREY RGB(120, 120, 120)
@@ -326,7 +326,7 @@ static void ui_steps(uint32_t dirty, const ui_steps_t *s)
         for (o = 0; b[o]; o++) {}
         ui_fmt(b + o, sizeof b - o, "%s", !s->n ? " -" : s->n > ST_CHORD ? " +" : "");
         ui_text(0, 166, 240, &FONT_S, b, C_WHITE, 1);
-        ui_fmt(b, sizeof b, "LEN %u  VEL %u", s->len, s->vel);
+        ui_fmt(b, sizeof b, "LEN %u  VEL %u%s", s->len, s->vel, s->n && s->notes[0].slide ? "  SLIDE" : "");
         ui_text(0, 184, 240, &FONT_S, b, C_WHITE, 1);
         if (rec[PIECE_CH_STEPS]) ui_fmt(b, sizeof b, "LOOP %u  SWING %u", rec[PIECE_CH_STEPS], rec[PIECE_CH_SWING]);
         else ui_fmt(b, sizeof b, "LOOP OFF  SWING %u", rec[PIECE_CH_SWING]);

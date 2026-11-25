@@ -18,8 +18,8 @@
  * PHYS, DIGITAL, VOICE (US-20: engines/eng_phys.c + phys_dsp.c + phys_symp.c, eng_digital.c, eng_formant.c): compiled
  * as they are with SLOOP's engine_t and preset_t layouts under other names; their presets are copied into COMPOSER's
  * preset_t at start (sloop_presets_init: name, EDIT values, ADSR, filter amount, MONO). Not played: a preset's extras
- * (XP: transpose, LFO, glide; COMPOSER's channels have none), its sends and pattern hint (COMPOSER's effects are the
- * piece's) and SLOOP's editor descriptors. PHYS keeps its voice slots in the channel's block (SYMP two voices, the
+ * (XP: transpose, LFO; US-30 plays their voice mode and glide: sloop_voice), its sends and pattern hint (COMPOSER's
+ * effects are the piece's) and SLOOP's editor descriptors. PHYS keeps its voice slots in the channel's block (SYMP two voices, the
  * other models three: synth_sound caps the channel); every channel may play it at once (ENG_POOL_N = NPART blocks). */
 #ifndef POOL
 #define POOL
@@ -34,7 +34,7 @@ static void *eng_arena_of(const track_t *t, uint32_t eng);
 
 /* ------------------------------------------------- what eng_fm6.c needs --- */
 #define ENGI_FM6 9u                             /* SLOOP core.h: FM6's engine index (an arena owner id here) */
-enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };    /* SLOOP core.h, P_VOICE (COMPOSER: always POLY) */
+enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };    /* SLOOP core.h, P_VOICE (US-30: POLY, MONO, LEGATO; no UNISON) */
 #ifndef RING_PUBLISH                            /* (platform.c's on the device; host tests: none needed, the patch is set
                                                  * in the audio interrupt itself, synth_sound) */
 #define RING_PUBLISH()
@@ -85,8 +85,10 @@ static const engine_t ENG_FM6 = {
 
 /* ------------------------------------------ what PHYS, DIGITAL, VOICE need --- */
 #define ENGI_PHYS 10u                           /* SLOOP core.h: PHYS's engine index (an arena owner id here) */
-enum { P_LRATE = 9, P_LFADE = 12, P_LD_PIT = 13, P_LD_AMP = 16, P_TRANS = 28, P_GLIDE = 38 };   /* SLOOP core.h: the
-                                                 * track parameters the presets' extras (XP) name; not played here */
+enum { P_LRATE = 9, P_LFADE = 12, P_LD_PIT = 13, P_LD_AMP = 16, P_TRANS = 28 };   /* SLOOP core.h: the track
+                                                 * parameters the presets' extras (XP) name; not played here */
+enum { XP_VOICE = 37, XP_GLIDE = 38, XP_GLMODE = 41 };   /* (US-30) SLOOP core.h P_VOICE, P_GLIDE, P_GLMODE: played */
+#define P_GLIDE XP_GLIDE                        /* (the presets' XP name SLOOP's id; synth.c's P_GLIDE is the track's) */
 typedef struct {                                /* SLOOP core.h preset_t, the layout the three engines' presets are in */
     const char *name;
     int8_t e[8];
@@ -124,6 +126,7 @@ static uint32_t sloop_rng(void)
 #undef rng
 #undef preset_t
 #undef engine_t
+#undef P_GLIDE
 
 /* the presets in COMPOSER's layout (sloop_presets_init, from synth_init): what COMPOSER's synth reads of a preset (its
  * sends and pattern hint are not: COMPOSER's effects are the piece's, per channel) */
@@ -163,6 +166,26 @@ static const engine_t ENG_FORMANT = {
     .knob = {P_E0, P_E4, P_E5, P_E2}, .poly = 4,
     .note_on = formant_note_on, .render = formant_render,
 };
+
+/* (US-30) the voice SLOOP gives a sound as it loads it (SLOOP ui.c: a MONO preset LEGATO, else POLY; then its extras'
+ * VOICE, GLIDE and GLMODE, preset_extras): only PHYS's, DIGITAL's and VOICE's presets have extras here. UNISON is not
+ * played: POLY (SPEC decision 48) */
+static void sloop_voice(const engine_t *e, const preset_t *pr, int16_t *mode, int16_t *glide, int16_t *glmode)
+{
+    const sloop_preset_t *s = e == &ENG_PHYS ? PHYS_PRESETS : e == &ENG_DIGITAL ? DIGITAL_PRESETS
+                            : e == &ENG_FORMANT ? FORMANT_PRESETS : 0;
+    uint32_t i;
+    *mode = pr->mono ? V_LEGATO : V_POLY;
+    *glide = *glmode = 0;
+    if (!s) return;
+    s += pr - e->presets;
+    for (i = 0; i + 1u < 8u; i += 2u) {
+        int32_t id = s->x[i] - 1, v = s->x[i + 1u];
+        if (id == XP_VOICE) *mode = (int16_t)(v == V_MONO || v == V_LEGATO ? v : V_POLY);
+        if (id == XP_GLIDE) *glide = (int16_t)clamp(v, 0, 127);
+        if (id == XP_GLMODE) *glmode = (int16_t)clamp(v, 0, 1);
+    }
+}
 
 /* ---------------------------------------------------------- the pool --- */
 typedef union {

@@ -350,13 +350,13 @@ static void test_25_5_hostile(void)
     CHECK(steps_key(pb, 7, 63 * ST_TICKS, 99, 0, 100) == ED_ARG && steps_key(pb, 7, 63 * ST_TICKS, 99, 65, 100) == ED_ARG, "len");
     CHECK(steps_set(pb, 0, 0, 0, 100) == ED_ARG && steps_set(pb, 0, 0, 65, 100) == ED_ARG, "set len");
     CHECK(edit_chan(pb, 0, PIECE_CH_STEPS, 65) == ED_ARG && edit_chan(pb, 0, PIECE_CH_SWING, 101) == ED_ARG, "loop 65, swing 101");
-    CHECK(edit_chan(pb, 8, PIECE_CH_STEPS, 1) == ED_ARG && edit_chan(pb, 0, 7, 1) == ED_ARG && edit_chan(pb, 0, 4, 1) == ED_ARG, "not a field");
+    CHECK(edit_chan(pb, 8, PIECE_CH_STEPS, 1) == ED_ARG && edit_chan(pb, 0, 7, 128) == ED_ARG && edit_chan(pb, 0, 4, 1) == ED_ARG, "not a field (US-30: byte 7 = glide 0..127)");
     edit_mark();
     CHECK(edit_chan(pb, 0, PIECE_CH_STEPS, 64) == ED_OK && edit_chan(pb, 0, PIECE_CH_SWING, 100) == ED_OK, "64, 100: the limits");
     CHECK(edit_undo(pb, &uc, &ut) == ED_OK && uc == 0 && !memcmp(pb, want, plen(pb)), "one gesture, one undo");
-    {   /* bytes a writer must not make: loop 65, swing 101, the last reserved byte */
+    {   /* bytes a writer must not make: loop 65, swing 101, glide 128 (US-30: the last reserved byte is the glide) */
         static const uint32_t at[3] = {5, 6, 7};
-        static const uint8_t val[3] = {65, 101, 1};
+        static const uint8_t val[3] = {65, 101, 128};
         for (k = 0; k < 3; k++) {
             memcpy(want, pb, plen(pb));
             want[PIECE_HDR + 3 * PIECE_CHREC + at[k]] = val[k];

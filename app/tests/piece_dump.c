@@ -34,8 +34,9 @@ int main(int argc, char **argv)
             piece_note_t no;
             printf("ch %u %u %u %u %u %u\n", i, v.ch[i].role, v.ch[i].sound, v.ch[i].vol, v.ch[i].pan, v.ch[i].src);
             if (v.ch[i].steps || v.ch[i].swing) printf("t %u %u\n", v.ch[i].steps, v.ch[i].swing);
+            if (v.ch[i].mode || v.ch[i].glide) printf("v %u %u\n", v.ch[i].mode, v.ch[i].glide);
             piece_cursor(&v.ch[i], &c);
-            while (piece_next(&c, &no)) printf("n %u %u %u %u\n", no.tick, no.dur, no.pitch, no.vel);
+            while (piece_next(&c, &no)) printf("n %u %u %u %u%s\n", no.tick, no.dur, no.pitch, no.vel, no.slide ? " s" : "");
         }
     }
     return 0;

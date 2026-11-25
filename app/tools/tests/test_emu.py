@@ -383,3 +383,4 @@ def dense_sections():
 from test_sections import test_23_6_strict_timing_densest_piece_a_section_jump_every_bar  # noqa: E402,F401  (run here by tests/emu_e2e.sh)
 from test_live import test_24_6_strict_timing_densest_piece_and_4_live_notes, test_24_4_midi_in_raw_bytes_through_the_jack_parser_in_the_emulator  # noqa: E402,F401  (run here by tests/emu_e2e.sh)
 from test_steps import test_25_6_strict_timing_8_tracks_64_steps_chords_swing_60  # noqa: E402,F401  (run here by tests/emu_e2e.sh)
+from test_voices import test_30_7_strict_timing_densest_piece_4_mono_glide_channels  # noqa: E402,F401  (run here by tests/emu_e2e.sh)

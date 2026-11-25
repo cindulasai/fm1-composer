@@ -6,7 +6,8 @@
  *
  * LIBRARY: SELECT turns, PLAY opens the piece, playing it.
  * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound (a drum channel: the 35 kits),
- * KNOB2 the tempo; white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
+ * KNOB2 the tempo, KNOB3 / KNOB4 its voice (US-30: AUTO = the sound's SLOOP mode + glide, POLY, MONO, LEGATO) / glide,
+ * saved in the piece (SAVE); white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
  * tempo for this piece; HOME goes back to the library (and stops). A piece with sections: the keys above F4 (F#4..G5)
  * launch section 1..14 (OCT+ 15..24), at the next bar line; SEQ loops the playing section.
  * KEYS (US-24, live.c): ARP turns it on / off: the 27 keys then play the selected channel's sound in the piece's key
@@ -14,7 +15,8 @@
  * plays on any screen but LIBRARY, as sent.
  * STEPS (US-25, steps.c): LFO opens it from PLAYER: the 8 channels x 16 steps from the playing section's start (4
  * pages, 64 steps); SELECT moves, KNOB1 the channel, a note key adds / removes that note in the step, KNOB2 / KNOB3
- * length (steps) / velocity, KNOB4 the channel's loop length, ALGORITHM its swing; edits also while playing.
+ * length (steps) / velocity, KNOB4 the channel's loop length, ALGORITHM its swing, ENV the step's SLIDE (US-30: it
+ * glides into the next step's note); edits also while playing.
  * REC (US-26, live.c): from PLAYER, a bar of clicks, then what is played live on the selected channel goes into it
  * (GLO: OVERDUB / REPLACE, ALGORITHM: the quantize grid); REC again, PLAY or leaving the PLAYER ends the pass. */
 #define APP_NAME "COMPOSER"
@@ -106,6 +108,7 @@ static void app_idle(void)
 }
 
 static void set_status(const char *s) { status = s; dirty |= D_FOOT; }
+static int32_t clampi(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 static void post(uint32_t op, uint32_t ch, uint32_t a, uint32_t b)
 {
@@ -128,6 +131,64 @@ static uint32_t sound_turn(uint32_t ch, int32_t d)
         do s = (s + step + n) % n; while ((uint32_t)!!sounds[s].e->oneshot != kit);
     }
     return (uint32_t)s;
+}
+
+static const char *const VM_NAME[VM_N] = {"POLY", "AUTO", "MONO", "LEGATO"};
+static const uint8_t *ch_rec(uint32_t ch) { return play_buf + PIECE_HDR + ch * PIECE_CHREC; }
+
+/* channel ch's voice as its sound plays it: SLOOP's mode (V_POLY / V_MONO / V_LEGATO) and glide (synth.c voice_apply) */
+static void voice_of(uint32_t ch, int16_t *m, int16_t *g)
+{
+    int16_t gm;
+    uint32_t vm = piece_mode(play_buf, ch);
+    *m = vm == VM_MONO ? V_MONO : vm == VM_LEGATO ? V_LEGATO : V_POLY;
+    *g = (int16_t)ch_rec(ch)[PIECE_CH_GLIDE];
+    if (vm == VM_AUTO) sloop_voice(sounds[snd[ch]].e, sounds[snd[ch]].pr, m, g, &gm);
+    if (sounds[snd[ch]].e->oneshot) *m = V_POLY, *g = 0;
+}
+
+static void voice_post(uint32_t ch)             /* the piece's voice of channel ch to the synth */
+{
+    post(SC_VOICE, ch, piece_mode(play_buf, ch), ch_rec(ch)[PIECE_CH_GLIDE]);
+}
+
+/* the footer: "VOICE 2 AUTO LEGATO GLIDE 36" (AUTO: what the sound brings) */
+static void voice_status(uint32_t ch)
+{
+    static const char *const V_NAME[3] = {"POLY", "MONO", "LEGATO"};
+    static char b[40];
+    int16_t m, g;
+    voice_of(ch, &m, &g);
+    if (piece_mode(play_buf, ch) == VM_AUTO) ui_fmt(b, sizeof b, "VOICE %u AUTO %s GLIDE %u", ch + 1u, V_NAME[m], (uint32_t)g);
+    else ui_fmt(b, sizeof b, "VOICE %u %s GLIDE %u", ch + 1u, VM_NAME[piece_mode(play_buf, ch)], (uint32_t)g);
+    set_status(b);
+}
+
+/* KNOB3 (dm) / KNOB4 (dg) in PLAYER: the selected channel's voice mode AUTO, POLY, MONO, LEGATO (turning, it stops at
+ * the ends), its glide 0..127; a glide turned in AUTO overrides it with the mode the sound plays. An edit of the piece:
+ * SAVE keeps it */
+static void voice_turn(int32_t dm, int32_t dg)
+{
+    static const uint8_t ORDER[VM_N] = {VM_AUTO, VM_POLY, VM_MONO, VM_LEGATO};
+    uint32_t vm = piece_mode(play_buf, sel), i, g = ch_rec(sel)[PIECE_CH_GLIDE];
+    int r = ED_OK;
+    for (i = 0; i < VM_N && ORDER[i] != vm; i++) {}
+    if (dm) vm = ORDER[clampi((int32_t)i + dm, 0, (int32_t)VM_N - 1)];
+    if (dg) {
+        if (vm == VM_AUTO) {
+            int16_t m, gg;
+            voice_of(sel, &m, &gg);
+            vm = m == V_MONO ? VM_MONO : m == V_LEGATO ? VM_LEGATO : VM_POLY;
+            g = (uint32_t)gg;
+        }
+        g = (uint32_t)clampi((int32_t)g + dg, 0, (int32_t)PIECE_MAX_GLIDE);
+    }
+    edit_mark();
+    if (vm != piece_mode(play_buf, sel)) r = edit_chan(play_buf, sel, PIECE_CH_MODE, vm);
+    if (r == ED_OK && g != ch_rec(sel)[PIECE_CH_GLIDE]) r = edit_chan(play_buf, sel, PIECE_CH_GLIDE, g);
+    if (r == ED_OK) { edited = 1; discard = 0; dirty |= D_HEAD; }
+    voice_post(sel);
+    voice_status(sel);
 }
 
 static void sound_next(int32_t d)               /* PRESETS: the selected channel's next sound, heard at once */
@@ -164,6 +225,7 @@ static int open_piece(uint32_t i)
         role[ch] = pl_v.ch[ch].role;
         snd[ch] = (uint8_t)(s < sound_count ? s : sound_default(role[ch]));
         post(SC_SOUND, ch, snd[ch], role[ch] + 1u);
+        post(SC_VOICE, ch, pl_v.ch[ch].mode, pl_v.ch[ch].glide);
         post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
     }
     {
@@ -310,9 +372,9 @@ static void player_input(uint32_t pressed, uint32_t keys)
         if (pressed & 1u << BTN_OCT_DOWN && lk.oct > -3) lk.oct--;
         if (ch0 != (uint32_t)lk.t.p[P_CHORD] || oct0 != (uint32_t)lk.oct || sc0 != lk_scale() || r0 != (uint32_t)lk.t.p[P_ROOT])
             keys_status();
-    } else {
-        fm1_enc_take(ENC_KNOB3);                /* (EDIT's: not kept for it) */
-        fm1_enc_take(ENC_KNOB4);
+    } else {                                    /* the selected channel's voice */
+        int32_t dm = fm1_enc_take(ENC_KNOB3), dg = fm1_enc_take(ENC_KNOB4);
+        if (dm || dg) voice_turn(dm, dg);
     }
     if ((d = fm1_enc_take(ENC_KNOB1) + fm1_enc_take(ENC_SELECT))) {
         sel = (uint32_t)(((int32_t)sel + d) % (int32_t)pl_v.nch + (int32_t)pl_v.nch) % pl_v.nch;
@@ -445,7 +507,8 @@ static void edit_input(uint32_t pressed, uint32_t keys)
             ed_len = (uint32_t)(len < 1 ? 1 : len > 65535 ? 65535 : len);
             ed_vel = (uint32_t)(vel < 1 ? 1 : vel > 127 ? 127 : vel);
             edit_mark();                        /* one turn: one undo */
-            for (i = 0; i < n && r == ED_OK; i++) r = edit_set(play_buf, sel, cn[i].tick, cn[i].pitch, ed_len, ed_vel);
+            for (i = 0; i < n && r == ED_OK; i++)
+                r = edit_set(play_buf, sel, cn[i].tick, cn[i].pitch, ed_len, ed_vel | (cn[i].slide ? PIECE_SLIDE : 0u));
             if (n) edited_now(r);
             dirty |= D_FOOT;
         }
@@ -469,6 +532,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
         if (playing) set_status("STOP TO EDIT");
         else if (edit_undo(play_buf, &ch, &t) == ED_OK) {
             sel = ch;
+            voice_post(ch);                     /* (a voice change undone too) */
             ed_tick = t - t % g;
             edited = 1;
             player_refresh();
@@ -485,8 +549,6 @@ static void steps_now(int r)
     if (r == ED_OK) { edited = 1; discard = 0; dirty |= D_ROLL | D_HEAD | D_FOOT; set_status(""); }
     else set_status(WHY[r]);
 }
-
-static int32_t clampi(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 /* STEPS: every change also while playing (player_hold / player_edited around it); one gesture, one undo */
 static void steps_input(uint32_t pressed, uint32_t keys)
@@ -544,12 +606,19 @@ static void steps_input(uint32_t pressed, uint32_t keys)
         if (n > was) { post(SC_NOTE_ON, sel, p, st_vel); preview |= 1u << k; }
         steps_now(r);
     }
+    if (pressed & 1u << BTN_ENV) {              /* SLIDE on the step */
+        edit_mark();
+        player_hold();
+        r = steps_slide(play_buf, sel, t0);
+        player_edited();
+        steps_now(r);
+    }
     if (pressed & 1u << BTN_FX) {               /* undo */
         uint32_t ch, t;
         player_hold();
         r = edit_undo(play_buf, &ch, &t);
         player_edited();
-        if (r == ED_OK) { sel = ch; edited = 1; dirty |= D_ROLL | D_HEAD | D_FOOT; set_status("UNDONE"); }
+        if (r == ED_OK) { sel = ch; voice_post(ch); edited = 1; dirty |= D_ROLL | D_HEAD | D_FOOT; set_status("UNDONE"); }
         else set_status("NOTHING TO UNDO");
     }
 }

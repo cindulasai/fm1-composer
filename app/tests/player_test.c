@@ -502,8 +502,232 @@ static void test_23_5_hostile_sections(void)
     player_stop(); play_frames(CTL);
 }
 
+/* ---- US-30: voice modes ---- */
+static uint32_t crc_upd(uint32_t c, const void *p, size_t n)
+{
+    const uint8_t *b = p;
+    uint32_t k;
+    c = ~c;
+    while (n--) { c ^= *b++; for (k = 0; k < 8u; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u))); }
+    return ~c;
+}
+
+static uint32_t first_of(const engine_t *e)
+{
+    uint32_t i;
+    for (i = 0; i < sound_count && sounds[i].e != e; i++) {}
+    return i;
+}
+
+/* 8 channels of overlapping notes and chords on mono and poly sounds (SAW LEAD, SQR BASS, FM BASS and ROBOT are mono
+ * presets, the last two with SLOOP glide in their extras): 4 s through the player and synth, as a CRC */
+static uint32_t v8_render(void)
+{
+    static tn_t ns[8][200];
+    const tn_t *nl[8];
+    uint32_t cnt[8], ch, i, crc = 0, f, id[8];
+    int32_t out[2 * CTL], peak = 0;
+    reset();
+    for (ch = 0; ch < 8; ch++) {
+        uint32_t k = 0;
+        for (i = 0; i < 64; i++) {
+            ns[ch][k++] = (tn_t){i * 48, 72, (uint8_t)(40 + ch * 5 + i % 7), 100};
+            if (i % 4 == 0) ns[ch][k++] = (tn_t){i * 48, 40, (uint8_t)(47 + ch * 5 + i % 7), 90};
+        }
+        nl[ch] = ns[ch]; cnt[ch] = k;
+    }
+    build(1200, 8 * 384, 8, nl, cnt);
+    player_load(pb);
+    id[0] = sound_find("ANALOG", "SAW LEAD"); id[1] = sound_find("ANALOG", "SQR BASS"); id[2] = sound_find("ANALOG", "SOFT PAD");
+    id[3] = sound_find("DIGITAL", "FM BASS"); id[4] = sound_find("VOICE", "ROBOT"); id[5] = sound_find("PHYS", "PLUCK BASS");
+    id[6] = first_of(&ENG_FM6); id[7] = sound_find("TRIO", "SYNC LEAD");
+    for (ch = 0; ch < 8; ch++) { CHECK(id[ch] < sound_count, "sound %u", ch); synth_sound(ch, id[ch]); }
+    player_play();
+    for (f = 0; f < 4u * 44100u; f += CTL) {
+        player_tick(CTL);
+        memset(out, 0, sizeof out);
+        synth_apply();
+        synth_render(out, CTL);
+        crc = crc_upd(crc, out, sizeof out);
+        for (i = 0; i < 2 * CTL; i++) if (out[i] > peak) peak = out[i];
+    }
+    CHECK(peak > 3000, "it sounds: peak %d", peak);
+    player_stop(); play_frames(CTL);
+    return crc;
+}
+
+#define V8_CRC 0x0001CCB7u                      /* recorded with v8's synth (before US-30) */
+static void test_30_1_a_v8_piece_renders_bit_identical(void)
+{
+    uint32_t crc = v8_render();
+    printf("30.1 v8 piece render %08X\n", crc);
+    CHECK(crc == V8_CRC, "a piece without mode bytes renders as v8: %08X, recorded %08X", crc, V8_CRC);
+    for (crc = 0; crc < 8; crc++) CHECK(pl_v.ch[crc].mode == VM_POLY && pl_v.ch[crc].glide == 0, "v8 channel %u: POLY", crc);
+}
+
+static void blocks(uint32_t n)                  /* the synth alone, n blocks */
+{
+    int32_t out[2 * CTL];
+    while (n--) { memset(out, 0, sizeof out); synth_apply(); synth_render(out, CTL); }
+}
+
+static uint32_t sine_key(void) { return sound_find("ANALOG", "SINE KEY"); }
+
+static void test_30_2_mono_retriggers_legato_glides(void)
+{
+    uint32_t age, n, want, step;
+    reset();
+    synth_sound(0, sine_key());
+    synth_voice(0, VM_MONO, 0);
+    CHECK(trk[0].p[P_VOICE] == V_MONO && chs[0].cap == 1, "MONO: one voice");
+    synth_on(0, 60, 100); blocks(20); age = trk[0].v[0].age;
+    synth_on(0, 64, 100);
+    CHECK(synth_count(0) == 1 && trk[0].v[0].note == 64 && trk[0].v[0].stage == 1 && trk[0].v[0].age != age,
+          "MONO: the new note retriggers the one voice");
+    synth_on(0, 67, 100);
+    synth_off(0, 67);
+    CHECK(trk[0].v[0].note == 64 && trk[0].v[0].gate && synth_count(0) == 1, "last-note priority: 67 let go, 64 (held) again");
+    synth_off(0, 60); synth_off(0, 64);
+    CHECK(!trk[0].v[0].gate && trk[0].mono_note == 0, "all let go: released");
+    blocks(3000);
+    CHECK(synth_active() == 0, "silent");
+
+    synth_voice(0, VM_LEGATO, 0);
+    synth_on(0, 60, 100); blocks(40); age = trk[0].v[0].age;
+    CHECK(trk[0].v[0].stage == 2, "held: decay / sustain");
+    synth_on(0, 64, 100);
+    CHECK(trk[0].v[0].note == 64 && trk[0].v[0].stage == 2 && trk[0].v[0].age == age && trk[0].v[0].pitch_cur == 64 * 16,
+          "LEGATO: an overlapping note changes the pitch, no retrigger (glide 0: at once)");
+    synth_off(0, 60); synth_off(0, 64); blocks(3000);
+
+    synth_voice(0, VM_LEGATO, 86);              /* an octave in ~511 ms: RATE, SLOOP voice.c */
+    synth_on(0, 60, 100); blocks(10);
+    synth_on(0, 64, 100);
+    step = ENV_LIN[86] * 3u >> 10;
+    want = (4u * 4096u + step - 1u) / step;     /* blocks to glide 4 semitones */
+    for (n = 0; n < 4000 && trk[0].v[0].pitch_cur != 64 * 16; n++) {
+        blocks(1);
+        if (n == want / 2u) CHECK(trk[0].v[0].pitch_cur > 61 * 16 && trk[0].v[0].pitch_cur < 63 * 16, "half way: %d", trk[0].v[0].pitch_cur);
+    }
+    CHECK(n + 1u >= want * 9u / 10u && n + 1u <= want * 11u / 10u, "the glide takes %u blocks, want %u (+-10%%)", n + 1u, want);
+    synth_off(0, 60); synth_off(0, 64); blocks(3000);
+    CHECK(synth_active() == 0, "silent");
+    printf("30.2 MONO retriggers, LEGATO changes pitch, glide 86: 4 semitones in %u blocks (%u)\n", n + 1u, want);
+}
+
+static void test_30_3_the_sound_brings_its_voice_an_override_wins(void)
+{
+    uint32_t fm = sound_find("DIGITAL", "FM BASS"), rb = sound_find("VOICE", "ROBOT"), tb = sound_find("VOICE", "TALKBOX");
+    reset();
+    synth_voice(0, VM_AUTO, 0);
+    synth_sound(0, fm);
+    CHECK(trk[0].p[P_VOICE] == V_LEGATO && trk[0].p[P_GLIDE] == 36 && chs[0].cap == 1, "FM BASS: MONO preset, GLIDE 36 (its XP)");
+    synth_sound(0, rb);
+    CHECK(trk[0].p[P_VOICE] == V_LEGATO && trk[0].p[P_GLIDE] == 20, "ROBOT: GLIDE 20");
+    synth_sound(0, sound_find("ANALOG", "SAW LEAD"));
+    CHECK(trk[0].p[P_VOICE] == V_LEGATO && trk[0].p[P_GLIDE] == 0, "SAW LEAD (Felucca, MONO): LEGATO, no glide");
+    synth_sound(0, sound_find("ANALOG", "SOFT PAD"));
+    CHECK(trk[0].p[P_VOICE] == V_POLY && chs[0].cap == NVOICE, "SOFT PAD: POLY");
+    synth_sound(0, sound_default(ROLE_DRUMS));
+    CHECK(trk[0].p[P_VOICE] == V_POLY && trk[0].p[P_GLIDE] == 0, "a kit: POLY");
+    synth_sound(0, tb);
+    synth_on(0, 57, 100); blocks(5); synth_on(0, 64, 100); blocks(2);
+    CHECK(trk[0].p[P_GLIDE] == 60 && trk[0].v[0].pitch_cur > 57 * 16 && trk[0].v[0].pitch_cur < 64 * 16, "TALKBOX glides (60): %d",
+          trk[0].v[0].pitch_cur);
+    synth_all_off(); blocks(3000);
+    synth_voice(0, VM_POLY, 0);
+    CHECK(trk[0].p[P_VOICE] == V_POLY && trk[0].p[P_GLIDE] == 0, "POLY wins over TALKBOX's own");
+    synth_on(0, 57, 100); blocks(5); synth_on(0, 64, 100); blocks(2);
+    CHECK(trk[0].v[0].pitch_cur == 64 * 16, "POLY: no glide");
+    synth_all_off(); blocks(3000);
+    synth_voice(0, VM_MONO, 100);
+    synth_sound(0, fm);                         /* (another sound keeps the channel's override) */
+    CHECK(trk[0].p[P_VOICE] == V_MONO && trk[0].p[P_GLIDE] == 100, "MONO 100 wins over FM BASS's LEGATO 36");
+    printf("30.3 AUTO: FM BASS LEGATO 36, ROBOT 20, TALKBOX 60; POLY / MONO overrides win\n");
+}
+
+static void test_30_5_slide_glides_into_the_next_note(void)
+{
+    static const tn_t ns[4] = {{0, 24, 60, 100 | PIECE_SLIDE}, {24, 24, 64, 100}, {96, 24, 60, 100}, {120, 24, 67, 100}};
+    const tn_t *nl[1] = {ns};
+    uint32_t cnt[1] = {4}, n;
+    int32_t mid = 0;
+    reset();
+    build(1200, 384, 1, nl, cnt);
+    CHECK(piece_check(pb, pc_u32(pb + 40)) == PE_OK, "a SLIDE note: a valid piece");
+    player_load(pb);
+    synth_sound(0, sine_key());
+    synth_voice(0, VM_LEGATO, 0);
+    pl_loop = 0;
+    player_play();
+    for (n = 0; n < frame_of(30, 1200) / CTL; n++) {   /* tick 24 + a few blocks: 60 slid into 64 */
+        play_frames(CTL);
+        if (pl_tick == 25 && !mid) mid = trk[0].v[0].pitch_cur;
+    }
+    CHECK(mid > 60 * 16 && mid < 64 * 16 && trk[0].v[0].note == 64, "SLIDE: 60 glides into 64 (SLOOP's SLIDE_T, glide 0): %d", mid);
+    play_frames(frame_of(122, 1200) - frame_of(30, 1200));
+    CHECK(trk[0].v[0].note == 67 && trk[0].v[0].pitch_cur == 67 * 16, "no SLIDE: 60 to 67 at once");
+    play_frames(frame_of(180, 1200) - frame_of(122, 1200));
+    CHECK(pl_noff == 0 && trk[0].mono_note == 0 && !trk[0].v[0].gate, "every note let go before the end (the SLIDE's too)");
+    play_frames(3u * 44100u);                   /* (the piece ends, 2 s, and stops) */
+    CHECK(synth_active() == 0 && pl_noff == 0 && trk[0].mono_note == 0, "nothing stuck: %u voices, %u held, note %u",
+          synth_active(), pl_noff, trk[0].mono_note);
+    printf("30.5 SLIDE glides into the next note, then nothing held\n");
+}
+
+static void test_30_6_hostile_voices(void)
+{
+    uint32_t k, ch;
+    reset();
+    synth_sound(0, sine_key());
+    synth_voice(0, VM_LEGATO, 127);             /* glide 127: an octave in 10 s */
+    synth_on(0, 40, 100); synth_on(0, 100, 100); blocks(50);
+    k = (uint32_t)(trk[0].v[0].pitch_cur << 8) + (uint32_t)trk[0].v[0].pitch_frac;   /* (1/4096 semitone) */
+    CHECK(k > 40u * 4096u && k < 41u * 4096u, "glide 127 crawls: %u", k);
+    synth_voice(0, VM_POLY, 0);                 /* mode change while it sounds */
+    synth_on(0, 50, 100);
+    synth_off(0, 40); synth_off(0, 100); synth_off(0, 50);
+    for (k = 0; k < NVOICE; k++) CHECK(!trk[0].v[k].gate, "POLY now: every note let go, voice %u", k);
+    synth_on(0, 50, 100); synth_on(0, 54, 100); synth_on(0, 57, 100);
+    synth_voice(0, VM_MONO, 0);                 /* and back, three POLY voices held */
+    synth_on(0, 62, 100);
+    synth_off(0, 50); synth_off(0, 54); synth_off(0, 57); synth_off(0, 62);
+    for (k = 0; k < NVOICE; k++) CHECK(!trk[0].v[k].gate, "MONO now: every note let go, voice %u", k);
+    blocks(3000);
+    CHECK(synth_active() == 0, "none stuck");
+    for (k = 0; k < 4; k++) synth_on(0, 60 + 3 * k, 100);   /* a 4-note chord step on MONO: the last note */
+    CHECK(synth_count(0) == 1 && trk[0].v[0].note == 69, "MONO chord: one voice, the last note (%u)", trk[0].v[0].note);
+    for (k = 0; k < 4; k++) synth_off(0, 60 + 3 * k);
+    CHECK(!trk[0].v[0].gate && trk[0].nmono == 0, "chord let go: released");
+    blocks(3000);
+    synth_voice(0, VM_LEGATO, 90);              /* LEGATO, no overlap: retriggered, no glide */
+    synth_on(0, 60, 100); blocks(10); synth_off(0, 60); blocks(2);
+    synth_on(0, 64, 100);
+    CHECK(trk[0].v[0].stage == 1 && trk[0].v[0].pitch_cur == 64 * 16, "LEGATO without overlap: a new note, no glide");
+    synth_off(0, 64);
+    synth_voice(0, VM_N + 3, 300);              /* out of range: POLY, glide 127 */
+    CHECK(ch_vm[0] == VM_POLY && ch_vg[0] == 127 && trk[0].p[P_VOICE] == V_POLY, "bad mode: POLY");
+    blocks(3000);
+    synth_voice(0, VM_POLY, 0);
+    for (ch = 1; ch < 3; ch++) { synth_sound(ch, sound_find("ANALOG", "SOFT PAD")); for (k = 0; k < 8; k++) synth_on(ch, 40 + k, 100); }
+    CHECK(synth_active() == VOICE_BUDGET, "16 voices busy: %u", synth_active());
+    synth_sound(3, sine_key());
+    synth_voice(3, VM_MONO, 40);
+    synth_on(3, 72, 100); synth_on(3, 76, 100);
+    CHECK(synth_active() <= VOICE_BUDGET && synth_count(3) == 1 && trk[3].v[0].note == 76, "MONO takes a voice: %u at once",
+          synth_active());
+    synth_all_off(); blocks(1500);
+    CHECK(synth_active() == 0, "all let go: silent (%u)", synth_active());
+    printf("30.6 glide 0 / 127, mode changes while sounding, MONO chords, LEGATO without overlap, a full pool: clean\n");
+}
+
 int main(void)
 {
+    test_30_1_a_v8_piece_renders_bit_identical();
+    test_30_2_mono_retriggers_legato_glides();
+    test_30_3_the_sound_brings_its_voice_an_override_wins();
+    test_30_5_slide_glides_into_the_next_note();
+    test_30_6_hostile_voices();
     test_23_1_v1_and_v2_play_the_same_without_launches();
     test_23_3_a_queued_section_starts_at_the_next_bar_line();
     test_23_3_loop_repeats_the_section_without_gap_or_stuck_note();

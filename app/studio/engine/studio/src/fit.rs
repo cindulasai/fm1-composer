@@ -149,7 +149,7 @@ pub fn fit_key(bytes: &[u8], name: &str, poly: usize, key: Option<(u8, u8)>) -> 
             if n.tick < 0 { return Err("a note lies before the start of the piece".into()); }
             kept.push(Note { tick: n.tick as u32, pitch: n.pitch, dur: n.dur as u16, vel: n.vel });
         }
-        channels.push(Channel { role, notes: kept, sound, vol, pan, src });
+        channels.push(Channel { role, notes: kept, sound, vol, pan, src, mode: f1p::AUTO, glide: 0 });   // (US-30: the sound's voice)
     }
     let exact = round_div(600_000_000, tempo_us);
     let tempo_x10 = exact.clamp(300, 3000) as u32;

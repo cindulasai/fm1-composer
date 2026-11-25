@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 import mido
 
 from . import sounds
-from .piece import (DEFAULT_SOUND, ROLES, Channel, Note, Piece, PieceError, Section, MAX_BYTES, MAX_CH, MAX_SECT,
+from .piece import (AUTO, DEFAULT_SOUND, ROLES, Channel, Note, Piece, PieceError, Section, MAX_BYTES, MAX_CH, MAX_SECT,
                     MAX_TICKS, PPQ, clean_name, encode, section_name)
 
 MAX_INPUT = 8 * 1024 * 1024
@@ -277,7 +277,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None,
                 rep.add(f"{p.role}: {sounds.NAMES[snd]} plays as {sounds.NAMES[alt]} "
                         f"(the FM-1 plays at most {sounds.FM6_POOL} FM6 sounds at once)")
                 snd = alt
-        chans.append(Channel(p.role, notes, sound=snd, vol=min(127, p.vol), pan=min(127, p.pan), src=p.src))
+        chans.append(Channel(p.role, notes, sound=snd, vol=min(127, p.vol), pan=min(127, p.pan), src=p.src, mode=AUTO))
     if unknown:
         rep.add(f"role default sound for {', '.join(unknown)} (no known instrument or GM program)")
 
