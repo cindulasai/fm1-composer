@@ -46,6 +46,39 @@ def test_32_1_composer_tile_guides_to_studio(browser, studio_url):
     page.close(); studio.close()
 
 
+def tiles(page):
+    """{firmware name: its tile's text}, once the list has stopped growing"""
+    n = -1
+    for _ in range(20):
+        page.wait_for_timeout(250)
+        m = page.locator("li .head b").count()
+        if m == n:
+            break
+        n = m
+    return {li.locator(".head b").inner_text(): li.inner_text() for li in page.locator("li", has=page.locator(".head b")).all()}
+
+
+@needs_emu
+def test_32_1_other_tiles_unchanged_without_the_cable(browser, studio_url):
+    """the page with Studio's cable.js and without it (blocked): every tile but COMPOSER's has the same text; COMPOSER's
+    gains the guide"""
+    page = tile_page(browser, studio_url + "emu/?fw=composer")
+    page.wait_for_selector("#composer-guide", timeout=15000)
+    cabled = tiles(page)
+    page.close()
+    bare_page = browser.new_page()
+    bare_page.route("**/cable.js", lambda r: r.abort())
+    bare_page.goto(studio_url + "emu/?fw=composer")
+    bare_page.wait_for_selector("li .head b", timeout=30000)
+    bare = tiles(bare_page)
+    assert bare_page.locator("#composer-guide").count() == 0, "blocked: no cable, no guide"
+    bare_page.close()
+    assert set(cabled) == set(bare) and "COMPOSER" in cabled and len(cabled) > 1, (sorted(cabled), sorted(bare))
+    changed = sorted(k for k in cabled if cabled[k] != bare[k])
+    assert changed == ["COMPOSER"], changed
+    assert "Start in three steps:" in cabled["COMPOSER"] and "Start in three steps:" not in bare["COMPOSER"]
+
+
 @needs_emu
 def test_32_1_no_guide_inside_studio(browser, studio_url):
     page = browser.new_page()
@@ -56,11 +89,44 @@ def test_32_1_no_guide_inside_studio(browser, studio_url):
     page.close()
 
 
+def composer_about_ok(cat):
+    """COMPOSER first and the default, its about saying what it does and where its pieces are made; others kept"""
+    assert cat["default"] == "composer" and cat["firmwares"][0]["id"] == "composer"
+    assert [f["id"] for f in cat["firmwares"]].count("composer") == 1
+    about = cat["firmwares"][0]["about"]
+    for want in ("8 parts", "sentence", "COMPOSER Studio", "this site's home page", "MIDI IN"):
+        assert want in about, want
+
+
+FAKE_CATALOG = {"default": "sloop", "firmwares": [{"id": "sloop", "name": "SLOOP", "about": "a looper"},
+                                                   {"id": "composer", "name": "old", "about": "stale"},
+                                                   {"id": "felucca", "name": "Felucca", "about": "synth"}]}
+
+
+def test_32_2_catalog_about_says_what_and_where_unit(tmp_path):
+    """fm1c's catalog rewrite (_composer_first) on a small catalog, no fm1-emu: the one function both `fm1c studio`
+    (served: checked here through its handler) and the export (_export) use"""
+    import functools, http.server, inspect, sys, threading, urllib.request
+    sys.path.insert(0, str(APP / "tools"))
+    from fm1c import cli
+    cat = json.loads(cli._composer_first(json.loads(json.dumps(FAKE_CATALOG))))
+    composer_about_ok(cat)
+    assert [f for f in cat["firmwares"] if f["id"] != "composer"] == [FAKE_CATALOG["firmwares"][0], FAKE_CATALOG["firmwares"][2]]
+    assert "_composer_first(" in inspect.getsource(cli._export) and "_composer_first(" in inspect.getsource(cli._StudioHandler)
+    (tmp_path / "emu").mkdir()
+    (tmp_path / "emu" / "firmwares.json").write_text(json.dumps(FAKE_CATALOG))
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(cli._StudioHandler, directory=str(tmp_path)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_port}/emu/firmwares.json", timeout=10) as r:
+            composer_about_ok(json.loads(r.read()))
+    finally:
+        srv.shutdown(); srv.server_close()
+
+
 @needs_emu
 def test_32_2_catalog_about_says_what_and_where(exported):
-    cat = json.loads((exported / "emu" / "firmwares.json").read_text())
-    about = next(f for f in cat["firmwares"] if f["id"] == "composer")["about"]
-    assert "COMPOSER Studio" in about and "sentence" in about and "8 parts" in about
+    composer_about_ok(json.loads((exported / "emu" / "firmwares.json").read_text()))
 
 
 def test_32_3_readme_leads_with_the_live_studio():
