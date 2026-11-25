@@ -132,6 +132,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 50 | (user, 2026-11-24) v10 = live send while playing (Studio sends, the FM-1 swaps at the next bar); then sampled instruments, energy/swing + setlists; verified work is pushed to main overnight (CI gates the Pages deploy) | user |
 | 51 | CI 17.2-style Send flake, root cause (2026-11-24): the jack's SysEx receiver (uart_sysex.c) held one finished frame; Studio queues up to 2000 B (~6 frames) in the jack, so a main-loop pause > ~100 ms dropped a frame → ESEQ → not saved (~1 in 3 runs of test_29_1 [990-1010]; 0/10 with one frame ahead). Fix in the firmware (queue frames), not by slowing Send (one frame ahead ≈ 4× slower: the status clock ticks once a second) | council |
 | 52 | v10 live send (council, within decision 50): swap in RAM at the next bar (the player already plays from play_buf; xfer stages a checked piece), save to flash only when stopped (erase silences audio); the newer of two pending pieces wins; device-side channel changes carry over | council |
+| 53 | v10 live send never drops work: if the playing piece has unsaved device edits, the sent piece waits and switches when playback stops (footer `NEXT AT STOP: <name>`); otherwise at the next bar | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
