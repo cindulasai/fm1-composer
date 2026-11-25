@@ -75,7 +75,16 @@
     const box = document.createElement('div');
     box.id = 'composer-guide';
     box.style.cssText = 'margin:.5em 0;padding:.6em .8em;border-left:3px solid #f5a623;background:rgba(245,166,35,.08);font-size:.92em;line-height:1.45';
-    box.append(...GUIDE.map(node));
+    // the way in, first and big: Studio is where a piece is made (this page alone has nothing to play yet)
+    const cta = document.createElement('a');
+    cta.className = 'composer-cta'; cta.href = STUDIO; cta.target = '_blank'; cta.rel = 'noopener';
+    cta.textContent = '\u{1F3B9} Compose music with AI: open COMPOSER Studio \u2192';
+    cta.style.cssText = 'all:revert;display:block;margin:.2em 0 .6em;padding:.7em 1em;border-radius:10px;background:#f5a623;' +
+      'color:#1a1a1a;font-weight:700;text-align:center;text-decoration:none;font-size:1.05em';
+    const sub = document.createElement('div');
+    sub.style.cssText = 'all:revert;display:block;margin:0 0 .5em;font-size:.9em;opacity:.85';
+    sub.textContent = 'Type "slow lo-fi in D minor" \u2192 an AI writes drums, bass, chords and lead \u2192 one click plays it on this FM-1.';
+    box.append(cta, sub, ...GUIDE.map(node));
     (card.querySelector('p.what') || card.lastChild).after(box);
     return true;
   };

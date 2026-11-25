@@ -27,8 +27,12 @@ def test_32_1_composer_tile_guides_to_studio(browser, studio_url):
     text = page.text_content("#composer-guide")
     for want in ("Its library starts empty here", "COMPOSER Studio", "Send to FM-1", "PLAY", "ARP", "EDIT", "full guide"):
         assert want in text, want
-    link = page.locator("#composer-guide a", has_text="COMPOSER Studio")
-    assert link.evaluate("a => a.href") == studio_url                                  # ../ on the same site
+    cta = page.locator("#composer-guide a.composer-cta")                               # the big button, first
+    assert "open COMPOSER Studio" in cta.text_content() and cta.evaluate("a => a.href") == studio_url
+    assert page.evaluate("() => document.querySelector('#composer-guide').firstElementChild.className") == "composer-cta"
+    for a in page.locator("#composer-guide a", has_text="COMPOSER Studio").all():
+        assert a.evaluate("a => a.href") == studio_url                                 # ../ on the same site
+    link = cta
     with page.expect_popup() as pop:
         link.click()
     studio = pop.value
