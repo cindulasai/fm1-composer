@@ -49,6 +49,7 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F29 | Voice modes: a channel plays POLY, MONO or LEGATO with glide (SLOOP's voice code); each sound brings SLOOP's own mode + glide, overridable per channel on the device and saved in the piece; SLIDE on a step glides into the next | v9 | planned |
 | F30 | Part tools in EDIT (SLOOP-style): hold a button and turn KNOB1 shift (every note a step later / earlier), KNOB2 ×2 / ½ (the part copied after itself / halved), KNOB3 transpose (a semitone); one hold = one undo | v9 | planned |
 | F31 | Show the way: the root README leads with the live Studio (screenshot + 3 steps); COMPOSER's tile on fm1-emu's page explains itself and links to Studio (Studio's cable script; fm1-emu's files unchanged) | v9 | planned |
+| F32 | Live send: a piece sent while playing (Studio or fm1c) takes over at the next bar, carrying device-side sound/mix changes; saved to flash once stopped | v10 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -130,6 +131,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 49 | (user) the README and COMPOSER's emulator tile must show Studio's value: a guide on the tile added by Studio's own cable.js (fm1-emu's page unchanged: it renders only plain about text + fixed links), Studio as the repo's homepage link | user |
 | 50 | (user, 2026-11-24) v10 = live send while playing (Studio sends, the FM-1 swaps at the next bar); then sampled instruments, energy/swing + setlists; verified work is pushed to main overnight (CI gates the Pages deploy) | user |
 | 51 | CI 17.2-style Send flake, root cause (2026-11-24): the jack's SysEx receiver (uart_sysex.c) held one finished frame; Studio queues up to 2000 B (~6 frames) in the jack, so a main-loop pause > ~100 ms dropped a frame → ESEQ → not saved (~1 in 3 runs of test_29_1 [990-1010]; 0/10 with one frame ahead). Fix in the firmware (queue frames), not by slowing Send (one frame ahead ≈ 4× slower: the status clock ticks once a second) | council |
+| 52 | v10 live send (council, within decision 50): swap in RAM at the next bar (the player already plays from play_buf; xfer stages a checked piece), save to flash only when stopped (erase silences audio); the newer of two pending pieces wins; device-side channel changes carry over | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -172,3 +174,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
 - v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29) — verified
 - v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile ; Send never loses a frame (US-30–US-33)
+- v10 — live send: a piece sent while playing takes over at the next bar (US-34)
