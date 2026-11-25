@@ -120,6 +120,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 42 | After v6 ships: fm1-composer goes public (the firmware carries SLOOP's GPL-3.0 code, so a public demo needs public source) and COMPOSER Studio is published on GitHub Pages like fm1-emu's page (free for public repos): a Pages workflow builds, tests and deploys it; README gets a "Try it" link; visitors use their own AI key. First, the full git history is scanned for secrets. Until then the repo stays private | user | yes |
 | 43 | v7 = decision 42's build, made ready while the repo stays private: static export (the server's 3 rewrites baked in), browser wording via Studio's own Vite config (text2midi's files stay unchanged), Pages job in firmware.yml after the gate (one build), deploy guarded by repo visibility; going public itself waits for the user's go | council |
 | 44 | CI flake 17.2's cause: fm1-emu drops MIDI past ~1 s of jack backlog; a stalled emulator (busy runner) took Studio's wall-clock-paced bytes and dropped them. Send now waits on fm1-emu's emulated time (its status line) to stay ≤ ~0.4 s ahead; fm1-emu unchanged | council |
+| 45 | Went public 2026-11-24 (user's go): full-history secret scan clean (157 commits; only the tests' fake key), repo public, Pages from GitHub Actions; CI 45521407008 deployed (export tested in a browser first); live page checked in Chromium: both windows, COMPOSER boots, Send read back, audio heard; local/ai.json 404 | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -133,7 +134,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
 - Second core for more voices: after a real-device test (decision 28)
 - Versus SLOOP (isod89/sloop-fm1, a mature live groovebox): COMPOSER wins on AI arrangements from plain English, an 8-part arrangement player, and Studio in the browser. To close the gaps, most valuable first: one-click install from the browser; more sounds and engines (FM6 / DX7 patches, physical models); a setlist that chains pieces; piano-roll editing in Studio before pushing; per-channel filter and effects; MIDI out of the playing piece
-- Public Studio page (decision 42, after v6): GitHub Pages from the public repo; later, free / demo AI keys or an in-browser model (no key)
+- Public Studio page: live at https://cindulasai.github.io/fm1-composer/ (decision 45); later, free / demo AI keys or an in-browser model (no key)
 - Desktop app (Studio packaged)
 - Studio: Web MIDI push to a real FM-1 over USB; audio preview before pushing
 - Describe-in-words on the Mac (text2midi LLM path) from `fm1c`
