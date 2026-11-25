@@ -48,6 +48,8 @@ jobs:
       - name: Headless Chromium for Studio's browser tests
         run: python3 -m playwright install --with-deps chromium-headless-shell
       - name: Gate
+        env:
+          FM1_STUDIO_REPEAT: "1"      # (33.3: 20 stall Sends on CI, 5 in a local gate)
         run: PY=python3 sh app/check.sh
       - name: COMPOSER Studio's export, tested in a browser (27.1; a missing piece fails here, never skips)
         if: github.ref == 'refs/heads/main' && !github.event.repository.private

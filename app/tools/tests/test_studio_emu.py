@@ -392,8 +392,11 @@ def stall_send(studio, after_refresh, stall_at):
             const tick = (x - %d) + 1000 * Math.floor((now - (x - %d)) / 1000);   // the last refresh
             return Math.round(T(tick) / 100) * 100; };
         c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""" % (stall_at, after_refresh, after_refresh))
-    status = send(page, secs=180)
-    sent, x = f.evaluate("() => window.sent"), f.evaluate("() => window.probe.x")
+    try:
+        status = send(page, secs=180)
+        sent, x = f.evaluate("() => window.sent"), f.evaluate("() => window.probe.x")
+    finally:
+        page.context.close()   # one fm1-emu at a time: 20 left running slowed CI's last Sends to 0.1x real time
     stall = x + stall_at
     run = lambda a, b: max(0, min(b, stall) - a) + max(0, b - max(a, stall + 3000))   # fm1-emu running ms in [a, b]
     q, worst, prev = 0.0, 0.0, sent[0][0]
@@ -417,7 +420,11 @@ def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio,
 
 # 5 runs (~25 s each) in every check.sh; 20 with FM1_STUDIO_REPEAT=1 (CI's US-33 proof). The old single frame buffer
 # failed ~1 in 3: 5 runs catch it 87% of the time ((2/3)^5 = 13% pass), 20 runs 99.97%
-STALL_RUNS = 20 if os.environ.get("FM1_STUDIO_REPEAT") == "1" else 5
+def stall_runs(env=os.environ):
+    return 20 if env.get("FM1_STUDIO_REPEAT") == "1" else 5
+
+
+STALL_RUNS = stall_runs()
 
 
 def test_33_3_send_with_2000_bytes_queued_in_the_jack_saves_every_time(studio):

@@ -136,3 +136,15 @@ def test_28_3_readme_try_it_section_and_its_commands_open_studio(studio, studio_
     assert t2m(page).url.startswith(studio_url) and emu(page).url.startswith(studio_url)    # both windows, in a browser
     start(page)                                                                          # fm1-emu boots COMPOSER
     assert page.request.get(studio_url + "firmware/composer.fwsc").body() == FWSC.read_bytes()
+
+
+def test_33_3_ci_runs_the_stall_send_20_times_a_local_gate_5():
+    """33.3: firmware.yml's Gate step (the one running check.sh, so the Studio emu e2e) sets FM1_STUDIO_REPEAT=1; the
+    stall Send then runs 20 times, 5 without it (check.sh does not set it)"""
+    from test_studio_emu import stall_runs
+    gate = [s for s in steps(job("build")) if re.search(r"^\s*run:.*\bapp/check\.sh\b", s, re.M)]
+    assert len(gate) == 1, "one step runs the gate"
+    assert gate[0].startswith("name: Gate\n")
+    assert re.search(r'^        env:\n(?:          .*\n)*?          FM1_STUDIO_REPEAT: "1"', gate[0], re.M), gate[0]
+    assert "FM1_STUDIO_REPEAT" not in (APP / "check.sh").read_text()
+    assert stall_runs({}) == 5 and stall_runs({"FM1_STUDIO_REPEAT": "1"}) == 20 and stall_runs({"FM1_STUDIO_REPEAT": "0"}) == 5

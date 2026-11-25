@@ -1,5 +1,5 @@
 COMMAND: cd app && FM1_LIVE=/nonexistent sh check.sh
-.............                                                            [100%]
-357 passed, 16 skipped in 792.68s (0:13:12)
+....................................s                                    [100%]
+379 passed, 18 skipped in 872.65s (0:14:32)
 emu e2e: SKIP (no fm1-live at /nonexistent: sh tools/get_emu.sh)
 EXIT_CODE: 0
