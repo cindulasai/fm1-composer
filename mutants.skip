@@ -196,3 +196,4 @@ app/studio/web/shell.js | ? () => emuMs() - eSent < 10000 && performance.now() -
 app/firmware/src/uart_sysex.c | static volatile uint32_t ux_w, ux_r;            /* frames finished / taken: ux_w - ux_r wait */ | the mutated ' - ' is inside the comment (no code changes)
 app/tools/fm1c/piece.py | reserved byte), and a note's SLIDE (its velocity + 128); a piece without them keeps its bytes, every channel POLY.""" | the mutated ' + ' is in the module docstring (no code changes)
 app/firmware/src/edit.c | for (i = 0; i < ed_n; i++) | equivalent: at i == ed_n the body sets ed_n = i = ed_n (no change) and the index wraps in the ring (ED_UNDO), so <= changes nothing
+app/tools/fm1c/cli.py | _write(dst, _cabled(_read(src)).encode("utf-8"), True) | equivalent: the export writes into a folder that is empty or was just emptied (--force), each file once, so dst never exists and force is never read

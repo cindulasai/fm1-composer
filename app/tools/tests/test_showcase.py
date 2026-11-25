@@ -27,6 +27,11 @@ def test_32_1_composer_tile_guides_to_studio(browser, studio_url):
     text = page.text_content("#composer-guide")
     for want in ("Its library starts empty here", "COMPOSER Studio", "Send to FM-1", "PLAY", "ARP", "EDIT", "full guide"):
         assert want in text, want
+    # built as elements, not flattened to text: the big button, the Studio link and the full guide link; the controls bold
+    links = page.locator("#composer-guide a")
+    assert links.count() == 3, links.all_text_contents()
+    assert [b.strip() for b in page.locator("#composer-guide b").all_text_contents()] == [
+        "Start in three steps:", "Send to FM-1", "PLAY", "ARP", "EDIT", "LFO", "REC", "FX"]
     cta = page.locator("#composer-guide a.composer-cta")                               # the big button, first
     assert "open COMPOSER Studio" in cta.text_content() and cta.evaluate("a => a.href") == studio_url
     assert page.evaluate("() => document.querySelector('#composer-guide').firstElementChild.className") == "composer-cta"
