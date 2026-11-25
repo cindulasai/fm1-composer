@@ -1,7 +1,7 @@
 """US-17: the right side of Studio is fm1-emu's own page (unchanged, pinned) running the CI-built COMPOSER, joined to
 text2midi's window by Studio's MIDI cable. The FM-1's screen (fm1-emu's Big screen, 240x240) is compared pixel for
 pixel with what host mode draws after the same pushes."""
-import hashlib, json, re, subprocess, time, urllib.request
+import hashlib, json, os, re, subprocess, time, urllib.request
 from pathlib import Path
 import pytest
 from conftest import APP
@@ -376,12 +376,10 @@ def test_29_3_the_read_back_lasts_10_s_of_the_emulators_own_time(studio):
     assert log["eSent"] >= log["e0"] and log["waits"] >= 0 and log["reads"] >= 50, log            # the whole timeline
 
 
-@pytest.mark.parametrize("after_refresh, stall_at", [(990, 1010), (400, 0)])
-def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio, after_refresh, stall_at):
-    """fm1-emu's status line (Studio's clock) refreshes once a second: Send starts `after_refresh` ms after a refresh
-    and fm1-emu stalls `stall_at` ms into it for 3 s (stalling at once, the stale start counts most). Modelling the jack
-    (3.125 bytes per running ms), its real backlog stays <= 2000 + one frame, never the ~3125 fm1-emu drops (the
-    Adversary's v8 cases)"""
+def stall_send(studio, after_refresh, stall_at):
+    """one Send while fm1-emu stalls `stall_at` ms into it for 3 s, seen through a status line refreshed once a second
+    (Send started `after_refresh` ms after a refresh): (Send's last status, the jack's worst modelled backlog, the
+    biggest write)"""
     page, _, _ = studio()
     open_example(page)
     f = start(page)
@@ -394,7 +392,7 @@ def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio,
             const tick = (x - %d) + 1000 * Math.floor((now - (x - %d)) / 1000);   // the last refresh
             return Math.round(T(tick) / 100) * 100; };
         c.send = (b) => { window.sent.push([performance.now(), b.length]); send(b); }; }""" % (stall_at, after_refresh, after_refresh))
-    assert send(page, secs=180).startswith("On the FM-1")
+    status = send(page, secs=180)
     sent, x = f.evaluate("() => window.sent"), f.evaluate("() => window.probe.x")
     stall = x + stall_at
     run = lambda a, b: max(0, min(b, stall) - a) + max(0, b - max(a, stall + 3000))   # fm1-emu running ms in [a, b]
@@ -403,7 +401,32 @@ def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio,
         q = max(0.0, q - 3.125 * run(prev, t)) + n
         prev = t
         worst = max(worst, q)
-    assert worst <= 2000 + max(n for _, n in sent), f"jack backlog {worst:.0f} bytes (fm1-emu drops past ~3125)"
+    return status, worst, max(n for _, n in sent)
+
+
+@pytest.mark.parametrize("after_refresh, stall_at", [(990, 1010), (400, 0)])
+def test_29_1_a_stall_seen_through_a_status_line_refreshed_once_a_second(studio, after_refresh, stall_at):
+    """fm1-emu's status line (Studio's clock) refreshes once a second: Send starts `after_refresh` ms after a refresh
+    and fm1-emu stalls `stall_at` ms into it for 3 s (stalling at once, the stale start counts most). Modelling the jack
+    (3.125 bytes per running ms), its real backlog stays <= 2000 + one frame, never the ~3125 fm1-emu drops (the
+    Adversary's v8 cases)"""
+    status, worst, biggest = stall_send(studio, after_refresh, stall_at)
+    assert status.startswith("On the FM-1"), status
+    assert worst <= 2000 + biggest, f"jack backlog {worst:.0f} bytes (fm1-emu drops past ~3125)"
+
+
+# 5 runs (~25 s each) in every check.sh; 20 with FM1_STUDIO_REPEAT=1 (CI's US-33 proof). The old single frame buffer
+# failed ~1 in 3: 5 runs catch it 87% of the time ((2/3)^5 = 13% pass), 20 runs 99.97%
+STALL_RUNS = 20 if os.environ.get("FM1_STUDIO_REPEAT") == "1" else 5
+
+
+def test_33_3_send_with_2000_bytes_queued_in_the_jack_saves_every_time(studio):
+    """33.3: the stall-at-1010 Send (test_29_1 [990-1010]: up to 2000 B queued in the jack while COMPOSER's main loop
+    is held up) saves on every run, as the jack keeps 4 finished frames (decision 51: one waited, a 2nd was lost)"""
+    results = [stall_send(studio, 990, 1010) for _ in range(STALL_RUNS)]
+    bad = [(i, status) for i, (status, _, _) in enumerate(results) if not status.startswith("On the FM-1")]
+    assert not bad, f"33.3: {len(bad)} of {STALL_RUNS} Sends did not save: {bad}"
+    assert all(w <= 2000 + b for _, w, b in results), [round(w) for _, w, _ in results]
 
 
 def test_29_3_a_clock_that_stops_after_the_transfer_reads_back_90_s_at_most(studio):

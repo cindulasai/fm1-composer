@@ -33,7 +33,7 @@
 | US-30 | MONO / LEGATO voices with glide + SLIDE | 1 | todo | 0 |
 | US-31 | Part tools in EDIT: shift, ×2 / ½, transpose | 1 | todo | 0 |
 | US-32 | Show the way: README + COMPOSER tile guide | 1 | todo | 0 |
-| US-33 | Send never loses a frame: the jack queues frames | 1 | todo | 0 |
+| US-33 | Send never loses a frame: the jack queues frames | 1 | proven | 0 |
 | US-34 | Live send: takes over at the next bar | 1 | todo | 0 |
 
 ## Impediments

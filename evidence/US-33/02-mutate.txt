@@ -1,0 +1,3 @@
+COMMAND: sh prove mutants US-33
+MUTANTS: 7 tried, 7 killed, 0 survived (of 7 candidates in US-33)
+EXIT_CODE: 0
