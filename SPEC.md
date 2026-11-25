@@ -123,7 +123,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 43 | v7 = decision 42's build, made ready while the repo stays private: static export (the server's 3 rewrites baked in), browser wording via Studio's own Vite config (text2midi's files stay unchanged), Pages job in firmware.yml after the gate (one build), deploy guarded by repo visibility; going public itself waits for the user's go | council |
 | 44 | CI flake 17.2's cause: fm1-emu drops MIDI past ~1 s of jack backlog; a stalled emulator (busy runner) took Studio's wall-clock-paced bytes and dropped them. Send now waits on fm1-emu's emulated time (its status line) to stay ≤ ~0.4 s ahead; fm1-emu unchanged | council |
 | 45 | Went public 2026-11-24 (user's go): full-history secret scan clean (157 commits; only the tests' fake key), repo public, Pages from GitHub Actions; CI 45521407008 deployed (export tested in a browser first); live page checked in Chromium: both windows, COMPOSER boots, Send read back, audio heard; local/ai.json 404 | user |
-| 46 | v9 voice mode: the sound's own SLOOP mode + glide by default, a per-channel override on the FM-1, saved in the piece (pieces from v8 open unchanged: POLY, as before) | user |
+| 46 | v9 voice mode: the sound's own SLOOP mode + glide by default (a channel's mode byte AUTO; new pieces), a per-channel override on the FM-1, saved in the piece; pieces from v8 (no mode bytes) open unchanged: POLY | user |
 | 47 | v9 part tools live in EDIT, SLOOP-style (hold + KNOB1 shift / KNOB2 ×2·½ / KNOB3 transpose; FX undo) | user |
 | 48 | v9 assumptions: emulator only; SLOOP voice.c mono/legato/glide copied with provenance; POLY renders bit-identical to v8; SLIDE in STEPS; UNISON out (voice budget) | user |
 
