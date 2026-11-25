@@ -465,6 +465,45 @@ static void edited_now(int r)
     else set_status(r == ED_FULL ? "PIECE FULL" : "CANNOT EDIT THERE");
 }
 
+/* EDIT's part tools (US-31, SLOOP's EDIT + knobs): held EDIT turns KNOB1 SHIFT, KNOB2 X2 / 1/2, KNOB3 TRANSPOSE.
+ * EDIT, SLOOP's own button, does nothing else on this screen; a press here arms it (the press that opened EDIT,
+ * still held, does not). One hold = one undo (edit.c). (The font has no × or ½: X2, 1/2.) */
+static uint32_t tl_on;
+static int32_t tl_shift, tl_trans;              /* the hold's turns so far, for the footer */
+static char tl_msg[24];
+static void tools_input(uint32_t pressed, uint32_t playing)
+{
+    static const char *const WHY[13] = {"", "CANNOT EDIT THERE", "PIECE FULL", "", "", "", "", "",
+                                        "DRUMS DO NOT TRANSPOSE", "EMPTY CHANNEL", "", "", "PART TOO BIG TO UNDO"};
+    int32_t d[3];
+    uint32_t k;
+    if (pressed & 1u << BTN_EDIT) { tl_on = 1; tl_shift = tl_trans = 0; set_status("SHIFT  X2 1/2  TRANSPOSE"); }
+    if (tl_on && !(fm1_in.buttons >> BTN_EDIT & 1u)) { tl_on = 0; edit_tools_end(); }
+    if (!tl_on) return;
+    d[0] = fm1_enc_take(ENC_KNOB1); d[1] = fm1_enc_take(ENC_KNOB2); d[2] = fm1_enc_take(ENC_KNOB3);
+    if (!(d[0] | d[1] | d[2])) return;
+    if (playing) { set_status("STOP TO EDIT"); return; }
+    for (k = 0; k < 3u; k++) {
+        int32_t c;
+        int r = ED_OK;
+        if (!d[k]) continue;
+        if (k == 1u) for (c = d[1] < 0 ? -d[1] : d[1]; c-- > 0 && r == ED_OK;) r = edit_tool(play_buf, sel, ET_LEN, d[1], 0);
+        else r = edit_tool(play_buf, sel, k ? ET_TRANS : ET_SHIFT, d[k], GRID[ed_gi]);
+        if (r == ED_OK) {
+            edited = 1; discard = 0; player_refresh(); dirty |= D_ROLL | D_HEAD;
+            if (k == 1u) ui_fmt(tl_msg, sizeof tl_msg, d[1] > 0 ? "X2" : "1/2");
+            else {
+                int32_t v = k ? (tl_trans += d[2]) : (tl_shift += d[0]);
+                ui_fmt(tl_msg, sizeof tl_msg, "%s %s%u", k ? "TRANSPOSE" : "SHIFT", v > 0 ? "+" : v < 0 ? "-" : "", (uint32_t)(v < 0 ? -v : v));
+            }
+            set_status(tl_msg);
+        } else if (r == ED_RANGE) set_status(d[2] > 0 ? "A NOTE WOULD PASS G9" : "A NOTE WOULD PASS C-1");
+        else if (r == ED_LONG) set_status(pl_v.ch[sel].steps ? "64 STEPS AT MOST" : "THE PART FILLS THE PIECE");
+        else if (r == ED_SHORT) set_status("SHORTEST ALREADY");
+        else set_status(WHY[r < 13 ? r : 1]);
+    }
+}
+
 static void edit_input(uint32_t pressed, uint32_t keys)
 {
     piece_note_t cn[16];
@@ -478,6 +517,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
         if (playing) { save_pending = 1; set_status("SAVES WHEN STOPPED"); }
         else save_all();
     }
+    tools_input(pressed, playing);              /* (held: the knobs taken before their EDIT jobs below) */
     if ((d = fm1_enc_take(ENC_SELECT))) {       /* the cursor, a step a click, inside the piece */
         int32_t t = (int32_t)ed_tick + d * (int32_t)g, last = (int32_t)((pl_v.len_ticks - 1u) / g * g);
         ed_tick = (uint32_t)(t < 0 ? 0 : t > last ? last : t);
@@ -533,7 +573,7 @@ static void edit_input(uint32_t pressed, uint32_t keys)
         else if (edit_undo(play_buf, &ch, &t) == ED_OK) {
             sel = ch;
             voice_post(ch);                     /* (a voice change undone too) */
-            ed_tick = t - t % g;
+            if (t < pl_v.len_ticks) ed_tick = t - t % g;   /* (a tools hold: the cursor stays) */
             edited = 1;
             player_refresh();
             dirty |= D_ROLL | D_HEAD;
@@ -676,7 +716,7 @@ static void app_main(void)
             library_input(pressed);
         } else {
             if (scr == 2) {
-                if (pressed & 1u << BTN_HOME) { scr = 1; dirty = D_ALL; }
+                if (pressed & 1u << BTN_HOME) { scr = 1; dirty = D_ALL; tl_on = 0; edit_tools_end(); }
                 else edit_input(pressed, keys);
             } else if (scr == 3) {
                 if (pressed & (1u << BTN_HOME | 1u << BTN_FX)) { scr = 1; dirty = D_ALL; }

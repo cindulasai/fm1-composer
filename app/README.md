@@ -123,6 +123,7 @@ python3 -m http.server -d site 8000 # then open http://127.0.0.1:8000/
 | | KNOB1 | grid: 1/32, 1/16, 1/8, 1/4 |
 | | KNOB2 / KNOB3 | length / velocity of the note at the cursor (and of the next new one) |
 | | OCT- / OCT+ | the keys an octave down / up (the roll follows) |
+| | EDIT held | the part tools (SLOOP's EDIT knobs; the press says `SHIFT  X2 1/2  TRANSPOSE`): **KNOB1** every note of the part a grid step later / earlier, wrapping in the part (`SHIFT +1`); **KNOB2** right: ×2, the part copied after itself, a loop up to 64 steps, else up to the piece's end (`X2`); left: ½, only the first half kept (`1/2`); **KNOB3** every note of the channel a semitone up / down (`TRANSPOSE -3`). The part is the channel's loop (STEPS' KNOB4), else the bars up to its last note. Let go, then **FX** takes back the whole hold in one step; SAVE keeps it. Refused, nothing changed: `A NOTE WOULD PASS G9` (or `C-1`), `DRUMS DO NOT TRANSPOSE` (kit sounds), `EMPTY CHANNEL`, `PIECE FULL`, `64 STEPS AT MOST`, `THE PART FILLS THE PIECE`, `SHORTEST ALREADY`, `PART TOO BIG TO UNDO` (more than 853 events), `STOP TO EDIT` (playing). Only the last hold (or REC pass) is kept for undo |
 | | FX | undo (the last 64 edits) |
 | | PLAY | plays from the cursor's bar / stops; edits wait until it is stopped |
 | | SAVE | saves the edited piece in place of the old one, with your sounds, mutes and tempo |
