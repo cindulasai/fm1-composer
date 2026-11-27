@@ -15,7 +15,7 @@ static int fails;
 /* ---- the model: channels of notes; the builder writes them as encode() does ---- */
 typedef struct { uint32_t tick, dur; uint8_t pitch, vel; } tn_t;
 #define MAXN 6000
-typedef struct { uint8_t role, steps; uint32_t n; tn_t note[MAXN]; } mch_t;
+typedef struct { uint8_t role, steps, mode; uint32_t n; tn_t note[MAXN]; } mch_t;   /* mode: US-30's nibble */
 static mch_t mc[PIECE_MAX_CH];
 static uint32_t m_nch, m_len, m_hold, m_hl;
 static uint8_t pb[PIECE_MAX_BYTES], want[PIECE_MAX_BYTES], before[PIECE_MAX_BYTES];
@@ -33,7 +33,7 @@ static int eqp(const uint8_t *a, const uint8_t *b) { return plen(a) == plen(b) &
 /* the model as bytes; 0 when it does not fit */
 static uint32_t build(uint8_t *b)
 {
-    uint32_t off = PIECE_HDR + m_nch * PIECE_CHREC, ch, i;
+    uint32_t off = PIECE_HDR + m_nch * PIECE_CHREC, ch, i, modes = 0;
     memset(b, 0, PIECE_MAX_BYTES);
     memcpy(b, "F1P1", 4); b[4] = 1; b[5] = (uint8_t)m_nch; put16(b + 8, 1200); put16(b + 10, 96); put32(b + 12, m_len);
     memcpy(b + 16, "tools", 5);
@@ -55,8 +55,10 @@ static uint32_t build(uint8_t *b)
             t = x->tick; off += 6; k++;
         }
         put32(c + 8, k);
+        modes |= (uint32_t)mc[ch].mode << 4u * ch;
     }
     put32(b + 40, off + 4);
+    put32(b + 44, modes);
     put32(b + off, piece_crc32(b, off));
     return off + 4;
 }
@@ -338,8 +340,89 @@ static void test_31_1_random_holds_match_the_model(void)
     CHECK(turns > 1500u, "enough turns went through (%u)", turns);
 }
 
+/* ---- US-39: a channel added / removed ---- */
+static uint32_t plen0(void)                     /* the model's size as built */
+{
+    uint32_t b = PIECE_HDR + m_nch * PIECE_CHREC + 4u, ch;
+    for (ch = 0; ch < m_nch; ch++) b += mc[ch].n * 6u;
+    return b;
+}
+static void m_remove(uint32_t k)
+{
+    for (uint32_t j = k; j + 1u < m_nch; j++) mc[j] = mc[j + 1u];
+    memset(&mc[m_nch - 1u], 0, sizeof mc[0]);
+    m_nch--;
+}
+static void test_39_1_add_and_remove_match_encode(void)
+{
+    uint32_t run, i;
+    srand(39);
+    for (run = 0; run < 300; run++) {
+        uint32_t n = 1u + (uint32_t)rand() % PIECE_MAX_CH, ch, k;
+        mreset(n, 16u * 384u);
+        for (ch = 0; ch < n; ch++) {
+            mc[ch].role = (uint8_t)(rand() % ROLE_COUNT);
+            mc[ch].mode = (uint8_t)(rand() % 4);
+            mc[ch].steps = (uint8_t)(rand() % 3 * 16);
+            for (i = (uint32_t)rand() % 40; i > 0; i--) add(ch, (uint32_t)rand() % (16u * 384u), 30u + (uint32_t)rand() % 60u, 1u + (uint32_t)rand() % 200u, 1u + (uint32_t)rand() % 127u);
+            for (i = 0; i + 1u < mc[ch].n; i++) mc[ch].note[i].pitch = (uint8_t)(mc[ch].note[i].pitch + i % 2);   /* (pairs may clash: dedupe) */
+        }
+        for (ch = 0; ch < n; ch++) {            /* no two notes at one tick and pitch, as a piece has */
+            uint32_t a, b, w = 0;
+            for (a = 0; a < mc[ch].n; a++) {
+                for (b = 0; b < w && (mc[ch].note[b].tick != mc[ch].note[a].tick || mc[ch].note[b].pitch != mc[ch].note[a].pitch); b++) {}
+                if (b == w) mc[ch].note[w++] = mc[ch].note[a];
+            }
+            mc[ch].n = w;
+        }
+        load();
+        if (n < PIECE_MAX_CH) {
+            uint32_t r = (uint32_t)rand() % ROLE_COUNT;
+            CHECK(edit_chan_add(pb, r, 255u) == ED_OK, "run %u: add to %u", run, n);
+            memset(&mc[n], 0, sizeof mc[0]);
+            mc[n].role = (uint8_t)r; mc[n].mode = 1u;   /* AUTO */
+            m_nch++;
+            same("add");
+            CHECK(edit_undoable() == 0, "add: the history forgotten");
+        }
+        if (m_nch > 1u) {
+            k = (uint32_t)rand() % m_nch;
+            CHECK(edit_chan_remove(pb, k) == ED_OK, "run %u: remove %u of %u", run, k, m_nch);
+            m_remove(k);
+            same("remove");
+        }
+    }
+}
+static void test_39_3_refusals_change_no_byte(void)
+{
+    uint32_t n, k;
+    mreset(8, 4u * 384u);
+    load();
+    memcpy(want, pb, PIECE_MAX_BYTES);
+    CHECK(edit_chan_add(pb, ROLE_BASS, 255u) == ED_ARG && memcmp(pb, want, PIECE_MAX_BYTES) == 0, "9th channel refused");
+    CHECK(edit_chan_remove(pb, 8) == ED_ARG && memcmp(pb, want, PIECE_MAX_BYTES) == 0, "no channel 9");
+    mreset(1, 4u * 384u);
+    add(0, 0, 60, 96, 100);
+    load();
+    memcpy(want, pb, PIECE_MAX_BYTES);
+    CHECK(edit_chan_remove(pb, 0) == ED_ARG && memcmp(pb, want, PIECE_MAX_BYTES) == 0, "the only channel stays");
+    CHECK(edit_chan_add(pb, ROLE_COUNT, 255u) == ED_ARG && memcmp(pb, want, PIECE_MAX_BYTES) == 0, "no such role");
+    mreset(2, 999u * 384u);                     /* full to the last few bytes: no room for 16 more */
+    for (k = 0; plen0() + 6u <= PIECE_MAX_BYTES - 4u; k++) add(0, k * 24u, 60u + k % 12u, 10, 90);
+    n = build(pb);
+    CHECK(n + PIECE_CHREC > PIECE_MAX_BYTES && piece_check(pb, n) == 0, "near full (%u B)", n);
+    edit_forget();
+    memcpy(want, pb, PIECE_MAX_BYTES);
+    CHECK(edit_chan_add(pb, ROLE_BASS, 255u) == ED_FULL && memcmp(pb, want, PIECE_MAX_BYTES) == 0, "no room: ED_FULL");
+    CHECK(edit_chan_remove(pb, 1) == ED_OK, "a removal still fits");
+    m_remove(1);
+    same("remove from a full piece");
+}
+
 int main(void)
 {
+    test_39_1_add_and_remove_match_encode();
+    test_39_3_refusals_change_no_byte();
     test_31_1_shift_wraps_in_the_part();
     test_31_1_x2_and_half();
     test_31_1_transpose_and_refusals();

@@ -315,6 +315,53 @@ static void ed_mv(uint8_t *b, uint32_t to, uint32_t from, uint32_t n)   /* memmo
     else for (i = 0; i < n; i++) b[to + i] = b[from + i];
 }
 
+/* US-39: a channel added (role, sound; no notes, voice AUTO, volume 100, pan 64) after the last, or channel k removed
+ * (its notes too; the channels after it move down one). Byte for byte fm1c's encode() of the piece with that channel
+ * added / dropped; everything else (sections, tempo, length, the other channels) as it was. The undo history is
+ * forgotten (its entries name channels by number). ED_ARG: 8 channels already, no channel k, or k the only one;
+ * ED_FULL: no room. An error changes no byte. */
+static int edit_chan_add(uint8_t *b, uint32_t role, uint32_t sound)
+{
+    uint32_t n = b[5], len = pc_u32(b + 40), at = PIECE_HDR + n * PIECE_CHREC, i, m = pc_u32(b + 44);
+    uint8_t *c;
+    if (n >= PIECE_MAX_CH || role >= ROLE_COUNT) return ED_ARG;
+    if (len + PIECE_CHREC > PIECE_MAX_BYTES) return ED_FULL;
+    ed_mv(b, at + PIECE_CHREC, at, len - at);
+    for (i = 0; i < n; i++) ed_w32(ed_rec(b, i) + 12, pc_u32(ed_rec(b, i) + 12) + PIECE_CHREC);
+    c = b + at;
+    for (i = 0; i < PIECE_CHREC; i++) c[i] = 0;
+    c[0] = (uint8_t)role; c[1] = (uint8_t)sound; c[2] = 100u; c[3] = 64u;
+    len += PIECE_CHREC;
+    ed_w32(c + 12, len - 4u);
+    b[5] = (uint8_t)(n + 1u);
+    ed_w32(b + 40, len);
+    ed_w32(b + 44, (m & ~(15u << 4u * n)) | 1u << 4u * n);
+    ed_seal(b);
+    edit_forget();
+    return ED_OK;
+}
+static int edit_chan_remove(uint8_t *b, uint32_t k)
+{
+    uint32_t n = b[5], len = pc_u32(b + 40), j, off, ev, at, m = pc_u32(b + 44), lo, hi;
+    if (k >= n || n < 2u) return ED_ARG;
+    off = pc_u32(ed_rec(b, k) + 12);
+    ev = pc_u32(ed_rec(b, k) + 8) * 6u;
+    for (j = 0; j < n; j++) ed_w32(ed_rec(b, j) + 12, pc_u32(ed_rec(b, j) + 12) - PIECE_CHREC - (j > k ? ev : 0u));
+    ed_mv(b, off, off + ev, len - off - ev);
+    len -= ev;
+    at = PIECE_HDR + k * PIECE_CHREC;
+    ed_mv(b, at, at + PIECE_CHREC, len - at - PIECE_CHREC);
+    len -= PIECE_CHREC;
+    lo = m & ((1u << 4u * k) - 1u);
+    hi = k + 1u < 8u ? m >> 4u * (k + 1u) << 4u * k : 0u;
+    b[5] = (uint8_t)(n - 1u);
+    ed_w32(b + 40, len);
+    ed_w32(b + 44, lo | hi);
+    ed_seal(b);
+    edit_forget();
+    return ED_OK;
+}
+
 static void ed_rev(uint8_t *e, uint32_t n)      /* n events reversed in place */
 {
     uint32_t i, k;

@@ -67,6 +67,7 @@ static uint8_t play_buf[PIECE_MAX_BYTES] POOL;  /* the piece being played, copie
 static volatile uint8_t idle_ok;
 static uint32_t scr, cur, top, dirty = D_ALL;
 static uint32_t loaded_id = 0xFFFFFFFFu, sel, mute, solo, tempo_x10, save_pending;
+static uint32_t rm_ask;                         /* US-39: the channel + 1 a removal waits on (0: none) */
 /* EDIT: the cursor's tick, grid (index into GRID), the keys' octave, the next new note, unsaved edits, HOME armed */
 static const uint16_t GRID[4] = {12, 24, 48, 96};
 static uint32_t ed_tick, ed_gi = 1, ed_len = 24, ed_vel = 100, edited, discard, preview;
@@ -366,6 +367,7 @@ static int open_piece(uint32_t i)
     edit_forget();
     edited = discard = 0;
     ed_tick = 0;
+    rm_ask = 0;
     pf = pref_find(e->id);
     post(SC_ALL_OFF, 0, 0, 0);
     for (ch = 0; ch < PIECE_MAX_CH; ch++) {      /* (piece_view: unused channels are OTHER, default sound, volume 0) */
@@ -459,10 +461,88 @@ static void rc_sync(void)
 
 static const uint8_t WHITE_KEY[8] = {0, 2, 4, 6, 7, 9, 11, 12};   /* F3 G3 A3 B3 C4 D4 E4 F4: fm1_in.notes bits */
 
+/* US-39: add / remove a channel (PLAYER, holding SEL: OCT+ adds one after the last, OCT- removes the selected one,
+ * once PLAY says yes). The per-channel choices (sound, effects, mute, solo) move with their channels; an edit. */
+static const uint8_t NS_ROLES[PIECE_MAX_CH];
+static void chan_synth(uint32_t ch)             /* channel ch's set-up to the synth */
+{
+    post(SC_SOUND, ch, snd[ch], role[ch] + 1u);
+    voice_post(ch);
+    post(SC_LEVEL, ch, pl_v.ch[ch].vol, pl_v.ch[ch].pan);
+    while (synth_fx_post(ch, fxv[ch])) platform_poll();
+    player_mute(ch, (int)(mute >> ch & 1u));
+    player_solo(ch, (int)(solo >> ch & 1u));
+}
+static void chan_add(void)
+{
+    static char b[40];
+    uint32_t n = pl_v.nch, r = ROLE_OTHER, i, k;
+    int e;
+    for (i = 0; i < PIECE_MAX_CH && r == ROLE_OTHER; i++) {   /* the first of NEW SONG's roles the piece lacks */
+        for (k = 0; k < n && role[k] != NS_ROLES[i]; k++) {}
+        if (k == n) r = NS_ROLES[i];
+    }
+    if (n >= PIECE_MAX_CH) { set_status("8 CHANNELS MAX"); return; }
+    if (rc.mode) rc_end(play_buf, ED_OK);
+    player_hold();
+    e = edit_chan_add(play_buf, r, 255u);
+    player_edited();
+    if (e) { set_status("PIECE FULL"); return; }
+    role[n] = (uint8_t)r;
+    snd[n] = (uint8_t)sound_default(r);
+    fx_defaults(r, fxv[n]);
+    mute &= ~(1u << n); solo &= ~(1u << n);
+    chan_synth(n);
+    sel = n;
+    edited = 1;
+    ui_fmt(b, sizeof b, "CH %u ADDED: PRESETS PICKS ITS SOUND", n + 1u);
+    set_status(b);
+    dirty |= D_ALL;
+}
+static void chan_remove(uint32_t k)
+{
+    static char b[40];
+    uint32_t n = pl_v.nch, j, f, lo;
+    if (rc.mode) rc_end(play_buf, ED_OK);
+    player_hold();
+    if (edit_chan_remove(play_buf, k)) { player_edited(); set_status("A SONG NEEDS 1 CHANNEL"); return; }
+    player_edited();
+    for (j = k; j + 1u < n; j++) {
+        role[j] = role[j + 1u]; snd[j] = snd[j + 1u];
+        for (f = 0; f < FX_N; f++) fxv[j][f] = fxv[j + 1u][f];
+    }
+    role[n - 1u] = pl_v.ch[n - 1u].role;        /* (piece_view: an unused channel) */
+    snd[n - 1u] = (uint8_t)sound_default(role[n - 1u]);
+    fx_defaults(role[n - 1u], fxv[n - 1u]);
+    lo = (1u << k) - 1u;
+    mute = (mute & lo) | (mute >> (k + 1u) << k);
+    solo = (solo & lo) | (solo >> (k + 1u) << k);
+    post(SC_ALL_OFF, 0, 0, 0);                  /* its notes let go at once; the moved channels' set-ups follow them */
+    for (j = 0; j < PIECE_MAX_CH; j++) chan_synth(j);
+    if (sel >= pl_v.nch) sel = pl_v.nch - 1u;
+    edited = 1;
+    ui_fmt(b, sizeof b, "CH %u REMOVED", k + 1u);
+    set_status(b);
+    dirty |= D_ALL;
+}
+
 static void player_input(uint32_t pressed, uint32_t keys)
 {
     int32_t d;
     uint32_t k;
+    if (rm_ask) {                               /* a removal asked: PLAY says yes, anything else keeps it */
+        static char b[40];
+        k = rm_ask - 1u;
+        if (pressed & 1u << BTN_PLAY) { rm_ask = 0; chan_remove(k); return; }
+        if (pressed) { rm_ask = 0; ui_fmt(b, sizeof b, "KEPT CH %u", k + 1u); set_status(b); return; }
+    }
+    if ((fm1_in.buttons & 1u << BTN_SEL) && (pressed & (1u << BTN_OCT_UP | 1u << BTN_OCT_DOWN))) {
+        static char b[40];
+        if (pressed & 1u << BTN_OCT_UP) chan_add();
+        else if (pl_v.nch < 2u) set_status("A SONG NEEDS 1 CHANNEL");
+        else { rm_ask = sel + 1u; ui_fmt(b, sizeof b, "REMOVE CH %u? PLAY = YES", sel + 1u); set_status(b); }
+        return;
+    }
     if (rc.mode && (pressed & (1u << BTN_PLAY | 1u << BTN_REC))) {   /* the pass (or its count-in) ends */
         rc_end(play_buf, ED_OK);
         pressed &= ~(1u << BTN_REC);
