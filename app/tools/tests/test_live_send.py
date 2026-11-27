@@ -1,3 +1,4 @@
+from pathlib import Path
 """US-34: live send. A piece sent while one plays takes over at the next bar line, keeping the sounds, mutes, solos and
 effects changed on the device; it is saved once playback stops. Host mode: pieces pushed over SysEx (the real transfer
 path), keys from a script, asserted on the screen text, the SysEx replies and the sound."""
@@ -300,3 +301,13 @@ def test_34_6_strict_timing_live_switch_on_the_densest_piece(tmp_path):
     assert m and m[1] == "0" and m[2] == "0", report[-800:]
     assert lcd16(lcd)[222 * 240:238 * 240] == footer_px("LIVE: dense two"), "switched at the bar line"
     assert erms(s, len(s) // 2 - 2 * 44100) > 300, "the new piece heard"
+
+
+def test_34_readme_documents_live_send_as_the_screen_says():
+    """app/README.md explains Send while playing with the footers the firmware shows (lv_status: "<what>: <name>")"""
+    here = Path(__file__).resolve().parents[2]
+    readme, src = (here / "README.md").read_text(), (here / "firmware/src/composer.c").read_text()
+    assert "Send while it plays" in readme and "next bar line" in readme
+    for what in ("NEXT", "LIVE", "NEXT AT STOP"):
+        assert f'lv_status("{what}"' in src, what
+        assert f"`{what}: <name>`" in readme, what

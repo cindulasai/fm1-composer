@@ -54,6 +54,10 @@ One page, two apps you may already know, joined by a MIDI cable:
   FM-1's MIDI IN (more slowly when the emulator runs slower than real time on this computer). Studio reads the piece
   back from the emulated flash before it says "On the FM-1". Press PLAY on the
   FM-1 (or Space) to hear it there.
+- **Send while it plays**: if the FM-1 is playing, the new piece takes over at the next bar line, from its bar 1,
+  at its own tempo, keeping the sounds, mutes, solos and effects you changed on the FM-1. Its footer shows
+  `NEXT: <name>` until the switch, then `LIVE: <name>`; the piece is saved to the library once you stop. If you have
+  unsaved edits on the FM-1, nothing is dropped: it waits and shows `NEXT AT STOP: <name>`, and switches when you stop.
 
 Both apps run unchanged, at pinned versions: Studio adds only the cable, the Send button, and the small stand-in
 that answers text2midi's window in the browser in place of its desktop shell.
