@@ -144,6 +144,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 58 | Studio's preview plays the same samples as the FM-1 (Rust port of the decoder + the same tables) | user |
 | 59 | v11 adds US-37: leaving PLAYER mid-recording says what it kept (`REC OFF: N NOTES`), the v6 Adversary's minor gap; built beside US-35 (other files) | council |
 | 60 | v12 = full flexibility on the device: NEW SONG from a blank grid with a choice of channels, and add / remove channels in any piece (wishlist B7's on-device half); before energy / swing + setlists (decision 50 moves to v13) | user |
+| 61 | After v12: v13 = Studio DAW (wishlist B2 mixer: per-channel volume / mute / solo / pan / EQ / FX + master; B3 transport: click-to-play timeline, loop region, position; B1 modern look with it; B4 regenerate a bar range of one channel built into the timeline; soundcraft DSP reused, B6). Energy / swing + setlists + longer songs move to v14 | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -188,3 +189,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v10 — live send: a piece sent while playing takes over at the next bar (US-34) — verified
 - v11 — sampled instruments: piano, strings, horns (SLOOP's CC0 sets + SAMPLE engine) on the FM-1 and in Studio's Play (US-35–US-37)
 - v12 — full flexibility on the FM-1: NEW SONG from a blank grid with your choice of channels; add / remove channels in any piece (US-38–US-39)
+- v13 — (planned, decision 61) Studio DAW: mixer, timeline + loop, regenerate a bar range, modern look
