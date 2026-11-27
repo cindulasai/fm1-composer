@@ -52,6 +52,8 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F32 | Live send: a piece sent while playing (Studio or fm1c) takes over at the next bar, carrying device-side sound/mix changes; saved to flash once stopped | v10 | shipped |
 | F33 | Sampled instruments on the FM-1: PIANO, STRINGS, HORNS from SLOOP's CC0 sets (VSCO-2 CE / VCSL) played by SLOOP's SAMPLE engine (IMA ADPCM, zones, loops); new sounds in the catalog, picked for text2midi's piano / string / brass parts | v11 | planned |
 | F34 | Studio's Play sounds like the FM-1 for the sampled sounds: Studio's engine renders the same samples the same way (same table, same decoder) | v11 | planned |
+| F35 | NEW SONG from a blank grid on the FM-1: from LIBRARY, make an empty piece choosing channel count (1–8), each channel's role + sound, tempo, length in bars and a name; fill it with STEPS / REC / EDIT; saved to LIBRARY like any piece | v12 | planned |
+| F36 | Channels on the FM-1: add a channel (up to 8: role + sound, empty) or remove one (its notes go, after a confirm) in any piece, sent or made on the device; the piece stays editable and Studio-compatible (same format) | v12 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -141,6 +143,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 57 | Choir skipped for now (no CC0 choir at hand); Backlog | user |
 | 58 | Studio's preview plays the same samples as the FM-1 (Rust port of the decoder + the same tables) | user |
 | 59 | v11 adds US-37: leaving PLAYER mid-recording says what it kept (`REC OFF: N NOTES`), the v6 Adversary's minor gap; built beside US-35 (other files) | council |
+| 60 | v12 = full flexibility on the device: NEW SONG from a blank grid with a choice of channels, and add / remove channels in any piece (wishlist B7's on-device half); before energy / swing + setlists (decision 50 moves to v13) | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -154,11 +157,12 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
   - B4 Edit the AI result: change notes/parts on top of the generation; regenerate one portion (a bar range) of one layer/channel only, keeping the rest
   - B5 Mobile: the same Studio experience on a phone browser (touch-friendly composing, responsive layout); no separate native app needed unless research says otherwise
   - B6 soundcraft (https://getartcraft.com/apps/soundcraft): researched (local note research/soundcraft.md) — MIT OR Apache-2.0 (GPL-compatible), Rust + egui + WebAssembly DAW, no AI, no mobile; reuse its DSP (EQ/effects/mixer) with notices, borrow its track-strip/timeline ideas in HTML; do not rebuild what can be reused
-  - B7 Seamless push to the FM-1 emulator: everything made in Studio stays fully tweakable on the FM-1 (channels editable, added, removed there)
+  - B7 Seamless push to the FM-1 emulator: everything made in Studio stays fully tweakable on the FM-1 (adding / removing channels on the device: v12, decision 60; the rest open)
   - B8 Beautify COMPOSER's home screen (LIBRARY) on the FM-1: a better way to browse and pick songs
   - B9 Performance + reliability first (user, 2026-11-24): faster than today everywhere (Studio, Send, emulator), no flaky paths
 - Choir (decision 57): a CC0 choir sample set, or SLOOP's VOICE engine as an 'aah' pad; more sample sets (vibes, bass) in the flash v11 leaves
-- Energy + swing macros, setlists chaining pieces, takes switched live (decision 50: next after v11; live send shipped in v10)
+- Energy + swing macros, setlists chaining pieces, takes switched live (decision 50; after v12 per decision 60)
+- Longer songs: play saved pieces straight from flash (XIP) so one piece can use most of the 292 KB library (~45,000 notes), and pack notes tighter (~3–4 bytes, ~8–10k notes per 32 KB); the 32 KB / ~5,000-note cap is COMPOSER's RAM budget (decision 11), not the FM-1's
 - From the SLOOP reconciliation (research/sloop-reconcile.md §4): the remaining ranked gaps (MONO/LEGATO, part tools shipped in v9); GRAIN engine
 - Second core for more voices: after a real-device test (decision 28)
 - Versus SLOOP (isod89/sloop-fm1, a mature live groovebox): COMPOSER wins on AI arrangements from plain English, an 8-part arrangement player, and Studio in the browser. To close the gaps, most valuable first: one-click install from the browser; more sounds and engines (FM6 / DX7 patches, physical models); a setlist that chains pieces; piano-roll editing in Studio before pushing; per-channel filter and effects; MIDI out of the playing piece
@@ -183,3 +187,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile ; Send never loses a frame (US-30–US-33)
 - v10 — live send: a piece sent while playing takes over at the next bar (US-34) — verified
 - v11 — sampled instruments: piano, strings, horns (SLOOP's CC0 sets + SAMPLE engine) on the FM-1 and in Studio's Play (US-35–US-37)
+- v12 — full flexibility on the FM-1: NEW SONG from a blank grid with your choice of channels; add / remove channels in any piece (US-38–US-39)
