@@ -37,6 +37,7 @@
 | US-34 | Live send: takes over at the next bar | 1 | done | 1 |
 | US-35 | Piano, strings, horns from samples on the FM-1 | 1 | todo | 0 |
 | US-36 | Studio Play sounds like the FM-1 (samples) | 1 | todo | 0 |
+| US-37 | Leaving PLAYER mid-recording says what it kept | 1 | todo | 0 |
 
 ## Impediments
 - US-14, US-15: done-self: v3 Adversary FAILs were on criteria replaced by v4 (US-16, US-17, done); their remaining criteria (14.4 key file, 14.5 server, 15.5 emulator pin) were not re-reviewed fresh

@@ -140,6 +140,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 56 | v11 sample sets: piano, strings, horns (~165 KB of the ~430 KB free; the rest kept for later) — SLOOP's CC0 sets + eng_sample.c reused (research/sampled.md); never the Hügelton pack | user |
 | 57 | Choir skipped for now (no CC0 choir at hand); Backlog | user |
 | 58 | Studio's preview plays the same samples as the FM-1 (Rust port of the decoder + the same tables) | user |
+| 59 | v11 adds US-37: leaving PLAYER mid-recording says what it kept (`REC OFF: N NOTES`), the v6 Adversary's minor gap; built beside US-35 (other files) | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -157,7 +158,6 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
   - B8 Beautify COMPOSER's home screen (LIBRARY) on the FM-1: a better way to browse and pick songs
   - B9 Performance + reliability first (user, 2026-11-24): faster than today everywhere (Studio, Send, emulator), no flaky paths
 - Choir (decision 57): a CC0 choir sample set, or SLOOP's VOICE engine as an 'aah' pad; more sample sets (vibes, bass) in the flash v11 leaves
-- Recording: leaving PLAYER mid-pass keeps the notes but shows no "REC OFF: N NOTES" (v6 Adversary, minor; composer.c)
 - Energy + swing macros, setlists chaining pieces, takes switched live (decision 50: next after v11; live send shipped in v10)
 - From the SLOOP reconciliation (research/sloop-reconcile.md §4): the remaining ranked gaps (MONO/LEGATO, part tools shipped in v9); GRAIN engine
 - Second core for more voices: after a real-device test (decision 28)
@@ -182,4 +182,4 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29) — verified
 - v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile ; Send never loses a frame (US-30–US-33)
 - v10 — live send: a piece sent while playing takes over at the next bar (US-34) — verified
-- v11 — sampled instruments: piano, strings, horns (SLOOP's CC0 sets + SAMPLE engine) on the FM-1 and in Studio's Play (US-35–US-36)
+- v11 — sampled instruments: piano, strings, horns (SLOOP's CC0 sets + SAMPLE engine) on the FM-1 and in Studio's Play (US-35–US-37)
