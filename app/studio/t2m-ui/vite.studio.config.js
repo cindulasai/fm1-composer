@@ -29,10 +29,22 @@ const browserKeyWords = {
   },
 };
 
+// Studio's palette (US-40): studio/theme.css is imported right after text2midi's tokens.css, in the build only.
+const TOKENS = 'import "./tokens.css";';
+const studioTheme = {
+  name: "studio-theme",
+  enforce: "pre",
+  transform(code, id) {
+    if (!id.endsWith("/src/main.ts")) return null;
+    if (!code.includes(TOKENS)) this.error(`main.ts no longer has ${TOKENS}: update vite.studio.config.js`);
+    return { code: code.replace(TOKENS, `${TOKENS}\nimport "../studio/theme.css";`), map: null };
+  },
+};
+
 export default defineConfig({
   root: here("."),
   base: "./",
-  plugins: [browserKeyWords, svelte()],
+  plugins: [browserKeyWords, studioTheme, svelte()],
   resolve: { alias: { "@tauri-apps/api/core": here("studio/core.js"), "@tauri-apps/api/event": here("studio/event.js") } },
   build: { outDir: here("../web/t2m"), emptyOutDir: true },
   logLevel: "warn",
