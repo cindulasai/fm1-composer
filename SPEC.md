@@ -50,6 +50,8 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F30 | Part tools in EDIT (SLOOP-style): hold a button and turn KNOB1 shift (every note a step later / earlier), KNOB2 ×2 / ½ (the part copied after itself / halved), KNOB3 transpose (a semitone); one hold = one undo | v9 | shipped |
 | F31 | Show the way: the root README leads with the live Studio (screenshot + 3 steps); COMPOSER's tile on fm1-emu's page explains itself and links to Studio (Studio's cable script; fm1-emu's files unchanged) | v9 | shipped |
 | F32 | Live send: a piece sent while playing (Studio or fm1c) takes over at the next bar, carrying device-side sound/mix changes; saved to flash once stopped | v10 | shipped |
+| F33 | Sampled instruments on the FM-1: PIANO, STRINGS, HORNS from SLOOP's CC0 sets (VSCO-2 CE / VCSL) played by SLOOP's SAMPLE engine (IMA ADPCM, zones, loops); new sounds in the catalog, picked for text2midi's piano / string / brass parts | v11 | planned |
+| F34 | Studio's Play sounds like the FM-1 for the sampled sounds: Studio's engine renders the same samples the same way (same table, same decoder) | v11 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -135,6 +137,9 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 53 | v10 live send never drops work: if the playing piece has unsaved device edits, the sent piece waits and switches when playback stops (footer `NEXT AT STOP: <name>`); otherwise at the next bar | council |
 | 54 | (v9 Adversary) SLIDE glides on every voice mode, not only MONO / LEGATO as in SLOOP: new pieces are AUTO and most sounds POLY, so SLOOP's rule made SLIDE silently do nothing; the slid note's voice glides into the next note. The README documents voice modes + SLIDE. 33.3: 5 runs locally, 20 on CI | council |
 | 55 | (v10 Adversary) only device edits hold a live switch (decision 53): a live piece not yet saved does not, so live sends chain at the next bar. A live piece replaced before it was saved is not saved (no flash write while playing) and never silently: fm1c names it (exit 1), Studio says so when the footer showed `LIVE: <it>`; README says it. Studio counts a switch only from a fresh `LIVE:` footer on a new screen after Send began (a playing piece cannot be read back) | council |
+| 56 | v11 sample sets: piano, strings, horns (~165 KB of the ~430 KB free; the rest kept for later) — SLOOP's CC0 sets + eng_sample.c reused (research/sampled.md); never the Hügelton pack | user |
+| 57 | Choir skipped for now (no CC0 choir at hand); Backlog | user |
+| 58 | Studio's preview plays the same samples as the FM-1 (Rust port of the decoder + the same tables) | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -151,7 +156,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
   - B7 Seamless push to the FM-1 emulator: everything made in Studio stays fully tweakable on the FM-1 (channels editable, added, removed there)
   - B8 Beautify COMPOSER's home screen (LIBRARY) on the FM-1: a better way to browse and pick songs
   - B9 Performance + reliability first (user, 2026-11-24): faster than today everywhere (Studio, Send, emulator), no flaky paths
-- Sampled instruments (piano, strings, choir) in the ~430 KB of free code flash (decision 36), if a sound test shows the synthesized ones fall short
+- Choir (decision 57): a CC0 choir sample set, or SLOOP's VOICE engine as an 'aah' pad; more sample sets (vibes, bass) in the flash v11 leaves
 - From the SLOOP reconciliation (research/sloop-reconcile.md §4): MONO / LEGATO voices with glide and SLIDE; transpose, shift and ×2 / ½ for a channel; the other gaps it ranks
 - Recording: leaving PLAYER mid-pass keeps the notes but shows no "REC OFF: N NOTES" (v6 Adversary, minor; composer.c)
 - After v6 (decision 37): send from Studio while playing (swap at the next bar), energy + swing macros, setlists chaining pieces, takes switched live
@@ -177,4 +182,5 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v7 — Studio ready for GitHub Pages: static export + CI Pages job, deploy only once public (US-27–US-28) — verified
 - v8 — Send survives a stalled emulator: paced by fm1-emu's emulated clock, not the wall clock (CI flake 17.2; US-29) — verified
 - v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile ; Send never loses a frame (US-30–US-33)
-- v10 — live send: a piece sent while playing takes over at the next bar (US-34)
+- v10 — live send: a piece sent while playing takes over at the next bar (US-34) — verified
+- v11 — sampled instruments: piano, strings, horns (SLOOP's CC0 sets + SAMPLE engine) on the FM-1 and in Studio's Play (US-35–US-36)
