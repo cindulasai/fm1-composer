@@ -117,9 +117,13 @@ def test_8_4_mute_solo_and_home(tmp_path):
 
 
 def test_8_5_mashing_and_deleting_the_playing_piece(tmp_path):
-    mash = [(i * 3, f"btn {BTN[b]}") for i, b in enumerate(["PLAY", "HOME", "SAVE", "PLAY"] * 10)]
+    mash = [(i * 3, f"btn {BTN[b]}") for i, b in enumerate(["PLAY", "HOME", "PLAY"] * 10)]
     log, _ = run_host(script(tmp_path, "empty", [f"{100 + ms} {w}" for ms, w in mash], 800))
     assert all(txt != "PLAYING" for _, txt in at(log, 0)) and (112, "LIBRARY EMPTY") in at(log, 0)
+    mash = [(i * 3, f"btn {BTN[b]}") for i, b in enumerate(["PLAY", "HOME", "SAVE", "PLAY"] * 10)]   # (US-38: SAVE
+    log, _ = run_host(script(tmp_path, "emptysave", [f"{100 + ms} {w}" for ms, w in mash], 800))      # is NEW SONG)
+    made = {txt for _, y, txt in screen(log) if y == 4 and txt.startswith("NEW ") and txt != "NEW SONG"}
+    assert made and made <= {f"NEW {k}" for k in range(1, 11)}, made     # only empty NEW n pieces, no crash
     (log, wav), t = library_with(tmp_path, ["doomed", "other"],
                                  [(10, f"enc {ENC['SELECT']} 1"), (20, f"btn {BTN['PLAY']}")]
                                  + [(30 + i, f"btn {BTN['PLAY']}") for i in range(0, 20, 2)]
