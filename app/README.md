@@ -58,6 +58,8 @@ One page, two apps you may already know, joined by a MIDI cable:
   at its own tempo, keeping the sounds, mutes, solos and effects you changed on the FM-1. Its footer shows
   `NEXT: <name>` until the switch, then `LIVE: <name>`; the piece is saved to the library once you stop. If you have
   unsaved edits on the FM-1, nothing is dropped: it waits and shows `NEXT AT STOP: <name>`, and switches when you stop.
+  Send again before you stop and the newer piece replaces the live one at the next bar; the replaced piece is not
+  saved, and Studio's status says `(replaces <name>, not saved yet)`.
 
 Both apps run unchanged, at pinned versions: Studio adds only the cable, the Send button, and the small stand-in
 that answers text2midi's window in the browser in place of its desktop shell.
@@ -185,8 +187,12 @@ By default fm1c finds the FM-1 by its USB name ("Felucca", as with every Felucca
 "FM-1". `--port PART-OF-NAME` or `$FM1C_PORT` choose another. Exit codes: 0 done, 1 the FM-1 refused (the
 reason is printed), 2 a problem with the command, a file or the connection.
 
-If you push while a piece is playing, the music keeps going. The new piece waits in memory and is saved when
-playback stops. `fm1c` says "staged" and then "saved" (or exits at once with `--no-wait`).
+If you push while a piece is playing, the music keeps going: the new piece takes over at the next bar line (the
+FM-1 shows `NEXT: <name>`, then `LIVE: <name>`) and is saved to the library when playback stops. `fm1c` says
+"staged" and then "saved" (or exits at once with `--no-wait`). If the FM-1 has unsaved edits, the piece waits for the
+stop instead (`NEXT AT STOP: <name>`). Replaced: a piece pushed while the one before it is still waiting or playing
+unsaved takes its place, and the one before is never saved (no flash write while music plays); `fm1c` says
+`<a>: replaced by <b> before it was saved, not in LIBRARY` and exits 1.
 
 ## Limits, measured
 

@@ -21,6 +21,7 @@
   // the FM-1's screen as fm1-emu's audio thread sends it to its page (a "frame" message with the LCD, RGB565 240 x 240):
   // Studio reads the footer off it (US-34: NEXT: / LIVE: <name>); the message goes on to fm1-emu unchanged
   let screen = null;
+  const watchers = new Set();                 // Send's readers: every new screen, not only the latest (US-34.9)
   const onmsg = Object.getOwnPropertyDescriptor(MessagePort.prototype, 'onmessage');
   if (onmsg?.set) {
     Object.defineProperty(MessagePort.prototype, 'onmessage', {
@@ -28,7 +29,10 @@
       set(fn) {
         onmsg.set.call(this, typeof fn !== 'function' ? fn : function (e) {
           const d = e.data;
-          if (d && d.type === 'frame' && d.lcd instanceof Uint16Array && d.lcd.length === 240 * 240) screen = d.lcd;
+          if (d && d.type === 'frame' && d.lcd instanceof Uint16Array && d.lcd.length === 240 * 240) {
+            screen = d.lcd;
+            for (const w of watchers) { try { w(screen); } catch { /* a reader's fault stays its own */ } }
+          }
           return fn.call(this, e);
         });
       },
@@ -37,6 +41,7 @@
   window.composerCable = {
     name: NAME,
     screen: () => screen,                     // the latest screen (null before the first)
+    onScreen(fn) { watchers.add(fn); return () => watchers.delete(fn); },   // fn(lcd) on each new screen; returns: stop
     connected: () => typeof input.onmidimessage === 'function',
     // fm1-emu's load (time spent emulating per time emulated, from its status line: "load 63%"); above 1 it runs
     // slower than real time, and its MIDI IN jack takes bytes that much slower. 1 while it is not shown yet

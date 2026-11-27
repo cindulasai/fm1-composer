@@ -402,6 +402,9 @@ static void test_23_3_loop_repeats_the_section_without_gap_or_stuck_note(void)
     CHECK(player_section() == 0 || player_section() == PL_NONE || player_pos() < 384, "past the end, from the start: %u", player_pos());
     player_stop(); play_frames(CTL);
     CHECK(ons() == offs() && synth_active() == 0, "nothing stuck: %u on, %u off", ons(), offs());
+    player_play_from(piece_sect_start(&pl_v, 2)); play_frames(64);   /* EDIT's play from this bar, on section 3's first tick */
+    CHECK(piece_sect_start(&pl_v, 2) > 0 && player_section() == 2, "played from section 3's start: section 3, not the one before (%u)", player_section());
+    player_stop(); play_frames(CTL);
 }
 
 static void test_23_3_a_jump_back_is_o1_cursor_snapshots(void)

@@ -128,6 +128,40 @@ def test_34_4_newer_wins_corrupt_refused_stopped_saved_as_today(tmp_path):
     assert replies(log2, 0x45) and not replies(log2, 0x4F) and (28, "> beta") in at(log2, t2)
 
 
+BETA_BAR_MS = 2400                                 # a bar of beta (100 BPM)
+
+
+def test_34_4_chained_live_sends_switch_at_the_next_bar_replaced_live_piece_not_saved(tmp_path):
+    """alpha plays, beta goes LIVE (unsaved, unedited), gamma sent: gamma takes over at beta's next bar (only device
+    edits hold a switch: decision 55); stopped, gamma (newest) is saved and beta, replaced before it was saved, is not"""
+    extra = [(600, beta()), (2600, beta("gamma")), (7000, f"btn {BTN['PLAY']}"), (7300, f"btn {BTN['HOME']}")]
+    (log, _), t = session(tmp_path, "live9", extra, 7800)
+    texts = [txt for ms, txt in foot(log, t + 600, t + 6990) if txt.startswith(("LIVE", "NEXT"))]
+    assert texts == ["NEXT: beta", "LIVE: beta", "NEXT: gamma", "LIVE: gamma"], texts
+    b_live = min(ms for ms, txt in foot(log, t + 600) if txt == "LIVE: beta")
+    g_live = min(ms for ms, txt in foot(log, t + 600) if txt == "LIVE: gamma")
+    assert b_live + BETA_BAR_MS - 15 <= g_live <= b_live + BETA_BAR_MS + 15, (b_live, g_live)
+    assert (4, "gamma") in at(log, g_live, g_live + 50), "the header names it"
+    assert not [ms for ms in replies(log, 0x45) if t < ms < t + 7000], "never saved while playing"
+    assert len([ms for ms in replies(log, 0x45) if ms >= t + 7000]) == 1, "one save once stopped: gamma"
+    lib = at(log, t + 7300)
+    assert (4, "2 PIECES") in lib and (28, "> gamma") in lib and (48, "  alpha") in lib, lib
+    assert all("beta" not in x for _, x in lib), "beta was replaced before it was saved"
+
+
+def test_34_4_a_live_piece_edited_on_the_device_holds_the_next_until_stop(tmp_path):
+    """beta goes LIVE, then a device edit on it (its voice, KNOB3), then gamma: NEXT AT STOP: gamma (34.7 holds for a
+    piece that itself went live); stopped, beta with its edit is saved, then gamma, newest at the top"""
+    extra = [(600, beta()), (2300, f"enc {ENC['KNOB3']} 1"), (2600, beta("gamma")), (7000, f"btn {BTN['PLAY']}"),
+             (7300, f"btn {BTN['HOME']}")]
+    (log, _), t = session(tmp_path, "live10", extra, 7800)
+    assert [txt for ms, txt in foot(log, t + 2300, t + 2390) if txt.startswith("VOICE 1 ")], "beta's voice edited"
+    texts = [txt for ms, txt in foot(log, t + 2400, t + 6990)]
+    assert "NEXT AT STOP: gamma" in texts and "LIVE: gamma" not in texts and "NEXT: gamma" not in texts, texts
+    lib = at(log, t + 7300)
+    assert (4, "3 PIECES") in lib and (28, "> gamma") in lib and (48, "  beta") in lib, lib
+
+
 def test_34_4_library_full_plays_live_then_says_so_and_keeps_it(tmp_path):
     small = lambda n: encode(Piece(n, 1200, 384, [Channel("lead", [Note(0, 60, 96, 100)])]))
     lines, t = [], 100
@@ -311,3 +345,150 @@ def test_34_readme_documents_live_send_as_the_screen_says():
     for what in ("NEXT", "LIVE", "NEXT AT STOP"):
         assert f'lv_status("{what}"' in src, what
         assert f"`{what}: <name>`" in readme, what
+
+
+def test_34_8_readme_and_fm1c_push_lines_say_next_bar_saved_at_stop_and_replaced_as_the_firmware_does():
+    """fm1c's push lines and app/README.md's push and Studio paragraphs: a piece pushed while playing takes over at the
+    next bar (the footers the firmware draws), is saved when playback stops, and what replaced means (decision 55)"""
+    here = Path(__file__).resolve().parents[2]
+    readme, src = (here / "README.md").read_text(), (here / "firmware/src/composer.c").read_text()
+    cli, shell = (here / "tools/fm1c/cli.py").read_text(), (here / "studio/web/shell.js").read_text()
+    push = readme[readme.index("If you push while a piece is playing"):readme.index("## Limits")]
+    flat = " ".join(push.split())
+    for what in ("NEXT", "LIVE", "NEXT AT STOP"):
+        assert f'lv_status("{what}"' in src and f"`{what}: <name>`" in push, what
+    assert "takes over at the next bar" in flat and "saved to the library when playback stops" in flat, flat
+    assert "`<a>: replaced by <b> before it was saved, not in LIBRARY` and exits 1" in flat, flat
+    assert 'f"{waiting}: replaced by {name} before it was saved, not in LIBRARY"' in cli
+    assert 'staged — takes over at the next bar (NEXT: {name}, then LIVE: {name}), "' in cli and \
+        '"saved when playback stops"' in cli
+    studio = " ".join(readme[readme.index("**Send while it plays**"):readme.index("Both apps run unchanged")].split())
+    assert "replaces the live one at the next bar" in studio and "`(replaces <name>, not saved yet)`" in studio, studio
+    assert "(replaces ${" in shell and ", not saved yet)" in shell, "Studio's status says it"
+
+
+# ---- Studio's Send while playing, against a scripted FM-1 screen (34.4, 34.9) ----
+# fm1-emu's page replaced by a stand-in with the cable's interface (cable.js): its screen shows the footers a script
+# gives, each drawn as the firmware draws it (fm1link.js footerPixels), timed from Send's END frame
+FAKE_EMU = """<!doctype html><meta charset="utf-8"><title>fake fm1-emu</title><script type="module">
+import { footerPixels } from '../fm1link.js';
+let screen = null, script = [];
+const watchers = new Set();
+window.__shown = [];
+window.__show = (text) => {
+  const l = new Uint16Array(240 * 240); l.set(footerPixels(text), 222 * 240); screen = l;
+  window.__shown.push([Date.now(), text]);
+  for (const w of watchers) w(screen);
+};
+window.__script = (s) => { script = s; };
+window.composerCable = { name: 'COMPOSER Studio', connected: () => true, load: () => 1, emulatedMs: () => NaN,
+  screen: () => screen, onScreen(fn) { watchers.add(fn); return () => watchers.delete(fn); },
+  send(b) { if (b[4] === 5) for (const [ms, text] of script) setTimeout(() => window.__show(text), ms); } };
+</script>"""
+
+
+def fake_studio(studio):
+    import re as _re
+    page, _, _ = studio(routes={_re.compile(r"/emu/\?embed=1$"): lambda r: r.fulfill(body=FAKE_EMU, content_type="text/html")})
+    page.evaluate("""() => { window.__said = []; new MutationObserver(() => window.__said.push([Date.now(),
+        document.querySelector('#status').textContent])).observe(document.querySelector('#status'),
+        { childList: true, characterData: true, subtree: true }); }""")
+    return page
+
+
+def fake_send(page, title, script):
+    """open the example, script the FM-1's footers ($ = the piece's name as the FM-1 shows it), Send; the final status"""
+    from test_studio_emu import open_example, t2m, emu
+    open_example(page, title)
+    f1p = bytes(t2m(page).evaluate("() => Array.from(window.studioDesk.fitted().f1p)"))
+    name = "".join(chr(c) if 32 <= c <= 126 else "?" for c in f1p[16:40].split(b"\0")[0])
+    emu(page).evaluate("s => window.__script(s)", [[ms, txt.replace("$", name)] for ms, txt in script])
+    page.click("#send")
+    page.wait_for_function("() => /^(Live on the FM-1|On the FM-1|Sending stopped)/.test(document.querySelector('#status').textContent)",
+                           timeout=60000)
+    return page.text_content("#status"), name
+
+
+def test_34_4_studio_says_which_unsaved_live_piece_a_send_replaces(studio):
+    """suite 1 goes LIVE; suite 2 sent while the footer shows LIVE: suite 1: its final status adds
+    (replaces funk.classic suite 1, not saved yet)"""
+    page = fake_studio(studio)
+    s1, n1 = fake_send(page, "funk.classic suite 1", [(100, "NEXT: $"), (600, "LIVE: $")])
+    assert s1.startswith('Live on the FM-1: "funk.classic suite 1" (read back'), s1
+    s2, _ = fake_send(page, "funk.classic suite 2", [(100, "NEXT: $"), (600, "LIVE: $")])
+    assert s2.startswith(f'Live on the FM-1: "funk.classic suite 2" (replaces {n1}, not saved yet) (read back'), s2
+
+
+def test_34_9_studio_resending_the_live_name_waits_for_the_new_switch(studio):
+    """suite 1 LIVE, then suite 1 sent again: the LIVE: suite 1 still up from before is not the new switch; the status
+    says Live only once the FM-1 draws LIVE: <it> again (after NEXT: <it>)"""
+    from test_studio_emu import emu
+    page = fake_studio(studio)
+    fake_send(page, "funk.classic suite 1", [(100, "NEXT: $"), (600, "LIVE: $")])
+    s, n = fake_send(page, "funk.classic suite 1", [(1500, "NEXT: $"), (2500, "LIVE: $")])
+    __import__("time").sleep(3)                      # (the script played out: its last footer is the new switch)
+    switched = emu(page).evaluate("() => window.__shown")[-1]
+    assert switched[1] == f"LIVE: {n}"
+    said = [ms for ms, txt in page.evaluate("() => window.__said") if txt.startswith("Live on the FM-1")]
+    assert said and said[-1] >= switched[0], ("Live said before the new switch", said, switched, s)
+    assert s.startswith(f'Live on the FM-1: "funk.classic suite 1" (replaces {n}, not saved yet)'), s
+
+
+def test_34_9_studio_sees_a_switch_whose_footer_is_overwritten_at_once(studio):
+    """NEXT: <it>, a knob turned (VOICE 1 ...), LIVE: <it> at the switch and a knob turned again 5 ms later: the
+    switch was read back from the screens, so the status still ends Live on the FM-1"""
+    page = fake_studio(studio)
+    s, _ = fake_send(page, "funk.classic suite 1",
+                     [(100, "NEXT: $"), (400, "VOICE 1 SAW"), (900, "LIVE: $"), (905, "VOICE 1 SQR")])
+    assert s.startswith('Live on the FM-1: "funk.classic suite 1"'), s
+
+
+@pytest.mark.skipif(not STUDIO_EMU, reason="needs build/composer.fwsc (from CI) and studio/web/emu (sh tools/get_web_emu.sh)")
+def test_34_4_studio_chained_live_sends_on_the_real_fm1(studio):
+    """fm1-emu running COMPOSER: suite 1 plays, suite 2 goes LIVE, suite 1 sent again before any stop: it too switches
+    at the next bar (no NEXT AT STOP: nothing was edited on the FM-1) and says it replaces suite 2, not saved yet;
+    once stopped, suite 2 is not in the flash (decision 55)"""
+    import time
+    from test_studio_emu import open_example, start, send, diag
+    page, _, _ = studio()
+    open_example(page, "funk.classic suite 1")
+    f = start(page)
+    assert send(page).startswith("On the FM-1")
+    f.click("#big")
+    page.keyboard.down(" "); time.sleep(0.25); page.keyboard.up(" ")              # PLAY: suite 1 plays
+    done = "() => /^(Live on the FM-1|On the FM-1|Plays when|Sending stopped)/.test(document.querySelector('#status').textContent)"
+    open_example(page, "funk.classic suite 2")
+    page.click("#send")
+    page.wait_for_function(done, timeout=120000)
+    assert page.text_content("#status").startswith('Live on the FM-1: "funk.classic suite 2"'), diag(page)
+    open_example(page, "funk.classic suite 1")
+    page.click("#send")
+    page.wait_for_function(done, timeout=120000)
+    st = page.text_content("#status")
+    assert st.startswith('Live on the FM-1: "funk.classic suite 1" (replaces funk.classic suite 2, not saved yet)'), diag(page)
+    page.keyboard.down(" "); time.sleep(0.25); page.keyboard.up(" ")              # stopped: the live one is saved
+    page.wait_for_function("""async () => { const m = await import('./fm1link.js'), ls = await m.savedLibraries();
+        return ls.some((l) => l.length >= 2 && l[0].name === 'funk.classic suite 1'); }""", timeout=30000)
+    names = page.evaluate("""async () => { const m = await import('./fm1link.js');
+        return (await m.savedLibraries()).flat().map((p) => p.name); }""")
+    assert "funk.classic suite 2" not in names, names
+
+
+def test_34_5_studio_frames_a_piece_of_whole_256_byte_chunks_exactly(pw_browser):
+    """fm1link.js transferFrames: a 512-byte piece is START, two 256-byte DATA frames (offsets 0, 256), END: no empty
+    DATA frame past the end (a piece whose length is a multiple of 256)"""
+    web = APP / "studio" / "web"
+    page = pw_browser.new_page()
+    def serve(route):
+        name = route.request.url.split("/", 3)[3].split("?")[0]
+        if name.endswith(".js") and (web / name).is_file():
+            route.fulfill(path=str(web / name), content_type="text/javascript")
+        else:
+            route.fulfill(body="<!doctype html><title>t</title>", content_type="text/html")
+    page.route("http://studio.test/**", serve)
+    page.goto("http://studio.test/blank")
+    n = page.evaluate("""async () => { const m = await import('./fm1link.js');
+        return [512, 513, 255].map((len) => m.transferFrames(new Uint8Array(len)).map((f) => f.length)); }""")
+    page.close()
+    assert len(n[0]) == 4 and n[0][1] == n[0][2], n[0]                      # START, DATA 0, DATA 256, END
+    assert len(n[1]) == 5 and len(n[2]) == 3, n                               # 513: one more byte, one more frame

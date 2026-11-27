@@ -221,11 +221,14 @@ static void sound_next(int32_t d)               /* PRESETS: the selected channel
  * Unsaved edits are never dropped (decision 53): while the playing piece has edits not in the library or a SAVE
  * waiting for the stop (edited / save_pending), the staged piece does not switch (footer NEXT AT STOP: <name>); once
  * stopped, the old piece's edits go as a stop always takes them (saved if SAVE was pressed, else kept open), then the
- * staged piece is saved, newest at the top of LIBRARY (xfer_poll runs after the stop's own save). */
+ * staged piece is saved, newest at the top of LIBRARY (xfer_poll runs after the stop's own save). A live piece not
+ * yet saved (lv_unsaved) is not an edit (decision 55): the next piece still switches at the bar, and the replaced one
+ * is not saved (fm1c / Studio say so). */
 typedef struct { uint8_t role, snd, mode, glide, vol, pan, fx[FX_N]; } lv_ch_t;
 static lv_ch_t lv_tab[PIECE_MAX_CH];            /* the next piece's synth set-up (the main loop writes, lv_apply reads) */
 static volatile uint32_t lv_tempo;
-static uint32_t lv_puts, lv_swaps, lv_unsaved;  /* the staged piece armed, the switch taken; the live piece unsaved */
+static uint32_t lv_puts, lv_swaps, lv_unsaved;  /* the staged piece armed, the switch taken; the live piece not yet
+                                                 * in the library (saved at the stop; not a device edit: holds nothing) */
 static char lv_msg[40];                         /* "NEXT: name" / "LIVE: name" */
 
 static uint32_t own_sound(uint32_t s, uint32_t r) { return s < sound_count ? s : sound_default(r); }
@@ -305,10 +308,8 @@ static void lv_take(void)
     tempo_x10 = lv_tempo;
     for (k = 0; k < PIECE_NAME + 1u; k++) title[k] = pl_v.name[k];
     loaded_id = 0xFFFFFFFFu;                    /* (not in the library yet) */
-    edited = 1;                                 /* saved when playback stops (save_all) */
-    discard = 0;
-    save_pending = 1;
-    lv_unsaved = 1;
+    edited = discard = 0;                       /* (no device edits on it yet: they alone hold a next switch) */
+    lv_unsaved = 1;                             /* saved when playback stops (save_all); replaced before: not saved */
     edit_forget();
     lk_keys_off();
     lk_open(&pl_v);
@@ -406,9 +407,10 @@ static void save_prefs(void)
  * choices, under the piece's new id */
 static void save_all(void)
 {
-    if (edited) {
+    if (edited || lv_unsaved) {
         int32_t id = lib_put(title, play_buf, pc_u32(play_buf + 40));
-        if (lv_unsaved) { lv_unsaved = 0; xfer_saved(id); }   /* (a live-sent piece: its sender hears, as for a staged one) */
+        if (lv_unsaved) { lv_unsaved = 0; edited = 1; xfer_saved(id); }   /* (a live-sent piece: its sender hears, as for
+                                                 * a staged one; not saved, it stays an unsaved piece, as an edit) */
         if (id < 0) { set_status(id == LIB_FULL ? "LIBRARY FULL" : "SAVE FAILED"); return; }
         lib_del(loaded_id);
         loaded_id = (uint32_t)id;
@@ -868,7 +870,7 @@ static void app_main(void)
                 else steps_input(pressed, keys);
             } else if (pressed & 1u << BTN_HOME) {
                 lk_keys_off();                  /* (only the PLAYER plays the keys) */
-                if (edited && !discard) { discard = 1; set_status("UNSAVED EDITS: HOME AGAIN TO DISCARD"); }
+                if ((edited || lv_unsaved) && !discard) { discard = 1; set_status("UNSAVED EDITS: HOME AGAIN TO DISCARD"); }
                 else {
                     player_stop();
                     while (player_playing()) platform_poll();
@@ -883,7 +885,7 @@ static void app_main(void)
         rc_poll(play_buf);
         rc_sync();
         if (was_playing && !playing) {
-            if (save_pending) { save_pending = 0; save_all(); }
+            if (save_pending || lv_unsaved) { save_pending = 0; save_all(); }
             else if (scr) set_status("STOPPED");
         }
         was_playing = playing;

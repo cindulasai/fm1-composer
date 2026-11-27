@@ -265,17 +265,26 @@ def cmd_push(a) -> int:
             raise UsageError(f"{path}: {e}") from e
     port = linkmod.open_port(a.port)
     lk, pushed, verified, refused, checked = linkmod.Link(port, timeout=a.timeout), 0, 0, 0, 0
+    waiting, replaced = None, 0                 # (--no-wait: the piece staged before, not saved yet)
     try:
         for path, data, name in pieces:
             try:
                 how, pid = lk.put(data)
                 if how == "staged":
-                    print(f"{name}: staged — saves when playback stops")
+                    # decision 55: the newer of two pieces sent while playing wins, and a live piece is saved only
+                    # when playback stops, so the one staged before this is never saved
+                    if waiting is not None:
+                        replaced += 1
+                        print(f"{waiting}: replaced by {name} before it was saved, not in LIBRARY", file=sys.stderr)
+                    print(f"{name}: staged — takes over at the next bar (NEXT: {name}, then LIVE: {name}), "
+                          "saved when playback stops")
                     if a.no_wait:
                         pushed += 1
+                        waiting = name
                         continue
                     pid = lk.wait_saved(a.wait)
                     print(f"{name}: saved")
+                waiting = None
                 pushed += 1
                 ok = lk.get(pid, len(data)) == data
                 checked += 1
@@ -286,8 +295,9 @@ def cmd_push(a) -> int:
                 print(f"{name}: refused — {e}", file=sys.stderr)
     finally:
         port.close()
-    print(f"pushed {pushed}, verified {verified}" + (f", refused {refused}" if refused else ""))
-    return 1 if refused or verified < checked else 0
+    print(f"pushed {pushed}, verified {verified}" + (f", refused {refused}" if refused else "")
+          + (f", replaced {replaced}" if replaced else ""))
+    return 1 if refused or replaced or verified < checked else 0
 
 
 def cmd_list(a) -> int:
@@ -370,7 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
     k.set_defaults(fn=cmd_compose)
     u = sub.add_parser("push", help="send .f1p pieces to the FM-1's library (each read back to verify)")
     u.add_argument("files", nargs="+")
-    u.add_argument("--no-wait", action="store_true", help="do not wait while a piece is staged during playback")
+    u.add_argument("--no-wait", action="store_true", help="do not wait while a piece is staged during playback (a later one replaces it)")
     u.add_argument("--wait", type=float, default=600.0, help=argparse.SUPPRESS)
     _port_args(u)
     u.set_defaults(fn=cmd_push)

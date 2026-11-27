@@ -11,6 +11,7 @@ const STATUS_EVERY = 1000;                    // fm1-emu rewrites its status lin
                                               // reading may be that stale, so progress counts only past it (never more)
 const left = () => $('#t2m').contentWindow, right = () => $('#fm1').contentWindow;
 let sending = false;
+const sentNames = new Set();                  // the names Send gave the FM-1 since this page loaded (a reload restarts it)
 
 function say(text, kind = '') { $('#status').textContent = text; $('#status').className = kind; }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -43,6 +44,23 @@ $('#send').addEventListener('click', async () => {
   const slow = () => { try { return Math.max(1, Math.min(10, cable.load())); } catch { return 1; } };
   const bar = $('#send-progress');
   bar.hidden = false;
+  // US-34: what the FM-1's screens show from now on, every one of them (not only the latest when Studio looks): a
+  // switch is a `LIVE: <name>` footer drawn after Send began, after one that was not it, so a `LIVE: <name>` already
+  // up (the same name sent again) is not taken for the new switch, and one shown only briefly (a knob turned right
+  // after) is still seen
+  const name = screenName(made.f1p), screen = () => { try { return cable.screen?.() || null; } catch { return null; } };
+  const replaces = [...sentNames].find((n) => footerSays(screen(), `LIVE: ${n}`));   // a live piece not saved yet
+  sentNames.add(name);
+  let live = false, next = false, atStop = false, wasLive = footerSays(screen(), `LIVE: ${name}`);
+  const look = (lcd) => {
+    const l = footerSays(lcd, `LIVE: ${name}`);
+    if (l && !wasLive) live = true;
+    wasLive = l;
+    next ||= footerSays(lcd, `NEXT: ${name}`);
+    atStop ||= footerSays(lcd, `NEXT AT STOP: ${name}`);
+  };
+  let unwatch = () => {};
+  try { unwatch = cable.onScreen?.(look) || unwatch; } catch { /* an older cable: the latest screen only, below */ }
   try {
     const frames = transferFrames(made.f1p), total = frames.reduce((n, f) => n + f.length, 0);
     let sent = 0;
@@ -70,8 +88,7 @@ $('#send').addEventListener('click', async () => {
     const same = (p) => p.seq > before && p.bytes.length === made.f1p.length && p.bytes.every((x, k) => x === made.f1p[k]);
     // the FM-1 playing (US-34): it takes the piece over at its next bar line, its footer says NEXT: then LIVE: <name>;
     // saved to its flash only once it stops
-    const name = screenName(made.f1p), screen = () => { try { return cable.screen?.() || null; } catch { return null; } };
-    let saved = false, live = false, next = false, atStop = false;
+    let saved = false, saidNext = false, saidStop = false;
     const eSent = emuMs(), t1 = performance.now();
     const log = window.studioSendLog = { e0, eSent, waits, bytes: sent, reads: 0 };   // (what a failed Send leaves to look at)
     const more = Number.isFinite(eSent)        // read back from fm1-emu's saved flash: until it has run 10 s of its own time
@@ -80,19 +97,21 @@ $('#send').addEventListener('click', async () => {
     while (!saved && more()) {
       await sleep(500);
       log.reads++;
-      if (footerSays(screen(), `LIVE: ${name}`)) { live = true; break; }
-      if (!next && footerSays(screen(), `NEXT: ${name}`)) { next = true; say(`Plays from the next bar: "${made.name}" is on the FM-1, waiting for the bar line …`); }
-      if (!atStop && footerSays(screen(), `NEXT AT STOP: ${name}`)) { atStop = true; say(`Plays when the FM-1 stops (it has unsaved edits): "${made.name}" waits on the FM-1 …`); }
+      look(screen());                          // (the latest too: a cable without onScreen)
+      if (live) break;
+      if (next && !saidNext) { saidNext = true; say(`Plays from the next bar: "${made.name}" is on the FM-1, waiting for the bar line …`); }
+      if (atStop && !saidStop) { saidStop = true; say(`Plays when the FM-1 stops (it has unsaved edits): "${made.name}" waits on the FM-1 …`); }
       try { saved = (await savedLibraries()).some((lib) => lib.some(same)); } catch { /* not saved yet */ }
     }
     log.eEnd = emuMs();
-    if (live) say(`Live on the FM-1: "${made.name}" (read back from its screen: it took over at the bar line; ${made.channels} channels, ${made.notes} notes, ${made.bars} bars). It is saved to LIBRARY when the FM-1 stops.`);
+    if (live) say(`Live on the FM-1: "${made.name}"${replaces === undefined ? '' : ` (replaces ${replaces}, not saved yet)`} (read back from its screen: it took over at the bar line; ${made.channels} channels, ${made.notes} notes, ${made.bars} bars). It is saved to LIBRARY when the FM-1 stops.`);
     else if (!saved && atStop) say(`Plays when the FM-1 stops (it has unsaved edits): "${made.name}" waits on the FM-1; stopped, it is saved to the top of LIBRARY.`);
     else if (!saved) throw new Error(`the FM-1 did not save "${made.name}" (if a piece is playing, it is saved when it stops; then Send again)`);
     else say(`On the FM-1: "${made.name}" (read back from its flash; ${made.channels} channels, ${made.notes} notes, ${made.bars} bars, ${report.length ? `${report.length} changes to fit` : 'nothing had to change'}). It is at the top of LIBRARY: press PLAY.`);
   } catch (e) {
     say(`Sending stopped: ${e.message || e}`, 'error');
   } finally {
+    unwatch();
     sending = false;
     bar.hidden = true;
     $('#send').disabled = !openPiece();

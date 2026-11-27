@@ -234,7 +234,7 @@ def test_7_2_push_during_playback_staged_then_saved(port, tmp_path, monkeypatch)
     r = fm1c("push", f, "--wait", "10", "--port", port)
     assert r.returncode == 0, r.stdout + r.stderr
     out = r.stdout
-    assert out.index("staged — saves when playback stops") < out.index("pushed 1, verified 1"), out
+    assert out.index("staged — takes over at the next bar") < out.index("pushed 1, verified 1"), out
 
 
 def test_7_4_a_midi_system_failing_silently_is_still_named(monkeypatch):

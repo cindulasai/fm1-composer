@@ -155,3 +155,29 @@ def test_3_1_outputs_are_ordinary_files(tmp_path):
 def test_3_4_help_carries_the_claims():
     r = fm1c("--help")
     assert "16 voices (measured in fm1-emu" in r.stdout and "Inspired by SLOOP" in r.stdout
+
+
+# ---- US-34 (decision 55): a piece pushed while playing replaces the one before it until playback stops ----
+def _xfer_port(tmp_path):
+    exe = tmp_path / "xfer_host"
+    subprocess.run(["cc", "-O1", "-Wno-unused-function", f"-I{APP}/firmware/src", f"-I{APP}/firmware/hal",
+                    "-o", str(exe), str(APP / "tests/xfer_host.c")], check=True)
+    return f"exec:{exe} {tmp_path / 'flash.bin'}"
+
+
+def test_34_4_push_no_wait_while_playing_names_each_replaced_piece_and_exits_1(tmp_path, monkeypatch):
+    from fm1c.piece import Piece, Channel, Note, encode
+    port = _xfer_port(tmp_path)
+    monkeypatch.setenv("XFER_PLAYING", "1")
+    files = []
+    for n in ("a", "b", "c"):
+        files.append(tmp_path / f"{n}.f1p")
+        files[-1].write_bytes(encode(Piece(n, 1200, 384, [Channel("lead", [Note(0, 60, 90, 96)])])))
+    r = fm1c("push", "--no-wait", *files, "--port", port)
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert "a: replaced by b before it was saved, not in LIBRARY" in out, out
+    assert "b: replaced by c before it was saved, not in LIBRARY" in out, out
+    assert "c: replaced" not in out, out
+    r = fm1c("push", "--no-wait", files[2], "--port", port)          # one piece: nothing replaced
+    assert r.returncode == 0 and "replaced" not in r.stdout + r.stderr, r.stdout + r.stderr
