@@ -18,9 +18,15 @@
  *
  * The piece goes into a RAM buffer first, is checked whole (piece_check), and only then is written to flash: never
  * while music plays (an erase silences the audio ~50 ms a sector), so a push during playback is staged. A put
- * idle for 5 s is dropped. Interface: xfer_frame (one received frame), xfer_poll (main loop), xfer_changed. */
+ * idle for 5 s is dropped. Interface: xfer_frame (one received frame), xfer_poll (main loop), xfer_changed.
+ * Live send (US-34): a staged piece is the player's next (composer.c arms it); a new put while one is staged replaces
+ * it (the newer wins: XF_PUT_BEGINS() lets the app withdraw it first). Once the piece plays, the app takes its bytes
+ * out of the staging buffer (xfer_taken), saves them itself when playback stops and reports that (xfer_saved). */
 #ifndef XFER_SEND
 #define XFER_SEND(p, n) ota_wire_send(p, n)
+#endif
+#ifndef XF_PUT_BEGINS
+#define XF_PUT_BEGINS()                         /* (a new put is about to fill the staging buffer) */
 #endif
 #ifndef XF_POOL
 #define XF_POOL __attribute__((section(".pool")))
@@ -35,6 +41,7 @@ static uint8_t xf_buf[LIB_MAX] XF_POOL;         /* the piece on its way in */
 static uint32_t xf_len, xf_got, xf_prev, xf_last_ms;   /* xf_prev: where the last chunk began */
 static uint8_t xf_state, xf_expired;
 static volatile uint8_t xf_changed;             /* the library changed: the UI re-reads it (and clears this) */
+static uint32_t xf_puts;                        /* pieces staged so far (the app arms the newest) */
 
 static uint32_t xf_rd32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static void xf_wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24); }
@@ -105,6 +112,19 @@ static void xf_commit(uint32_t cmd)             /* the whole piece is in xf_buf 
     xf_reply(0x45, p, 4);
 }
 
+/* the app took the staged piece (it plays it now): the buffer is free again */
+static void xfer_taken(void) { if (xf_state == XS_STAGED) xf_state = XS_IDLE; }
+
+/* the app saved a piece it took (id), or could not (a LIB_* error): told unasked, as a staged piece's save is */
+static void xfer_saved(int32_t id)
+{
+    uint8_t p[4];
+    if (id < 0) { xf_nak(0x05, id == LIB_FULL ? XF_EFULL : XF_EIO); return; }
+    xf_changed = 1;
+    xf_wr32(p, (uint32_t)id);
+    xf_reply(0x45, p, 4);
+}
+
 /* one received SysEx frame (the bytes between F0 and F7): 1 = ours (handled), 0 = someone else's */
 static int xfer_frame(const uint8_t *f, uint32_t n, uint32_t now_ms, int playing)
 {
@@ -140,8 +160,8 @@ static int xfer_frame(const uint8_t *f, uint32_t n, uint32_t now_ms, int playing
     }
     case 0x03: {
         uint32_t want = len == 4u ? xf_rd32(d) : 0;
-        if (xf_state == XS_STAGED) { xf_nak(cmd, XF_EBUSY); break; }
         if (want < PIECE_HDR || want > LIB_MAX) { xf_nak(cmd, XF_ESIZE); break; }
+        XF_PUT_BEGINS();                        /* (a staged piece not yet playing: the newer wins) */
         xf_state = XS_RECV;
         xf_len = want;
         xf_got = xf_prev = 0;
@@ -172,7 +192,7 @@ static int xfer_frame(const uint8_t *f, uint32_t n, uint32_t now_ms, int playing
         if (xf_state != XS_RECV) { xf_nak(cmd, xf_expired ? XF_ETIMEOUT : XF_ENOPUT); break; }
         if (xf_got != xf_len) { xf_nak(cmd, XF_ESHORT); break; }
         if (piece_check(xf_buf, xf_len) != PE_OK) { xf_state = XS_IDLE; xf_nak(cmd, XF_EPIECE); break; }
-        if (playing) { xf_state = XS_STAGED; xf_reply(0x4F, d, 0); break; }
+        if (playing) { xf_state = XS_STAGED; xf_puts++; xf_reply(0x4F, d, 0); break; }
         xf_commit(cmd);
         break;
     case 0x06: {

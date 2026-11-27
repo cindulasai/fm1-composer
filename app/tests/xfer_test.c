@@ -132,17 +132,21 @@ static void test_7_2_staged_while_playing(void)
     CHECK(put(pc, n) == 0x4F && lib_count() == 0, "staged, not yet in flash");
     send(0x01, 0, 0);
     CHECK(rp[10] == 3, "info: playing + staged");
-    make_piece(68 + 6 * 10, 3);
-    send32(0x03, 128);
-    CHECK(nak(XF_EBUSY), "a second put while one is staged: busy");
-    send(0x08, 0, 0);
-    CHECK(rcmd == 0x48 && xf_state == XS_STAGED, "abort keeps the staged piece");
+    make_piece(68 + 6 * 10, 3);                 /* 34.4: a second put while one is staged: the newer wins (was busy) */
+    CHECK(put(pc, 68 + 6 * 10) == 0x4F && xf_state == XS_STAGED && xf_puts == 2u && lib_count() == 0, "the newer staged");
     nsent = 0;
     xfer_poll(now += 10, 1);
     CHECK(nsent == 0 && lib_count() == 0, "still playing: nothing written");
     xfer_poll(now += 10, 0);
-    CHECK(nsent == 1 && lib_count() == 1 && !strcmp(lib_entry(0)->name, "piece 2"), "stopped: saved");
+    CHECK(nsent == 1 && lib_count() == 1 && !strcmp(lib_entry(0)->name, "piece 3"), "stopped: the newer saved, once");
     { const uint8_t *w = sent[0]; int32_t d = xf_unpack7(w + 5, sent_n[0] - 6, rp, sizeof rp); CHECK(w[4] == 0x45 && d == 8 && xf_rd32(rp) == lib_entry(0)->id, "SAVED id sent unasked"); }
+    CHECK(put(pc, 68 + 6 * 10) == 0x4F, "staged again");   /* 34.4: a put begun and given up drops it; nothing saved */
+    send32(0x03, 128);
+    send(0x08, 0, 0);
+    CHECK(rcmd == 0x48 && xf_state == XS_IDLE, "abort: idle");
+    nsent = 0;
+    xfer_poll(now += 10, 0);
+    CHECK(nsent == 0 && lib_count() == 1, "nothing more saved");
     playing = 0;
     make_piece(68 + 6 * 10, 4);
     { int r = put(pc, 68 + 6 * 10); CHECK(r == 0x45, "next put works: %d / %02X %u", r, rcmd, rlen ? rp[1] : 0); }

@@ -19,7 +19,13 @@
  * (0..100) starts each note on an odd 1/16 late by SLOOP's swing_units (100: half a step) in the accumulator's
  * units, not ticks; it still ends where it would have (the step is shorter, as on SLOOP). player_hold() /
  * player_edited() let the main loop change the bytes while playing: the interrupt waits meanwhile. A SLIDE note (US-30)
- * is held PL_SLIDE_T ticks past its end (into the next note, also a swung one) and tells the synth: the next glides. */
+ * is held PL_SLIDE_T ticks past its end (into the next note, also a swung one) and tells the synth: the next glides.
+ *
+ * Live send (US-34): player_next() arms another checked piece (its bytes stay put meanwhile); at the playing piece's
+ * next bar line (or its end, if sooner) the interrupt lets go of every sounding note and plays it from its bar 1, at
+ * the tempo / mutes / solos given, with no work beyond a section jump's: O(channels), no scan, so the audio never
+ * waits. PL_SWITCH() then sets the synth up for it, in the same block before the first note. Until the main loop calls
+ * player_moved() (it copies the bytes to its own buffer), the section snapshots are the old piece's: bar 1 needs none. */
 #ifndef PL_NOTE_ON
 #define PL_NOTE_ON synth_on
 #define PL_NOTE_OFF synth_off
@@ -28,6 +34,9 @@
 #endif
 #ifndef PL_SLIDE
 #define PL_SLIDE synth_slide
+#endif
+#ifndef PL_SWITCH
+#define PL_SWITCH()                             /* (the interrupt, a live switch just made: the synth's set-up) */
 #endif
 
 #define PL_TICK_UNITS (60u * 10u * 44100u)      /* accumulator units a tick (tempo x10, per frame) */
@@ -75,6 +84,9 @@ static uint32_t pl_lp[PIECE_MAX_CH], pl_wrap[PIECE_MAX_CH], pl_nsw;
 static int32_t pl_off[PIECE_MAX_CH];
 static pl_swn_t pl_swq[PL_SWQ];
 static volatile uint32_t pl_hold;               /* the main loop writes: 1 while it changes the bytes */
+/* live send: the piece armed (the main loop writes it last, the interrupt clears it), what it starts with; switches made */
+static const uint8_t *volatile pl_nx;
+static volatile uint32_t pl_nx_tempo, pl_nx_mute, pl_nx_solo, pl_swaps;
 
 /* ---- SLOOP firmware/src/seq.c @ bac9c05, unchanged ---- */
 /* units an odd step starts late: the track's + the global SWING (MPC: 0 = 50 %, 100 = 75 %) */
@@ -211,6 +223,20 @@ static void player_edited(void)
     PL_BARRIER();
     pl_hold = 0;
 }
+/* live send: arm a checked piece (0: none) to take over at the next bar line, with this tempo and these mutes / solos */
+static void player_next(const uint8_t *piece, uint32_t tempo_x10, uint32_t mute, uint32_t solo)
+{
+    pl_nx = 0;
+    PL_BARRIER();
+    pl_nx_tempo = tempo_x10 < 300u ? 300u : tempo_x10 > 3000u ? 3000u : tempo_x10;
+    pl_nx_mute = mute;
+    pl_nx_solo = solo;
+    PL_BARRIER();
+    pl_nx = piece;
+}
+static uint32_t player_swaps(void) { return pl_swaps; }        /* live switches made so far */
+/* (held: player_hold() first) the playing piece's bytes now live at p, copied unchanged: read from there on */
+static void player_moved(const uint8_t *p) { pl_piece = p; player_edited(); }
 /* the tick channel ch is playing of its own (with a loop length, it runs behind the piece's) */
 static uint32_t player_local(uint32_t ch) { return ch < PIECE_MAX_CH ? pl_pos - (uint32_t)pl_off[ch] : 0u; }
 static void player_stop(void) { pl_want_run = 0; }
@@ -333,6 +359,25 @@ static uint32_t pl_section_edge(void)
     return 0;
 }
 
+/* (the interrupt, at a bar line) the armed piece takes over from its bar 1: what sounds lets go, launches forgotten */
+static void pl_swap(void)
+{
+    uint32_t acc = pl_acc;
+    pl_release_all();
+    pl_piece = pl_nx;
+    pl_nx = 0;
+    piece_view(pl_piece, &pl_v);
+    pl_tempo = pl_nx_tempo;
+    pl_mute = pl_mute_on = pl_nx_mute;
+    pl_solo = pl_solo_on = pl_nx_solo;
+    pl_sloop = 0;
+    pl_qdone = pl_q >> 8;
+    pl_rewind(0);
+    pl_acc = acc;                               /* (the part of a tick already counted: no drift at the switch) */
+    PL_SWITCH();
+    pl_swaps++;
+}
+
 /* the audio interrupt, once a block of nframes (32) */
 static void player_tick(uint32_t nframes)
 {
@@ -378,6 +423,7 @@ static void player_tick(uint32_t nframes)
     while (pl_acc > PL_TICK_UNITS) {            /* a tick due exactly at the next block's start waits for it */
         pl_acc -= PL_TICK_UNITS;
         pl_tick++;
+        if (pl_nx && (pl_tick % PL_BAR == 0u || pl_tick >= pl_v.len_ticks)) { pl_swap(); pl_events(); continue; }
         /* (unless a launch or a section loop jumped) the end: loop (keeping the part of a tick already counted), or stop */
         if (!(pl_v.nsect && pl_section_edge()) && pl_tick >= pl_v.len_ticks) {
             uint32_t acc = pl_acc;

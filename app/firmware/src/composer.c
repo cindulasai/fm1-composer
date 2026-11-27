@@ -18,7 +18,9 @@
  * length (steps) / velocity, KNOB4 the channel's loop length, ALGORITHM its swing, ENV the step's SLIDE (US-30: it
  * glides into the next step's note); edits also while playing.
  * REC (US-26, live.c): from PLAYER, a bar of clicks, then what is played live on the selected channel goes into it
- * (GLO: OVERDUB / REPLACE, ALGORITHM: the quantize grid); REC again, PLAY or leaving the PLAYER ends the pass. */
+ * (GLO: OVERDUB / REPLACE, ALGORITHM: the quantize grid); REC again, PLAY or leaving the PLAYER ends the pass.
+ * LIVE SEND (US-34): a piece sent while one plays takes over at the next bar line (footer NEXT: <name>, then
+ * LIVE: <name>), keeping the sounds, mutes, solos and effects changed here; it is saved to the library once stopped. */
 #define APP_NAME "COMPOSER"
 static void app_idle(void);
 #include <stdint.h>
@@ -39,10 +41,14 @@ static volatile uint8_t midi_in_lost;           /* (SLOOP 2.8.3) a MIDI note mes
 #define XF_POOL POOL
 #include "piece.h"
 #include "synth.c"
+static void lv_apply(void);
+#define PL_SWITCH() lv_apply()
 #include "player.c"
 #include "edit.c"
 #include "steps.c"
 #include "lib.c"
+static void lv_put_begins(void);
+#define XF_PUT_BEGINS() lv_put_begins()
 #include "xfer.c"
 #include "ui.c"
 static void post(uint32_t op, uint32_t ch, uint32_t a, uint32_t b);
@@ -197,6 +203,146 @@ static void sound_next(int32_t d)               /* PRESETS: the selected channel
     post(SC_SOUND, sel, snd[sel], 0);           /* (0: the role kept) */
 }
 
+/* ---- live send (US-34) ----
+ * A piece staged while playing (xfer.c) is armed in the player, which switches to it at the next bar line in the
+ * interrupt (player.c pl_swap) and calls lv_apply() there: the synth's set-up for it, prepared here beforehand (lv_tab),
+ * so its first note already has its sound. The main loop then copies its bytes into play_buf (lv_take: no second piece
+ * buffer, only this table) and treats it as an unsaved piece: saved, with its choices, when playback stops.
+ *
+ * What carries over, channel by channel ("changed on the device", 34.2): this firmware keeps no per-piece edit flags
+ * for the mix, but each choice has a value the piece itself gives, so a channel counts as changed exactly when its
+ * current value differs from that: its sound vs the piece's sound (as open_piece resolves it), its effects vs the
+ * role's defaults (fx_defaults), a mute or solo always (a piece holds none). A choice SAVEd earlier for the playing
+ * piece (prefs) counts too: it was made on the device. Changed: kept on the same channel of the new piece (a sound
+ * only if it fits the new channel: a drum kit on a drum channel, a melodic sound on a melodic one), else the new
+ * piece's own. Voice mode / glide, volume / pan and tempo are the piece's own (they live in its bytes). A channel the
+ * new piece lacks is dropped: its notes let go, its mute / solo cleared, the default silent set-up as open_piece's.
+ *
+ * Unsaved edits are never dropped (decision 53): while the playing piece has edits not in the library or a SAVE
+ * waiting for the stop (edited / save_pending), the staged piece does not switch (footer NEXT AT STOP: <name>); once
+ * stopped, the old piece's edits go as a stop always takes them (saved if SAVE was pressed, else kept open), then the
+ * staged piece is saved, newest at the top of LIBRARY (xfer_poll runs after the stop's own save). */
+typedef struct { uint8_t role, snd, mode, glide, vol, pan, fx[FX_N]; } lv_ch_t;
+static lv_ch_t lv_tab[PIECE_MAX_CH];            /* the next piece's synth set-up (the main loop writes, lv_apply reads) */
+static volatile uint32_t lv_tempo;
+static uint32_t lv_puts, lv_swaps, lv_unsaved;  /* the staged piece armed, the switch taken; the live piece unsaved */
+static char lv_msg[40];                         /* "NEXT: name" / "LIVE: name" */
+
+static uint32_t own_sound(uint32_t s, uint32_t r) { return s < sound_count ? s : sound_default(r); }
+
+/* the footer: what (NEXT / LIVE) and the piece's name, in the screen font's characters (32..126) */
+static void lv_status(const char *what, const char *name)
+{
+    char n[PIECE_NAME + 1];
+    uint32_t k;
+    for (k = 0; k < PIECE_NAME && name[k]; k++) n[k] = name[k] >= 32 && name[k] <= 126 ? name[k] : '?';
+    n[k] = 0;
+    ui_fmt(lv_msg, sizeof lv_msg, "%s: %s", what, n);
+    set_status(lv_msg);
+}
+
+/* the set-up the staged piece starts with, from what plays now (main loop; again each pass while it waits, so a
+ * change made meanwhile goes along); arm: hand it to the player */
+static void lv_prepare(int arm)
+{
+    piece_view_t v;
+    uint32_t ch, keep = 0, k;
+    piece_view(xf_buf, &v);
+    for (ch = 0; ch < PIECE_MAX_CH; ch++) {
+        lv_ch_t *t = &lv_tab[ch];
+        uint32_t r = v.ch[ch].role, s = own_sound(v.ch[ch].sound, r), kit = r == ROLE_DRUMS || r == ROLE_PERC;
+        uint8_t dfx[FX_N];
+        int was = ch < pl_v.nch && ch < v.nch;  /* (a channel both pieces have) */
+        t->role = (uint8_t)r; t->mode = v.ch[ch].mode; t->glide = v.ch[ch].glide; t->vol = v.ch[ch].vol; t->pan = v.ch[ch].pan;
+        if (was && snd[ch] != own_sound(pl_v.ch[ch].sound, role[ch]) && (uint32_t)!!sounds[snd[ch]].e->oneshot == kit) s = snd[ch];
+        t->snd = (uint8_t)s;
+        fx_defaults(role[ch], dfx);
+        for (k = 0; k < FX_N && dfx[k] == fxv[ch][k]; k++) {}
+        if (was && k < FX_N) for (k = 0; k < FX_N; k++) t->fx[k] = fxv[ch][k];
+        else fx_defaults(r, t->fx);
+        if (ch < v.nch) keep |= 1u << ch;
+    }
+    lv_tempo = v.tempo_x10;
+    if (arm) { player_next(xf_buf, v.tempo_x10, mute & keep, solo & keep); lv_status("NEXT", v.name); }
+    else { pl_nx_mute = mute & keep; pl_nx_solo = solo & keep; }
+}
+
+/* (the interrupt, at the switch) the synth set up for the new piece, before its first note */
+static void lv_apply(void)
+{
+    uint32_t ch, k;
+    for (ch = 0; ch < PIECE_MAX_CH; ch++) {
+        const lv_ch_t *t = &lv_tab[ch];
+        if (chs[ch].sound != t->snd || ch_role[ch] != t->role) { synth_role(ch, t->role); synth_sound(ch, t->snd); }
+        synth_voice(ch, t->mode, t->glide);
+        synth_level(ch, t->vol, t->pan);
+        for (k = 0; k < FX_N; k++) synth_fx(ch, k, t->fx[k]);
+    }
+    synth_tempo(lv_tempo);
+}
+
+/* the player switched: its bytes into play_buf (the interrupt waits meanwhile), the screens follow the new piece.
+ * Never waits on the synth's queue (it runs from a SysEx frame too, lv_put_begins) */
+static void lv_take(void)
+{
+    uint32_t ch, k, n;
+    if (player_swaps() == lv_swaps) return;
+    lv_swaps = player_swaps();
+    if (rc.mode) rc_end(play_buf, ED_OK);       /* (a recording pass ends with the piece it was in) */
+    n = pc_u32(xf_buf + 40);
+    player_hold();
+    for (k = 0; k < n; k++) play_buf[k] = xf_buf[k];
+    player_moved(play_buf);
+    xfer_taken();
+    for (ch = 0; ch < PIECE_MAX_CH; ch++) {
+        role[ch] = lv_tab[ch].role;
+        snd[ch] = lv_tab[ch].snd;
+        for (k = 0; k < FX_N; k++) fxv[ch][k] = lv_tab[ch].fx[k];
+    }
+    mute = pl_nx_mute;
+    solo = pl_nx_solo;
+    for (ch = 0; ch < PIECE_MAX_CH; ch++) { player_mute(ch, (int)(mute >> ch & 1u)); player_solo(ch, (int)(solo >> ch & 1u)); }
+    tempo_x10 = lv_tempo;
+    for (k = 0; k < PIECE_NAME + 1u; k++) title[k] = pl_v.name[k];
+    loaded_id = 0xFFFFFFFFu;                    /* (not in the library yet) */
+    edited = 1;                                 /* saved when playback stops (save_all) */
+    discard = 0;
+    save_pending = 1;
+    lv_unsaved = 1;
+    edit_forget();
+    lk_keys_off();
+    lk_open(&pl_v);
+    if (sel >= pl_v.nch) sel = 0;
+    sloop = spage = 0;
+    ed_tick = st_base = st_step = 0;
+    lv_status("LIVE", pl_v.name);
+    dirty = D_ALL;
+}
+
+/* (xfer.c) a new put begins: a switch already made is taken first; one still waiting gives way to the newer */
+static void lv_put_begins(void)
+{
+    lv_take();
+    if (pl_nx) { player_next(0, 0, 0, 0); set_status(""); }
+}
+
+/* (main loop) a staged piece armed while playing, its set-up kept current; stopped, nothing waits (xfer.c saves it).
+ * Unsaved edits on the playing piece: not armed (or withdrawn), it waits for the stop */
+static void lv_poll(uint32_t playing)
+{
+    uint32_t hold = edited || save_pending, fresh;
+    lv_take();
+    if (!playing) { if (pl_nx) player_next(0, 0, 0, 0); return; }
+    if (xf_state != XS_STAGED) return;
+    fresh = xf_puts != lv_puts;
+    lv_puts = xf_puts;
+    if (hold) {
+        if (fresh || pl_nx) lv_status("NEXT AT STOP", (const char *)xf_buf + 16);
+        if (pl_nx) player_next(0, 0, 0, 0);
+    } else if (fresh || !pl_nx) lv_prepare(1);
+    else lv_prepare(0);
+}
+
 /* open library entry i: copy it to RAM, check it, load the player, apply the saved choices */
 static int open_piece(uint32_t i)
 {
@@ -262,6 +408,7 @@ static void save_all(void)
 {
     if (edited) {
         int32_t id = lib_put(title, play_buf, pc_u32(play_buf + 40));
+        if (lv_unsaved) { lv_unsaved = 0; xfer_saved(id); }   /* (a live-sent piece: its sender hears, as for a staged one) */
         if (id < 0) { set_status(id == LIB_FULL ? "LIBRARY FULL" : "SAVE FAILED"); return; }
         lib_del(loaded_id);
         loaded_id = (uint32_t)id;
@@ -699,12 +846,7 @@ static void app_main(void)
             if (uart_sysex_get(&sp, &sn)) { xfer_frame(sp, sn, fm1_ms, (int)playing); uart_sysex_done(); }
         }
 #endif
-        xfer_poll(fm1_ms, (int)playing);
-        if (xf_changed) {
-            xf_changed = 0;
-            if (cur >= lib_count()) cur = lib_count() ? lib_count() - 1u : 0u;
-            dirty |= scr ? 0u : D_LIST;
-        }
+        lv_poll(playing);
         pressed = fm1_input_edges(&rel);
         keys = fm1_input_note_edges() | (fm1_in.notes & ~held);   /* (also a press shorter than a pass) */
         held = fm1_in.notes;
@@ -745,6 +887,12 @@ static void app_main(void)
             else if (scr) set_status("STOPPED");
         }
         was_playing = playing;
+        xfer_poll(fm1_ms, (int)playing);        /* (after the stop's own save: a piece staged meanwhile ends up newest) */
+        if (xf_changed) {
+            xf_changed = 0;
+            if (cur >= lib_count()) cur = lib_count() ? lib_count() - 1u : 0u;
+            dirty |= scr ? 0u : D_LIST;
+        }
         if (scr == 1u && (player_section() | player_queued() << 8) != last_sect) {   /* a section began, or was queued */
             last_sect = player_section() | player_queued() << 8;
             dirty |= D_SECT;

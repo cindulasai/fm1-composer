@@ -60,12 +60,10 @@ def test_7_2_staged_while_playing_then_saved(host_bin, tmp_path):
         p.line("play 1")
         assert lk.put(piece("during")) == ("staged", None)
         assert lk.info()["staged"] and lk.info()["count"] == 0
-        with pytest.raises(link.LinkError) as e:
-            lk.put(piece("second"))
-        assert e.value.code == 9 and "busy" in str(e.value)
+        assert lk.put(piece("second")) == ("staged", None)      # 34.4: the newer of two waiting pieces wins (was busy)
         p.line("play 0")
         pid = lk.wait_saved(5)
-        assert [x["name"] for x in lk.list()] == ["during"] and lk.list()[0]["id"] == pid
+        assert [x["name"] for x in lk.list()] == ["second"] and lk.list()[0]["id"] == pid
         assert lk.put(piece("after"))[0] == "saved"
     finally:
         p.close()

@@ -1,4 +1,6 @@
-// COMPOSER's transfer SysEx (as app/tools/fm1c/link.py writes it): PUT, the 256-byte chunks, COMMIT.
+// COMPOSER's transfer SysEx (as app/tools/fm1c/link.py writes it): PUT, the 256-byte chunks, COMMIT. And the FM-1's
+// footer read off its screen (US-34: a piece sent while it plays shows NEXT: <name>, then LIVE: <name>).
+import { FONT_S } from './font.js';
 const CRC = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 export function crc32(b) { let c = ~0; for (const x of b) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return ~c >>> 0; }
 
@@ -69,4 +71,42 @@ export async function savedLibraries(idb = indexedDB) {
       return library(flash);
     });
   } finally { db.close(); }
+}
+
+// ---- the FM-1's footer (firmware/src/gfx.c draw_text_box: FONT_S centred in 240 x 16 at row 222, C_GREY on black) ----
+const GLYPHS = Uint8Array.from(atob(FONT_S.data), (c) => c.charCodeAt(0));
+const GREY = (120 >> 3) << 11 | (120 >> 2) << 5 | (120 >> 3), FOOT_Y = 222;
+
+/** the name the FM-1 shows for a piece: its 24 name bytes up to the first 0, other than 32..126 as '?' (composer.c) */
+export function screenName(piece) {
+  const raw = piece.subarray(16, 40), end = raw.indexOf(0) < 0 ? 24 : raw.indexOf(0);
+  return String.fromCharCode(...[...raw.subarray(0, end)].map((c) => (c >= 32 && c <= 126 ? c : 63)));
+}
+
+/** the footer's pixels (RGB565, 240 x 16) as the FM-1 draws this text */
+export function footerPixels(text) {
+  const f = FONT_S, w = 240, out = new Uint16Array(w * f.h);
+  const r = GREY >> 11, g = (GREY >> 5) & 63, b = GREY & 31;
+  const ramp = Array.from({ length: 16 }, (_, a) => (Math.floor(r * a / 15) << 11) | (Math.floor(g * a / 15) << 5) | Math.floor(b * a / 15));
+  const ks = [...text].map((ch) => { const c = ch.charCodeAt(0); return (c < f.first || c > f.last ? 63 : c) - f.first; });
+  let x = Math.trunc((w - ks.reduce((n, k) => n + f.adv[k], 0)) / 2);
+  for (const k of ks) {
+    const bw = f.bw[k], bpr = (bw + 1) >> 1;
+    for (let y = 0; y < f.h; y++) {
+      for (let gx = 0; gx < bw; gx++) {
+        const byte = GLYPHS[f.off[k] + y * bpr + (gx >> 1)], v = gx & 1 ? byte & 15 : byte >> 4, px = x - f.pad + gx;
+        if (v && px >= 0 && px < w) out[y * w + px] = ramp[v];
+      }
+    }
+    x += f.adv[k];
+  }
+  return out;
+}
+
+/** the FM-1's screen (RGB565, 240 x 240) shows exactly this footer */
+export function footerSays(lcd, text) {
+  if (!lcd || lcd.length !== 240 * 240) return false;
+  const want = footerPixels(text);
+  for (let i = 0; i < want.length; i++) if (lcd[FOOT_Y * 240 + i] !== want[i]) return false;
+  return true;
 }

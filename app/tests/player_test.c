@@ -20,6 +20,8 @@ static void t_hush(void) { nhush++; synth_hush(); }
 #define PL_HUSH t_hush
 static uint32_t steps;                          /* cursor steps taken (pl_jump, pl_seek) */
 #define PL_STEP() (steps++)
+static uint32_t nswitch, switch_frame, switch_steps;  /* live send: switches seen (PL_SWITCH), the last one's frame */
+#define PL_SWITCH() (nswitch++, switch_frame = now, switch_steps = steps)
 #include "player.c"
 
 static int fails;
@@ -85,7 +87,7 @@ static void play_frames(uint32_t frames)
 static void reset(void)
 {
     synth_init(); nrec = nchoff = nhush = 0; now = 0; pl_want_run = 0; pl_state = 0; pl_running = 0; pl_loop = 1;
-    bs_n = 0; pl_sloop = 0; steps = 0;
+    bs_n = 0; pl_sloop = 0; steps = 0; nswitch = 0; pl_nx = 0;
 }
 
 static void timing(uint32_t tempo)
@@ -751,8 +753,113 @@ static void test_30_6_hostile_voices(void)
     printf("30.6 glide 0 / 127, mode changes while sounding, MONO chords, LEGATO without overlap, a full pool: clean\n");
 }
 
+/* ---- US-34: live send ---- */
+static uint8_t lv_a[PIECE_MAX_BYTES], lv_b[PIECE_MAX_BYTES], lv_c[PIECE_MAX_BYTES];
+
+/* A: 3 pad channels holding notes across every bar line (and a note that would start right at bar 2), 4 bars at 120;
+ * B: 2 channels at 90, a note on its tick 0 and its tick 96; C: one channel at 150 */
+static void lv_pieces(void)
+{
+    static tn_t a0[] = {{0, 1536, 60, 100}, {384, 50, 72, 100}}, a1[] = {{300, 1000, 40, 100}}, a2[] = {{0, 1536, 67, 100}};
+    static tn_t b0[] = {{0, 300, 80, 100}, {96, 50, 81, 100}}, b1[] = {{0, 700, 50, 100}};
+    static tn_t c0[] = {{0, 200, 90, 100}};
+    const tn_t *na[3] = {a0, a1, a2}, *nb[2] = {b0, b1}, *nc[1] = {c0};
+    uint32_t ca[3] = {2, 1, 1}, cb[2] = {2, 1}, cc[1] = {1}, n;
+    n = build(1200, 4 * 384, 3, na, ca); memcpy(lv_a, pb, n);
+    n = build(900, 2 * 384, 2, nb, cb); memcpy(lv_b, pb, n);
+    n = build(1500, 384, 1, nc, cc); memcpy(lv_c, pb, n);
+}
+
+static void test_34_1_live_switch_at_the_next_bar_no_hanging_note_no_gap(void)
+{
+    uint32_t i, sounding[3][128], gap = 0, worst = 0, b_on = 0, a_after = 0, first_b = 0, second_b = 0;
+    int32_t peaks[64];
+    reset();
+    lv_pieces();
+    CHECK(player_load(lv_a) == 0, "load A");
+    player_play();
+    play_frames(frame_of(100, 1200));                   /* A plays, tick ~100: its notes sound */
+    player_next(lv_b, 900, 0, 0);
+    while (now + CTL < frame_of(384, 1200) - 8 * CTL) play_frames(CTL);
+    CHECK(nswitch == 0 && player_pos() < 384, "nothing before the bar line (tick %u)", player_pos());
+    for (i = 0; i < 64; i++) { play_frames(CTL); peaks[i] = blk_peak; }   /* across the bar line */
+    CHECK(nswitch == 1 && player_swaps() == 1, "one switch: %u", nswitch);
+    CHECK(switch_frame <= frame_of(384, 1200) && switch_frame + CTL > frame_of(384, 1200),
+          "at A's bar line: frame %u, exact %u", switch_frame, frame_of(384, 1200));
+    CHECK(switch_steps == steps || steps - switch_steps <= 2u, "the switch scans nothing (%u steps)", steps - switch_steps);
+    for (i = 0; i < 64; i++) { if (peaks[i] == 0) { gap++; if (gap > worst) worst = gap; } else gap = 0; }
+    CHECK(peaks[0] > 0 && peaks[63] > 0, "A sounds before, B after (%d %d)", peaks[0], peaks[63]);
+    CHECK(worst <= 1, "no gap of more than a block at the switch: %u silent blocks", worst);
+    memset(sounding, 0, sizeof sounding);               /* every A note sounding at the switch got its note-off there */
+    for (i = 0; i < nrec; i++) {
+        if (rec[i].frame < switch_frame) { if (rec[i].on) sounding[rec[i].ch][rec[i].pitch]++; else if (sounding[rec[i].ch][rec[i].pitch]) sounding[rec[i].ch][rec[i].pitch]--; continue; }
+        if (rec[i].frame == switch_frame && !rec[i].on && sounding[rec[i].ch][rec[i].pitch]) sounding[rec[i].ch][rec[i].pitch]--;
+        if (rec[i].on && (rec[i].pitch == 60 || rec[i].pitch == 72 || rec[i].pitch == 40 || rec[i].pitch == 67)) a_after++;
+        if (rec[i].on && (rec[i].pitch == 80 || rec[i].pitch == 50)) { b_on++; if (!first_b) first_b = rec[i].frame; }
+    }
+    for (i = 0; i < 3 * 128; i++) CHECK(!sounding[i / 128][i % 128], "A's note ch %u pitch %u left hanging", i / 128, i % 128);
+    CHECK(a_after == 0, "no note of A after the switch (its bar-2 note 72 neither): %u", a_after);
+    CHECK(b_on == 2 && first_b == switch_frame, "B's bar 1 starts at the switch: %u notes, frame %u", b_on, first_b);
+    CHECK(pl_v.nch == 2 && pl_tempo == 900 && pl_piece == lv_b, "B, at its own tempo");
+    play_frames(frame_of(200, 900));
+    for (i = 0; i < nrec; i++) if (rec[i].on && rec[i].pitch == 81) second_b = rec[i].frame;
+    CHECK(second_b > switch_frame && second_b - switch_frame <= frame_of(96, 900) + CTL && second_b - switch_frame + CTL > frame_of(96, 900),
+          "B's tick 96 at its 90 BPM from the switch: %u frames after", second_b - switch_frame);
+    printf("34.1 switch at the next bar line, from bar 1 at its tempo; every note let go there; no audio gap; O(1)\n");
+}
+
+static void test_34_4_newer_wins_bar_line_moved_bytes_dropped_channels(void)
+{
+    uint32_t i, on2 = 0;
+    reset();
+    lv_pieces();
+    player_load(lv_a);
+    player_play();
+    player_mute(1, 1); player_mute(2, 1);
+    play_frames(frame_of(50, 1200));
+    player_next(lv_b, 900, 2u, 0);                      /* B, then C before the bar: C wins, one switch */
+    play_frames(frame_of(50, 1200));
+    player_next(lv_c, 1500, 0, 0);
+    play_frames(frame_of(384, 1200));
+    CHECK(nswitch == 1 && pl_piece == lv_c && pl_tempo == 1500 && pl_v.nch == 1, "the newer wins: %u switches", nswitch);
+    CHECK(pl_mute == 0 && pl_mute_on == 0, "mutes as given");
+    while (player_pos() != 0) play_frames(CTL);          /* C (1 bar) wraps to its start: armed exactly at a bar line */
+    while (player_pos() == 0) play_frames(CTL);
+    reset();
+    player_load(lv_a);
+    player_play();
+    while (player_pos() < 384) play_frames(CTL);
+    CHECK(player_pos() == 384 && nswitch == 0, "at the bar line itself (tick %u)", player_pos());
+    player_next(lv_b, 900, 2u, 0);                      /* the bar line just passed: the next one */
+    play_frames(CTL);
+    CHECK(nswitch == 0, "not this bar line, it has played");
+    nrec = 0;
+    play_frames(frame_of(384, 1200));
+    CHECK(nswitch == 1 && switch_frame <= frame_of(768, 1200) && switch_frame + CTL > frame_of(768, 1200), "the next one: frame %u", switch_frame);
+    for (i = 0; i < nrec; i++) if (rec[i].on && rec[i].frame >= switch_frame && rec[i].ch == 1) on2++;
+    CHECK(on2 == 0 && pl_mute == 2u, "B's channel 2 muted as given: %u notes", on2);
+    for (i = 0; i < nrec; i++) CHECK(!(rec[i].on && rec[i].frame >= switch_frame && rec[i].ch == 2), "A's channel 3, not in B: dropped");
+    memcpy(lv_c, lv_b, sizeof lv_c);                    /* the main loop moves the bytes (player_moved): no jump, no note again */
+    nrec = 0;
+    player_hold();
+    player_moved(lv_c);
+    play_frames(CTL * 4);
+    for (i = 0; i < nrec; i++) CHECK(!rec[i].on, "moved: nothing replays (pitch %u)", rec[i].pitch);
+    CHECK(pl_piece == lv_c && player_playing(), "plays on from the copy");
+    player_next(lv_a, 1200, 0, 0);                      /* stopped while armed: no switch while stopped */
+    player_stop();
+    play_frames(CTL);
+    player_next(0, 0, 0, 0);
+    player_play();
+    play_frames(frame_of(800, 900));
+    CHECK(nswitch == 1 && pl_piece == lv_c, "disarmed: B plays on (%u)", nswitch);
+    printf("34.4 the newer of two armed pieces wins, once; armed on a bar line: the next; dropped / muted channels; moved bytes\n");
+}
+
 int main(void)
 {
+    test_34_1_live_switch_at_the_next_bar_no_hanging_note_no_gap();
+    test_34_4_newer_wins_bar_line_moved_bytes_dropped_channels();
     test_30_1_a_v8_piece_renders_bit_identical();
     test_30_2_mono_retriggers_legato_glides();
     test_30_3_the_sound_brings_its_voice_an_override_wins();
