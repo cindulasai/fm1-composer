@@ -52,8 +52,10 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F32 | Live send: a piece sent while playing (Studio or fm1c) takes over at the next bar, carrying device-side sound/mix changes; saved to flash once stopped | v10 | shipped |
 | F33 | Sampled instruments on the FM-1: PIANO, STRINGS, HORNS from SLOOP's CC0 sets (VSCO-2 CE / VCSL) played by SLOOP's SAMPLE engine (IMA ADPCM, zones, loops); new sounds in the catalog, picked for text2midi's piano / string / brass parts | v11 | planned |
 | F34 | Studio's Play sounds like the FM-1 for the sampled sounds: Studio's engine renders the same samples the same way (same table, same decoder) | v11 | planned |
-| F35 | NEW SONG from a blank grid on the FM-1: from LIBRARY, make an empty piece choosing channel count (1–8), each channel's role + sound, tempo, length in bars and a name; fill it with STEPS / REC / EDIT; saved to LIBRARY like any piece | v12 | planned |
-| F36 | Channels on the FM-1: add a channel (up to 8: role + sound, empty) or remove one (its notes go, after a confirm) in any piece, sent or made on the device; the piece stays editable and Studio-compatible (same format) | v12 | planned |
+| F35 | NEW SONG from a blank grid on the FM-1: from LIBRARY, make an empty piece choosing channel count (1–8), each channel's role + sound, tempo, length in bars and a name; fill it with STEPS / REC / EDIT; saved to LIBRARY like any piece | v13 | planned |
+| F36 | Channels on the FM-1: add a channel (up to 8: role + sound, empty) or remove one (its notes go, after a confirm) in any piece, sent or made on the device; the piece stays editable and Studio-compatible (same format) | v13 | planned |
+| F37 | Studio looks like one app: text2midi's window (left) blends with fm1-emu's page (right): one palette, type and spacing; slim modern scrollbars; today's simple layout and controls kept | v12 | planned |
+| F38 | Studio mixer in the notes panel: per-channel volume, mute / solo, pan and effects (EQ, reverb, compressor: SoundCraft's DSP, MIT OR Apache-2.0, copied with notices) + a master volume by Play; heard in Play; volume / pan / mute go to the FM-1 on Send | v12 | planned |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
@@ -145,6 +147,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 59 | v11 adds US-37: leaving PLAYER mid-recording says what it kept (`REC OFF: N NOTES`), the v6 Adversary's minor gap; built beside US-35 (other files) | council |
 | 60 | v12 = full flexibility on the device: NEW SONG from a blank grid with a choice of channels, and add / remove channels in any piece (wishlist B7's on-device half); before energy / swing + setlists (decision 50 moves to v13) | user |
 | 61 | After v12: v13 = Studio DAW (wishlist B2 mixer: per-channel volume / mute / solo / pan / EQ / FX + master; B3 transport: click-to-play timeline, loop region, position; B1 modern look with it; B4 regenerate a bar range of one channel built into the timeline; soundcraft DSP reused, B6). Energy / swing + setlists + longer songs move to v14 | user |
+| 62 | Priority first (user, 2026-11-27): v12 = Studio look (left panel blends with the right, modern scrollbars, simplicity kept) + mixer (per-channel volume, master, effects copied from SoundCraft — licence MIT OR Apache-2.0 allows it; craft-anything used to study / copy). NEW SONG + channels → v13; timeline + regenerate a bar range → v14; energy / swing, setlists, longer songs → v15. Effects are Studio-side (Play); volume / pan / mute reach the FM-1 piece on Send (its channel vol / pan / mute); the FM-1 keeps its own FX | user |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -188,5 +191,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile ; Send never loses a frame (US-30–US-33)
 - v10 — live send: a piece sent while playing takes over at the next bar (US-34) — verified
 - v11 — sampled instruments: piano, strings, horns (SLOOP's CC0 sets + SAMPLE engine) on the FM-1 and in Studio's Play (US-35–US-37)
-- v12 — full flexibility on the FM-1: NEW SONG from a blank grid with your choice of channels; add / remove channels in any piece (US-38–US-39)
-- v13 — (planned, decision 61) Studio DAW: mixer, timeline + loop, regenerate a bar range, modern look
+- v12 — Studio look + mixer: one blended app, modern scrollbars; per-channel volume / mute / solo / pan / EQ / reverb / compressor + master (SoundCraft DSP) (US-40–US-41)
+- v13 — full flexibility on the FM-1: NEW SONG from a blank grid with your choice of channels; add / remove channels in any piece (US-38–US-39)
+- v14 — (planned) Studio timeline: click-to-play, loop a region, regenerate a bar range of one channel
+- v15 — (planned) energy / swing, setlists, longer songs
