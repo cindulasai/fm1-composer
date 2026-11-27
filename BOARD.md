@@ -30,7 +30,7 @@
 | US-27 | Studio as a static site | 1 | done | 0 |
 | US-28 | Pages from CI, deploy only when public | 1 | done | 2 |
 | US-29 | Send survives a stalled emulator | 1 | done | 2 |
-| US-30 | MONO / LEGATO voices with glide + SLIDE | 1 | proven | 1 |
+| US-30 | MONO / LEGATO voices with glide + SLIDE | 1 | done | 1 |
 | US-31 | Part tools in EDIT: shift, ×2 / ½, transpose | 1 | done | 0 |
 | US-32 | Show the way: README + COMPOSER tile guide | 1 | done | 1 |
 | US-33 | Send never loses a frame: the jack queues frames | 1 | done | 1 |
