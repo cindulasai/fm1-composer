@@ -8,10 +8,10 @@
 #include "synth.c"
 
 static uint32_t now;
-typedef struct { uint32_t frame; uint8_t on, ch, pitch; } rec_t;
+typedef struct { uint32_t frame; uint8_t on, ch, pitch, vel; } rec_t;
 static rec_t rec[40000];
 static uint32_t nrec;
-static void t_on(uint32_t ch, uint32_t p, uint32_t v) { if (nrec < 40000u) rec[nrec++] = (rec_t){now, 1, (uint8_t)ch, (uint8_t)p}; synth_on(ch, p, v); }
+static void t_on(uint32_t ch, uint32_t p, uint32_t v) { if (nrec < 40000u) rec[nrec++] = (rec_t){now, 1, (uint8_t)ch, (uint8_t)p, (uint8_t)v}; synth_on(ch, p, v); }
 static void t_off(uint32_t ch, uint32_t p) { if (nrec < 40000u) rec[nrec++] = (rec_t){now, 0, (uint8_t)ch, (uint8_t)p}; synth_off(ch, p); }
 #define PL_NOTE_ON t_on
 #define PL_NOTE_OFF t_off
@@ -78,7 +78,7 @@ static uint32_t frames_of(uint32_t ticks, uint32_t tempo) { return (uint32_t)((u
 
 static void reset(void)
 {
-    synth_init(); nrec = 0; now = 0; pl_want_run = 0; pl_state = 0; pl_running = 0; pl_loop = 1; pl_sloop = 0; steps = 0;
+    synth_init(); player_macros(0, 0); nrec = 0; now = 0; pl_want_run = 0; pl_state = 0; pl_running = 0; pl_loop = 1; pl_sloop = 0; steps = 0;
     bs_n = 0; memset(bs_steps, 0, sizeof bs_steps); memset(bs_swing, 0, sizeof bs_swing); edit_forget();
 }
 
@@ -247,6 +247,70 @@ static void test_25_2_polymeter(void)
     CHECK(na == 1 && a[0] == 42, "from step 15 of 16 a 12-step loop is at its 3rd: %u", na ? a[0] : 0);
     player_stop(); play_frames(CTL);
     CHECK(player_local(0) == 0 && player_local(9) == 0, "stopped: its own tick at the start");
+}
+
+/* ---- 45.1: the ENERGY and SWING macros ---- */
+static uint32_t macro_run(int32_t e, uint32_t ms, uint8_t own, const tn_t *ns, uint32_t n, rec_t *out)
+{
+    const tn_t *nl[1] = {ns};
+    uint32_t cnt[1] = {n};
+    reset();
+    bs_swing[0] = own;
+    CHECK(piece_check(pb, build(pb, 1200, 16 * 24, 1, nl, cnt)) == PE_OK, "macro piece");
+    CHECK(player_load(pb) == 0, "load");
+    pl_loop = 0;
+    player_macros(e, ms);
+    player_play();
+    play_frames(frames_of(16 * 24, 1200) + 4410);
+    memcpy(out, rec, nrec * sizeof *rec);
+    return nrec;
+}
+
+static void test_45_1_energy_scales_velocity_swing_macro_swings_every_channel(void)
+{
+    static const uint8_t V[6] = {1, 2, 50, 99, 100, 127};
+    static const int32_t E[6] = {-50, -1, 0, 1, 25, 50};
+    static tn_t ns[16];
+    static rec_t a[64], b[64];
+    uint32_t i, k, n, m;
+    for (i = 0; i < 16; i++) ns[i] = (tn_t){i * 24, 12, (uint8_t)(60 + i), V[i % 6]};
+    for (k = 0; k < 6; k++) {
+        uint32_t ok = 1, ons = 0;
+        n = macro_run(E[k], 0, 0, ns, 16, a);
+        for (i = 0; i < n; i++) {
+            int32_t want;
+            if (!a[i].on) continue;
+            want = ((int32_t)ns[a[i].pitch - 60].vel * (100 + E[k]) + 50) / 100;
+            want = want < 1 ? 1 : want > 127 ? 127 : want;
+            ok &= a[i].vel == (uint32_t)want;
+            if (E[k] == 0) ok &= a[i].vel == ns[a[i].pitch - 60].vel;   /* 0: the piece's own, exactly */
+            ons++;
+        }
+        CHECK(ok && ons == 16, "energy %d: vel x (100 + e) / 100, rounded, 1..127", (int)E[k]);
+    }
+    n = macro_run(-50, 0, 0, ns, 16, a);
+    for (i = 0; i < n; i++) if (a[i].on && ns[a[i].pitch - 60].vel == 1) CHECK(a[i].vel == 1, "vel 1 never silent");
+    n = macro_run(50, 0, 0, ns, 16, a);
+    for (i = 0; i < n; i++) if (a[i].on && ns[a[i].pitch - 60].vel == 127) CHECK(a[i].vel == 127, "127 stays 127");
+    /* the SWING macro: as if the channel's own swing were max(own, macro) */
+    {
+        static const uint8_t OWN[4] = {0, 0, 100, 30};
+        static const uint8_t MS[4] = {60, 100, 60, 30};
+        for (k = 0; k < 4; k++) {
+            uint8_t eff = OWN[k] > MS[k] ? OWN[k] : MS[k];
+            n = macro_run(0, MS[k], OWN[k], ns, 16, a);
+            m = macro_run(0, 0, eff, ns, 16, b);
+            CHECK(n == m && n == 32 && !memcmp(a, b, n * sizeof *a), "own %u, macro %u: plays as swing %u", OWN[k], MS[k], eff);
+        }
+        n = macro_run(0, 60, 0, ns, 16, a);
+        m = macro_run(0, 0, 0, ns, 16, b);
+        CHECK(n == m && memcmp(a, b, n * sizeof *a), "a SWING macro moves the odd steps");
+    }
+    player_macros(-99, 500);
+    CHECK(pl_energy == -50 && pl_mswing == 100, "clamped: -50, 100");
+    player_macros(77, 0);
+    CHECK(pl_energy == 50 && pl_mswing == 0, "clamped: +50, 0");
+    player_macros(0, 0);
 }
 
 /* ---- 25.3: swing ---- */
@@ -428,6 +492,7 @@ static void test_25_5_edit_while_playing_in_time(void)
 int main(void)
 {
     test_25_1_grid_and_notes();
+    test_45_1_energy_scales_velocity_swing_macro_swings_every_channel();
     test_25_2_polymeter();
     test_25_3_swing();
     test_25_5_hostile();

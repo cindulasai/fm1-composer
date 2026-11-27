@@ -83,6 +83,8 @@ static piece_cur_t pl_bcur[PIECE_MAX_CH];
 static uint32_t pl_lp[PIECE_MAX_CH], pl_wrap[PIECE_MAX_CH], pl_nsw;
 static int32_t pl_off[PIECE_MAX_CH];
 static pl_swn_t pl_swq[PL_SWQ];
+static volatile int32_t pl_energy;            /* (US-45) the main loop writes: ENERGY -50..+50, every note's velocity */
+static volatile uint32_t pl_mswing;             /* (US-45) the main loop writes: SWING 0..100, every channel at least this */
 static volatile uint32_t pl_hold;               /* the main loop writes: 1 while it changes the bytes */
 /* live send: the piece armed (the main loop writes it last, the interrupt clears it), what it starts with; switches made */
 static const uint8_t *volatile pl_nx;
@@ -264,10 +266,26 @@ static void pl_seek(uint32_t t)                 /* (just started, at tick 0) ski
     pl_tick = pl_pos = t;
 }
 
+/* (US-45) ENERGY: vel x (100 + e) / 100, rounded, 1..127; e = 0: the piece's own */
+static uint32_t pl_vel(uint32_t vel)
+{
+    int32_t e = pl_energy, v;
+    if (!e) return vel;
+    v = ((int32_t)vel * (100 + e) + 50) / 100;
+    return (uint32_t)(v < 1 ? 1 : v > 127 ? 127 : v);
+}
+
+/* (US-45) the macros, from the main loop: clamped; heard from the next note */
+static void player_macros(int32_t energy, uint32_t swing)
+{
+    pl_energy = energy < -50 ? -50 : energy > 50 ? 50 : energy;
+    pl_mswing = swing > 100u ? 100u : swing;
+}
+
 static void pl_on(uint32_t ch, uint32_t pitch, uint32_t vel, uint32_t end, uint32_t slide)
 {
     if (pl_noff < PL_MAXOFF) {
-        PL_NOTE_ON(ch, pitch, vel);
+        PL_NOTE_ON(ch, pitch, pl_vel(vel));
         if (slide) PL_SLIDE(ch);
         pl_offs[pl_noff].off = end + (slide ? PL_SLIDE_T : 0u);   /* (already past, for a swung note: the next tick) */
         pl_offs[pl_noff].ch = (uint8_t)ch;
@@ -282,6 +300,7 @@ static void pl_on(uint32_t ch, uint32_t pitch, uint32_t vel, uint32_t end, uint3
 static uint32_t pl_swing(uint32_t ch)
 {
     uint32_t sw = pl_v.ch[ch].swing;
+    if (pl_mswing > sw) sw = pl_mswing;          /* (US-45) the SWING macro: at least this */
     if (!sw || pl_tick % (2u * PL_STEPT) != PL_STEPT) return 0;
     return swing_units((int32_t)sw, PL_STEPT * PL_SUB) * (PL_TICK_UNITS / PL_SUB);
 }

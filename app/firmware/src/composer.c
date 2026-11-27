@@ -77,6 +77,9 @@ static uint8_t role[PIECE_MAX_CH], snd[PIECE_MAX_CH];
 static uint8_t fxv[PIECE_MAX_CH][FX_N];          /* FX: each channel's effects; the row picked */
 static uint32_t fxrow;
 static uint32_t sloop, spage;                   /* PLAYER: section loop on; the sections the keys launch (14 a page) */
+static int32_t mac_e;                           /* (US-45) ENERGY -50..+50, SWING 0..100: performance only, never saved */
+static uint32_t mac_s;
+static char mac_txt[16];
 static char snext[24];                          /* "NEXT VERSE1" */
 static uint32_t st_step, st_base, st_len = 1, st_vel = 100, st_play;   /* STEPS: cursor, start tick, next note; playhead */
 static uint32_t rc_seen, rc_shown;              /* REC: the recorder's edits taken in; its state on screen */
@@ -356,6 +359,7 @@ static int open_piece(uint32_t i)
     uint32_t ch;
     int n;
     if (!e) return -1;
+    if (mac_e || mac_s) { mac_e = 0; mac_s = 0; player_macros(0, 0); }   /* (US-45) a new piece: no macros */
     player_stop();
     while (player_playing()) platform_poll();
     if ((n = lib_read(i, play_buf, sizeof play_buf)) < 0 || piece_check(play_buf, (uint32_t)n) || player_load(play_buf)) {
@@ -600,6 +604,11 @@ static void player_input(uint32_t pressed, uint32_t keys)
         if (pressed & 1u << BTN_OCT_DOWN && lk.oct > -3) lk.oct--;
         if (ch0 != (uint32_t)lk.t.p[P_CHORD] || oct0 != (uint32_t)lk.oct || sc0 != lk_scale() || r0 != (uint32_t)lk.t.p[P_ROOT])
             keys_status();
+    } else if (fm1_in.buttons & 1u << BTN_SEL) {   /* (US-45) SEL held: KNOB3 ENERGY, KNOB4 SWING */
+        int32_t de = fm1_enc_take(ENC_KNOB3), ds = fm1_enc_take(ENC_KNOB4);
+        if (de) { mac_e = clampi(mac_e + de, -50, 50); ui_fmt(mac_txt, sizeof mac_txt, "ENERGY %s%u", mac_e > 0 ? "+" : mac_e < 0 ? "-" : "", (unsigned)(mac_e < 0 ? -mac_e : mac_e)); }
+        if (ds) { mac_s = (uint32_t)clampi((int32_t)mac_s + ds, 0, 100); ui_fmt(mac_txt, sizeof mac_txt, "SWING %u", (unsigned)mac_s); }
+        if (de || ds) { player_macros(mac_e, mac_s); set_status(mac_txt); }
     } else {                                    /* the selected channel's voice */
         int32_t dm = fm1_enc_take(ENC_KNOB3), dg = fm1_enc_take(ENC_KNOB4);
         if (dm || dg) voice_turn(dm, dg);
