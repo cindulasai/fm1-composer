@@ -105,6 +105,16 @@ def test_34_2_device_changes_carry_over_others_take_the_new_pieces_own(tmp_path)
     assert head == "FX 1 PAD" and v["REVERB"] == rev, f"channel 1's changed reverb carries over ({v}, {rev})"
 
 
+
+def test_34_2_untouched_effects_take_the_new_pieces_role_defaults(tmp_path):
+    """alpha's channel 1 is LEAD, beta's is PAD: with its effects untouched here, beta's channel 1 gets PAD's own"""
+    (log, _), t = session(tmp_path, "live2fx", [(700, beta()), (2600, f"btn {BTN['FX']}"), (2800, f"btn {BTN['HOME']}")], 3000)
+    assert any(txt == "LIVE: beta" for _, txt in foot(log, t + 700))
+    (ref, _), r = session(tmp_path, "live2fxref", [(100, f"btn {BTN['FX']}"), (300, f"btn {BTN['HOME']}")], 400, first=beta())
+    head, _, v = fx_page(log, t + 2600, t + 2790)
+    rhead, _, rv = fx_page(ref, r + 100, r + 290)
+    assert head == rhead == "FX 1 PAD" and v == rv, f"PAD's own effects, not LEAD's carried over ({v} vs {rv})"
+
 def test_34_4_newer_wins_corrupt_refused_stopped_saved_as_today(tmp_path):
     bad = bytearray(beta("bad"))
     bad[-1] ^= 0xFF                                    # its CRC

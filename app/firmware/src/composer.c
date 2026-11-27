@@ -838,6 +838,7 @@ static void app_main(void)
     if (blob_load(1, &fxprefs, sizeof fxprefs) || fxprefs.magic != FXP_MAGIC) fxprefs_reset();
     for (;;) {
         uint32_t rel, pressed, keys, playing;
+        const char *rc_left;
         platform_poll();
         midi_in(1);
         playing = (uint32_t)player_playing();
@@ -852,8 +853,12 @@ static void app_main(void)
         pressed = fm1_input_edges(&rel);
         keys = fm1_input_note_edges() | (fm1_in.notes & ~held);   /* (also a press shorter than a pass) */
         held = fm1_in.notes;
-        if (scr == 1u && rc.mode && (pressed & (1u << BTN_HOME | 1u << BTN_EDIT | 1u << BTN_LFO | 1u << BTN_FX)))
-            rc_end(play_buf, ED_OK);            /* leaving the PLAYER ends a pass, before HOME asks about edits */
+        rc_left = 0;
+        if (scr == 1u && rc.mode && (pressed & (1u << BTN_HOME | 1u << BTN_EDIT | 1u << BTN_LFO | 1u << BTN_FX))) {
+            rc_end(play_buf, ED_OK);            /* leaving the PLAYER ends a pass: what it kept shows on the next screen */
+            rc_left = rc.msg;                   /* (HOME: that press only ends it, as REC would; the next asks about edits) */
+            pressed &= ~(1u << BTN_HOME);
+        }
         rc_sync();
         if (scr == 0) {
             fm1_enc_take(ENC_KNOB1); fm1_enc_take(ENC_PRESETS); fm1_enc_take(ENC_KNOB2); fm1_enc_take(ENC_KNOB3);
@@ -882,6 +887,7 @@ static void app_main(void)
                 player_input(pressed, keys);
             }
         }
+        if (rc_left) set_status(rc_left);       /* (over what the screen it went to says) */
         rc_poll(play_buf);
         rc_sync();
         if (was_playing && !playing) {
