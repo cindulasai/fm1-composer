@@ -49,7 +49,7 @@ S8. `./fm1c studio` opens COMPOSER Studio: left, text2midi's own window; I type 
 | F29 | Voice modes: a channel plays POLY, MONO or LEGATO with glide (SLOOP's voice code); each sound brings SLOOP's own mode + glide, overridable per channel on the device and saved in the piece; SLIDE on a step glides into the next | v9 | shipped |
 | F30 | Part tools in EDIT (SLOOP-style): hold a button and turn KNOB1 shift (every note a step later / earlier), KNOB2 ×2 / ½ (the part copied after itself / halved), KNOB3 transpose (a semitone); one hold = one undo | v9 | shipped |
 | F31 | Show the way: the root README leads with the live Studio (screenshot + 3 steps); COMPOSER's tile on fm1-emu's page explains itself and links to Studio (Studio's cable script; fm1-emu's files unchanged) | v9 | shipped |
-| F32 | Live send: a piece sent while playing (Studio or fm1c) takes over at the next bar, carrying device-side sound/mix changes; saved to flash once stopped | v10 | planned |
+| F32 | Live send: a piece sent while playing (Studio or fm1c) takes over at the next bar, carrying device-side sound/mix changes; saved to flash once stopped | v10 | shipped |
 
 ## Design
 piece (`app/firmware/src/piece.h`, `app/tools/fm1c/piece.py`) — interface: `piece_check(buf,len)->err`, `piece_view(buf)->{name,tempo_x10,len_ticks,nch,ch[i]{role,sound,vol,pan,nev}}`, `piece_events(view,ch)->iter{tick,dur,pitch,vel}`; py `encode(Piece)->bytes`, `decode(bytes)->Piece` — hides: binary layout (LE, 96 PPQ, delta ticks), CRC32, version checks.
