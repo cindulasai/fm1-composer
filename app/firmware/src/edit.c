@@ -38,6 +38,28 @@ static void ed_ev(uint8_t *e, uint32_t delta, uint32_t dur, uint32_t pitch, uint
 }
 static void ed_seal(uint8_t *b) { uint32_t n = pc_u32(b + 40); ed_w32(b + n - 4u, piece_crc32(b, n - 4u)); }
 
+/* NEW SONG (US-38): an empty piece of nch channels (roles[i]; each its role's default sound, volume 100, pan 64, src 0,
+ * voice AUTO), tempo, length, name: byte for byte fm1c's encode() of the same (no sections). Returns its length. */
+static uint32_t edit_blank(uint8_t *b, uint32_t nch, const uint8_t *roles, uint32_t tempo_x10, uint32_t len_ticks,
+                           const char *name)
+{
+    uint32_t i, n = PIECE_HDR + nch * PIECE_CHREC + 4u, modes = 0;
+    for (i = 0; i < n; i++) b[i] = 0;
+    b[0] = 'F'; b[1] = '1'; b[2] = 'P'; b[3] = '1'; b[4] = 1u; b[5] = (uint8_t)nch;
+    ed_w16(b + 8, tempo_x10); ed_w16(b + 10, PIECE_PPQ); ed_w32(b + 12, len_ticks);
+    for (i = 0; i < PIECE_NAME && name[i]; i++) b[16 + i] = (uint8_t)name[i];
+    ed_w32(b + 40, n);
+    for (i = 0; i < nch; i++) {
+        uint8_t *c = ed_rec(b, i);
+        c[0] = roles[i]; c[1] = 255u; c[2] = 100u; c[3] = 64u;
+        ed_w32(c + 12, PIECE_HDR + nch * PIECE_CHREC);
+        modes |= 1u << 4u * i;                  /* AUTO: the sound's own SLOOP voice, as Studio's pieces */
+    }
+    ed_w32(b + 44, modes);
+    ed_seal(b);
+    return n;
+}
+
 static void edit_forget(void) { ed_n = ed_pn = ed_hold = 0; }   /* a new piece: nothing to undo */
 static void edit_mark(void) { ed_grp++; }       /* what follows is one gesture: undone together */
 static uint32_t edit_undoable(void) { return ed_n; }

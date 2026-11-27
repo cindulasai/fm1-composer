@@ -60,6 +60,31 @@ static void ui_text(uint32_t x, uint32_t y, uint32_t w, const felucca_font_t *f,
 #endif
 }
 
+/* NEW SONG (US-38): the set-up of an empty piece */
+typedef struct { uint32_t n, sel, tempo_x10, bars; uint8_t role[PIECE_MAX_CH]; const char *status; } ns_t;
+static void ui_newsong(uint32_t dirty, const ns_t *s)
+{
+    char b[40];
+    uint32_t i;
+    if (dirty & D_ALL) lcd_fill(0, 0, 240, 240, C_BLACK);
+    if (dirty & (D_ALL | D_HEAD)) {
+        ui_text(8, 4, 120, &FONT_S, "NEW SONG", C_ACC, 0);
+        ui_fmt(b, sizeof b, "%u BPM %u BARS", s->tempo_x10 / 10u, s->bars);
+        ui_text(112, 4, 120, &FONT_S, b, C_GREY, 2);
+    }
+    if (dirty & (D_ALL | D_LIST | D_HEAD)) {
+        ui_fmt(b, sizeof b, "%u CHANNEL%s", s->n, s->n == 1u ? "" : "S");
+        ui_text(8, 28, 224, &FONT_S, b, C_WHITE, 0);
+        for (i = 0; i < PIECE_MAX_CH; i++) {
+            uint32_t y = 50u + i * 20u;
+            if (i >= s->n) { lcd_fill(0, y, 240, 20, C_BLACK); continue; }
+            ui_fmt(b, sizeof b, "%s%u %s", i == s->sel ? "> " : "  ", i + 1u, ROLE_NAME[s->role[i]]);
+            ui_text(4, y, 232, &FONT_S, b, i == s->sel ? C_ACC : C_WHITE, 0);
+        }
+    }
+    if (dirty & (D_ALL | D_FOOT)) ui_text(0, 222, 240, &FONT_S, s->status, C_GREY, 1);
+}
+
 static void ui_library(uint32_t dirty, uint32_t cur, uint32_t *top)
 {
     char b[40];
@@ -77,6 +102,7 @@ static void ui_library(uint32_t dirty, uint32_t cur, uint32_t *top)
             lcd_fill(0, 28, 240, LIB_ROWS * 20u, C_BLACK);
             ui_text(0, 112, 240, &FONT_S, "LIBRARY EMPTY", C_GREY, 1);
             ui_text(0, 136, 240, &FONT_S, "push pieces with fm1c", C_GREY, 1);
+            ui_text(0, 160, 240, &FONT_S, "or SAVE: NEW SONG", C_GREY, 1);
         } else {
             for (i = 0; i < LIB_ROWS; i++) {
                 const lib_entry_t *e = lib_entry(*top + i);

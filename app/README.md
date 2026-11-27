@@ -97,6 +97,7 @@ python3 -m http.server -d site 8000 # then open http://127.0.0.1:8000/
 | --- | --- | --- |
 | LIBRARY | SELECT | moves through the pieces, newest first |
 | | PLAY | opens the piece and plays it |
+| | SAVE | NEW SONG: a set-up screen for an empty piece. KNOB1 the channels (1 to 8, default 4: DRUMS, BASS, CHORDS, LEAD), SELECT picks one, PRESETS its role (its sound: the role's own, changed in PLAYER as in any piece), KNOB2 the tempo (40 to 240 BPM, default 120), KNOB3 the length (1 to 64 bars, default 8). PLAY makes it, saved at once as `NEW 1` (`NEW 2`… when the name is taken), and opens it in PLAYER: fill it with STEPS, REC or EDIT. HOME cancels: nothing is made. A full library says `LIBRARY FULL` and makes nothing |
 | PLAYER | PLAY | stops / plays (from the start) |
 | | KNOB1 (or SELECT) | picks a channel |
 | | PRESETS | changes that channel's sound, heard at once |

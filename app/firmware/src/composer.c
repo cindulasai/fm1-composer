@@ -4,7 +4,8 @@
  * Built on Dinghy (zvenson) / Felucca (Leo Kuroshita, Hugelton Instruments) / SLOOP (isod89): platform.c, everything below it.
  * Sound engines: Felucca-Engines (MIT), app/engines. The chip's rules: docs/RULES.md.
  *
- * LIBRARY: SELECT turns, PLAY opens the piece, playing it.
+ * LIBRARY: SELECT turns, PLAY opens the piece, playing it; SAVE: NEW SONG (US-38), an empty piece of the channels,
+ * roles, tempo and bars set up there, saved at once as NEW n and opened in PLAYER.
  * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound (a drum channel: the 35 kits),
  * KNOB2 the tempo, KNOB3 / KNOB4 its voice (US-30: AUTO = the sound's SLOOP mode + glide, POLY, MONO, LEGATO) / glide,
  * saved in the piece (SAVE); white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
@@ -101,7 +102,7 @@ static void midi_in(int main_loop)
 {
     uint8_t st, d1, d2;
     while (sq_w - sq_r <= 32u - 2u && midi_get(&st, &d1, &d2))
-        if (scr) lk_midi(st, d1, d2, sel, pl_v.nch);
+        if (scr && scr != 5u) lk_midi(st, d1, d2, sel, pl_v.nch);   /* (not in LIBRARY or NEW SONG: no piece open) */
     if (main_loop && midi_in_lost) {
         midi_in_lost = 0;
         lk_midi_off();
@@ -812,6 +813,64 @@ static void steps_input(uint32_t pressed, uint32_t keys)
     }
 }
 
+/* NEW SONG (US-38, scr 5): KNOB1 the channels (1..8), SELECT picks one, PRESETS its role, KNOB2 the tempo, KNOB3 the
+ * bars; PLAY makes the empty piece (saved to the library at once, as NEW n) and opens it in the PLAYER; HOME cancels */
+static const uint8_t NS_ROLES[PIECE_MAX_CH] = {ROLE_DRUMS, ROLE_BASS, ROLE_CHORDS, ROLE_LEAD, ROLE_PAD, ROLE_ARP,
+                                               ROLE_COUNTER, ROLE_PERC};
+static ns_t ns;
+static char ns_name[PIECE_NAME + 1];
+static void newsong_open(void)
+{
+    uint32_t i;
+    ns.n = 4u; ns.sel = 0; ns.tempo_x10 = 1200u; ns.bars = 8u;
+    for (i = 0; i < PIECE_MAX_CH; i++) ns.role[i] = NS_ROLES[i];
+    scr = 5u;
+    dirty = D_ALL;
+    set_status("PLAY MAKES IT  HOME CANCELS");
+}
+static int ns_taken(const char *nm)            /* a library piece of this name? */
+{
+    uint32_t i, k;
+    for (i = 0; i < lib_count(); i++) {
+        const lib_entry_t *e = lib_entry(i);
+        for (k = 0; e && e->name[k] == nm[k] && nm[k]; k++) {}
+        if (e && e->name[k] == nm[k]) return 1;
+    }
+    return 0;
+}
+static void newsong_input(uint32_t pressed)
+{
+    int32_t d;
+    if ((d = fm1_enc_take(ENC_KNOB1)) != 0) {
+        ns.n = (uint32_t)clampi((int32_t)ns.n + d, 1, (int32_t)PIECE_MAX_CH);
+        if (ns.sel >= ns.n) ns.sel = ns.n - 1u;
+        dirty |= D_LIST;
+    }
+    if ((d = fm1_enc_take(ENC_SELECT)) != 0) { ns.sel = (uint32_t)clampi((int32_t)ns.sel + d, 0, (int32_t)ns.n - 1); dirty |= D_LIST; }
+    if ((d = fm1_enc_take(ENC_PRESETS)) != 0) {
+        int32_t r = ((int32_t)ns.role[ns.sel] + d) % (int32_t)ROLE_COUNT;
+        ns.role[ns.sel] = (uint8_t)(r < 0 ? r + (int32_t)ROLE_COUNT : r);
+        dirty |= D_LIST;
+    }
+    if ((d = fm1_enc_take(ENC_KNOB2)) != 0) { ns.tempo_x10 = (uint32_t)clampi((int32_t)ns.tempo_x10 + d * 10, 400, 2400); dirty |= D_HEAD; }
+    if ((d = fm1_enc_take(ENC_KNOB3)) != 0) { ns.bars = (uint32_t)clampi((int32_t)ns.bars + d, 1, 64); dirty |= D_HEAD; }
+    if (pressed & 1u << BTN_HOME) { scr = 0; dirty = D_ALL; status = ""; return; }
+    if (pressed & 1u << BTN_PLAY) {
+        uint32_t k, len;
+        int32_t id;
+        int i;
+        for (k = 1u; k < 1000u; k++) { ui_fmt(ns_name, sizeof ns_name, "NEW %u", k); if (!ns_taken(ns_name)) break; }
+        len = edit_blank(play_buf, ns.n, ns.role, ns.tempo_x10, ns.bars * PIECE_PPQ * 4u, ns_name);
+        id = lib_put(ns_name, play_buf, len);
+        if (id < 0) { set_status(id == LIB_FULL ? "LIBRARY FULL" : "SAVE FAILED"); return; }   /* nothing made */
+        if ((i = lib_find((uint32_t)id)) < 0 || open_piece((uint32_t)i)) return;
+        cur = (uint32_t)i;
+        scr = 1;
+        dirty = D_ALL;
+        set_status("NEW SONG: EMPTY, FILL IT WITH STEPS OR REC");
+    }
+}
+
 static void library_input(uint32_t pressed)
 {
     int32_t d = fm1_enc_take(ENC_SELECT);
@@ -821,6 +880,7 @@ static void library_input(uint32_t pressed)
         cur = (uint32_t)(c < 0 ? 0 : c >= (int32_t)n ? (int32_t)n - 1 : c);
         dirty |= D_LIST;
     }
+    if (pressed & 1u << BTN_SAVE) { newsong_open(); return; }   /* NEW SONG (US-38) */
     if ((pressed & 1u << BTN_PLAY) && n && !open_piece(cur)) {
         scr = 1;
         player_play();
@@ -863,6 +923,8 @@ static void app_main(void)
         if (scr == 0) {
             fm1_enc_take(ENC_KNOB1); fm1_enc_take(ENC_PRESETS); fm1_enc_take(ENC_KNOB2); fm1_enc_take(ENC_KNOB3);
             library_input(pressed);
+        } else if (scr == 5u) {
+            newsong_input(pressed);
         } else {
             if (scr == 2) {
                 if (pressed & 1u << BTN_HOME) { scr = 1; dirty = D_ALL; tl_on = 0; edit_tools_end(); }
@@ -918,6 +980,7 @@ static void app_main(void)
         if (dirty) {
             idle_ok = 1;
             if (scr == 0) ui_library(dirty, cur, &top);
+            else if (scr == 5u) { ns.status = status; ui_newsong(dirty, &ns); }
             else if (scr == 2) {
                 piece_note_t cn[16];
                 uint32_t n = cell_notes(cn);
