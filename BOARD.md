@@ -34,7 +34,7 @@
 | US-31 | Part tools in EDIT: shift, ×2 / ½, transpose | 1 | done | 0 |
 | US-32 | Show the way: README + COMPOSER tile guide | 1 | done | 1 |
 | US-33 | Send never loses a frame: the jack queues frames | 1 | done | 1 |
-| US-34 | Live send: takes over at the next bar | 1 | proven | 0 |
+| US-34 | Live send: takes over at the next bar | 1 | todo | 1 |
 
 ## Impediments
 - US-14, US-15: done-self: v3 Adversary FAILs were on criteria replaced by v4 (US-16, US-17, done); their remaining criteria (14.4 key file, 14.5 server, 15.5 emulator pin) were not re-reviewed fresh

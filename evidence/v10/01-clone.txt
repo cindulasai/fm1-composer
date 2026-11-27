@@ -1,0 +1,9 @@
+COMMAND: rm -rf adversary/clone && git clone -q . adversary/clone && cd adversary/clone/app && python3 -m venv ../.venv && ../.venv/bin/pip install -q -r tools/requirements.txt && ../.venv/bin/python -m playwright install chromium-headless-shell && FM1_LIVE=/nonexistent PY=$PWD/../.venv/bin/python sh check.sh
+
+[notice] A new release of pip is available: 26.1.2 -> 26.3
+[notice] To update, run: /Users/bot/Claude/Projects/fm1-composer/adversary/clone/.venv/bin/python3.14 -m pip install --upgrade pip
+ssss...............................s.............s                       [100%]
+352 passed, 58 skipped in 275.21s (0:04:35)
+studio emu e2e: SKIP (needs build/composer.fwsc from CI and studio/web/emu: sh tools/get_web_emu.sh)
+emu e2e: SKIP (no fm1-live at /nonexistent: sh tools/get_emu.sh)
+EXIT_CODE: 0

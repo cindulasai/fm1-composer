@@ -134,6 +134,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 52 | v10 live send (council, within decision 50): swap in RAM at the next bar (the player already plays from play_buf; xfer stages a checked piece), save to flash only when stopped (erase silences audio); the newer of two pending pieces wins; device-side channel changes carry over | council |
 | 53 | v10 live send never drops work: if the playing piece has unsaved device edits, the sent piece waits and switches when playback stops (footer `NEXT AT STOP: <name>`); otherwise at the next bar | council |
 | 54 | (v9 Adversary) SLIDE glides on every voice mode, not only MONO / LEGATO as in SLOOP: new pieces are AUTO and most sounds POLY, so SLOOP's rule made SLIDE silently do nothing; the slid note's voice glides into the next note. The README documents voice modes + SLIDE. 33.3: 5 runs locally, 20 on CI | council |
+| 55 | (v10 Adversary) only device edits hold a live switch (decision 53): a live piece not yet saved does not, so live sends chain at the next bar. A live piece replaced before it was saved is not saved (no flash write while playing) and never silently: fm1c names it (exit 1), Studio says so when the footer showed `LIVE: <it>`; README says it. Studio confirms a switch by read-back, not by a footer alone | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
