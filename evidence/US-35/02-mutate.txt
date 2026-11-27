@@ -1,0 +1,6 @@
+COMMAND: sh prove mutants US-35
+SURVIVED app/tools/gen_samples.py:15  " and " -> " or "  | One SAMPLE preset is written per set (SET_PRESETS: its name and sound). A file named ..._m<n>.wav has its root
+SURVIVED app/firmware/src/synth.c:147  " and " -> " or "  | static uint8_t ch_vm[NPART], ch_vg[NPART];      /* (US-30) each channel's voice mode (VM_*) and glide, as the piece asks */
+SURVIVED app/firmware/src/synth.c:622  " < " -> " <= "  | for (k = 0; k < cap && !v; k++)             /* the same live note again: retriggered */
+MUTANTS: 12 tried, 9 killed, 3 survived (of 464 candidates in US-35)
+EXIT_CODE: 1

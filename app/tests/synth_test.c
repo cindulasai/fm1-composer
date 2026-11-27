@@ -59,6 +59,40 @@ static void test_4_1_budget_and_stealing(void)
     for (k = 0; k < NVOICE; k++) CHECK(trk[1].v[k].stage != 4u, "fade finished");
 }
 
+/* SLOOP's mono note-off (mono_off) lets go of its own voice only: a POLY voice left held when the channel went MONO
+ * keeps sounding until its own key is let go */
+/* a live note held on a voice past the channel's cap (its voice mode went to MONO meanwhile): the same key again
+ * retriggers that voice, never a second voice of the same note */
+static void test_35_live_note_held_past_a_smaller_cap_is_retriggered(void)
+{
+    uint32_t k, n = 0;
+    synth_init(); synth_sound(4, find("ANALOG", "SOFT PAD")); synth_voice(4, VM_POLY, 0);
+    synth_live_on(4, 60, 100); synth_live_on(4, 64, 100);
+    CHECK(trk[4].v[1].note == 64 && (vlive[4] & 2u), "the second live note on voice 1");
+    synth_voice(4, VM_MONO, 0);
+    CHECK(chs[4].cap == 1u, "MONO: cap 1");
+    synth_live_on(4, 64, 110);
+    for (k = 0; k < NVOICE; k++) if (trk[4].v[k].active && trk[4].v[k].gate && trk[4].v[k].note == 64) n++;
+    CHECK(n == 1, "64 again: retriggered, not doubled (%u voices)", (unsigned)n);
+    CHECK(trk[4].v[0].note == 60 && trk[4].v[0].gate, "60 still held on voice 0");
+}
+
+static void test_4_1_mono_off_leaves_a_poly_voice_from_before(void)
+{
+    synth_init();
+    synth_sound(4, find("ANALOG", "SOFT PAD"));
+    synth_voice(4, VM_POLY, 0);
+    synth_on(4, 60, 100); synth_on(4, 64, 100);
+    CHECK(trk[4].v[1].note == 64 && trk[4].v[1].gate, "poly: 64 held in voice 1");
+    synth_voice(4, VM_MONO, 0);
+    synth_on(4, 67, 100);
+    synth_off(4, 67);
+    CHECK(trk[4].v[0].gate == 0, "the mono note let go");
+    CHECK(trk[4].v[1].note == 64 && trk[4].v[1].gate, "the poly voice from before still held");
+    synth_off(4, 64);
+    CHECK(trk[4].v[1].gate == 0, "its own key lets it go");
+}
+
 static void test_4_1_mono_and_retrigger(void)
 {
     uint32_t bass;
@@ -128,8 +162,8 @@ static void test_4_3_role_defaults(void)
     }
     CHECK(sound_default(ROLE_DRUMS) == find("KIT", "STD KIT"), "drums get the kit");
     CHECK(sound_default(200) == sound_default(ROLE_OTHER), "unknown role: other's sound");
-    CHECK(sound_count == 80u + ENG_PHYS.npresets + ENG_DIGITAL.npresets + ENG_FORMANT.npresets && sound_count <= SOUND_MAX,
-          "catalog size %u", sound_count);   /* v4's 40, SLOOP's 32 kits, FM6, PHYS, DIGITAL, VOICE */
+    CHECK(sound_count == 80u + ENG_PHYS.npresets + ENG_DIGITAL.npresets + ENG_FORMANT.npresets + ENG_SAMPLE.npresets &&
+          sound_count <= SOUND_MAX, "catalog size %u", sound_count);   /* v4's 40, SLOOP's 32 kits, FM6, PHYS, DIGITAL, VOICE, SAMPLE */
     CHECK(snd_eq(sound_name(sound_count), "?") && snd_eq(sound_engine(9999), "?"), "out of range names");
 }
 
@@ -954,7 +988,7 @@ static void test_20_1_every_phys_digital_voice_preset_sounds_and_ends(void)
             n++;
         }
     printf("20.1 %u presets (PHYS %u, DIGITAL %u, VOICE %u, ids %u..%u) sound and end\n", n, ENG_PHYS.npresets,
-           ENG_DIGITAL.npresets, ENG_FORMANT.npresets, first_of(&ENG_PHYS), sound_count - 1u);
+           ENG_DIGITAL.npresets, ENG_FORMANT.npresets, first_of(&ENG_PHYS), first_of(&ENG_FORMANT) + ENG_FORMANT.npresets - 1u);
 }
 
 /* SLOOP's three engines as copied: every preset as it is, then with its EDIT values moved (each DIGITAL algorithm,
@@ -1173,11 +1207,246 @@ static void test_20_6_sixteen_voices_of_the_costliest_cost(void)
     CHECK(us_per_256 < 3000.0, "20.6 host render too slow: %.0f us", us_per_256);
 }
 
+/* ---- US-35: SLOOP's SAMPLE engine, PIANO / STRINGS / HORNS ---- */
+static const char *const SAMPLED[3] = {"PIANO", "STRINGS", "HORNS"};
+static int32_t step_prev;                               /* the last left sample run_steps saw */
+static int32_t step_max;                                /* the largest jump between two neighbouring samples */
+
+/* blocks of the mix, left channel: the largest step between neighbouring samples; every voice of channels 0..2
+ * inside its zone and its recording (no read past a sample's end) */
+static void run_steps(uint32_t blocks)
+{
+    int32_t out[2 * CTL];
+    uint32_t b, i, ch, k;
+    for (b = 0; b < blocks; b++) {
+        memset(out, 0, sizeof out);
+        synth_apply();
+        synth_render(out, CTL);
+        for (i = 0; i < CTL; i++) {
+            int32_t d = out[2 * i] - step_prev;
+            if (d < 0) d = -d;
+            if (d > step_max) step_max = d;
+            step_prev = out[2 * i];
+        }
+        for (ch = 0; ch < 3u; ch++)
+            for (k = 0; k < NVOICE; k++) {
+                const voice_t *v = &trk[ch].v[k];
+                if (!v->active || chs[ch].e != &ENG_SAMPLE) continue;
+                CHECK((uint32_t)v->s[4] < NELEM(SMP_ZONES), "35 zone %d out of the table", v->s[4]);
+                CHECK(v->ph[0] <= SMP_ZONES[(uint32_t)v->s[4] % NELEM(SMP_ZONES)].n, "35 read past the end: %u of %u",
+                      v->ph[0], SMP_ZONES[(uint32_t)v->s[4] % NELEM(SMP_ZONES)].n);
+            }
+    }
+}
+#define QUARTER_FS 8192                                 /* a click: a step over 1/4 full scale */
+
+static uint32_t sampled_id(uint32_t k) { return find("SAMPLE", SAMPLED[k]); }
+
+static void test_35_1_the_three_sets_and_their_zones(void)
+{
+    uint32_t k, note, i;
+    synth_init();
+    CHECK(sampled_id(0) == 135u && sampled_id(1) == 136u && sampled_id(2) == 137u, "35.2 PIANO STRINGS HORNS are 135-137");
+    CHECK(SMP_NSETS == 3 && NELEM(SMP_ZONES) == 11u, "35.1 3 sets, 11 zones");
+    for (k = 0; k < 3u; k++) {
+        const smp_set_t *set = &SMP_SETS[k];
+        CHECK(sounds[sampled_id(k)].pr->e[0] == (int8_t)k && sounds[sampled_id(k)].pr->e[3] == 1, "35.1 %s: SET, LOOP",
+              SAMPLED[k]);
+        for (note = 0; note < 128u; note++) {           /* every key on the zone of the nearest root */
+            uint32_t best = 999, got;
+            synth_init();
+            synth_sound(0, sampled_id(k));
+            synth_on(0, note, 100);
+            got = (uint32_t)trk[0].v[0].s[4];
+            for (i = 0; i < set->nz; i++) {
+                int32_t d = (int32_t)note - SMP_ZONES[set->z0 + i].root16 / 16;
+                if ((uint32_t)(d < 0 ? -d : d) < best) best = (uint32_t)(d < 0 ? -d : d);
+            }
+            CHECK(got >= set->z0 && got < set->z0 + set->nz, "35.1 %s note %u: zone %u not its set's", SAMPLED[k], note, got);
+            {
+                int32_t d = (int32_t)note - SMP_ZONES[got % NELEM(SMP_ZONES)].root16 / 16;
+                CHECK((uint32_t)(d < 0 ? -d : d) == best, "35.1 %s note %u: zone root %d not the nearest", SAMPLED[k], note,
+                      SMP_ZONES[got % NELEM(SMP_ZONES)].root16 / 16);
+            }
+        }
+        for (i = 0; i < set->nz; i++) {                 /* each zone loops inside its recording, the ADPCM state kept */
+            const smp_zone_t *z = &SMP_ZONES[set->z0 + i];
+            CHECK(z->looped == 1 && z->ls < z->le && z->le < z->n && z->rate == 32768u && z->idx <= 88u,
+                  "35.1 %s zone %u: loop %u..%u of %u", SAMPLED[k], i, z->ls, z->le, z->n);
+            CHECK(z->off + (z->n + 1u) / 2u <= sizeof SMP_DATA, "35.1 %s zone %u past SMP_DATA", SAMPLED[k], i);
+        }
+    }
+    printf("35.1 PIANO STRINGS HORNS: sounds 135-137, every key on the nearest zone, %u B of ADPCM\n",
+           (unsigned)sizeof SMP_DATA);
+}
+
+/* a held STRINGS / HORNS note goes past its recording's end (the loop) without a click and keeps sounding; a held PIANO
+ * note decays and its voice ends by itself */
+static void test_35_1_loops_hold_and_piano_ends(void)
+{
+    uint32_t k, b;
+    int32_t worst_loop = 0, worst_own = 0;
+    for (k = 1; k < 3u; k++) {
+        const smp_set_t *set = &SMP_SETS[k];
+        uint32_t i;
+        for (i = 0; i < set->nz; i++) {
+            uint32_t note = (uint32_t)(SMP_ZONES[set->z0 + i].root16 / 16), wraps = 0, last = 0;
+            synth_init();
+            synth_sound(0, sampled_id(k));
+            synth_level(0, 127, 64);
+            synth_on(0, note, 127);
+            int32_t at_loop = 0, own = 0, after = 0;
+            step_prev = 0; step_max = 0;
+            run_steps(SEC(0.05));                        /* (the attack) */
+            for (b = 0; b < SEC(2.0); b++) {             /* the block a wrap falls in and the next: the loop point */
+                step_max = 0;
+                run_steps(1);
+                if (trk[0].v[0].ph[0] < last) { wraps++; after = 2; }
+                last = trk[0].v[0].ph[0];
+                if (after) { after--; if (step_max > at_loop) at_loop = step_max; }
+                else if (step_max > own) own = step_max;
+            }
+            step_max = at_loop;
+            if (own > worst_own) worst_own = own;
+            if (at_loop > worst_loop) worst_loop = at_loop;
+            peak = 0; tail_abs = 0; tail_n = 0;
+            run(SEC(0.5), 0);
+            CHECK(wraps >= 10u, "35.1 %s note %u: looped %u times in 2 s", SAMPLED[k], note, wraps);
+            CHECK(step_max < QUARTER_FS, "35.1 %s note %u: step %d at the loop", SAMPLED[k], note, step_max);
+            CHECK(synth_active() == 1u && tail_abs / (tail_n ? tail_n : 1) > 500, "35.1 %s note %u: held, still heard (%lld)",
+                  SAMPLED[k], note, (long long)(tail_abs / (tail_n ? tail_n : 1)));
+        }
+    }
+    {                                                   /* PIANO */
+        int64_t early, late;
+        synth_init();
+        synth_sound(0, sampled_id(0));
+        synth_level(0, 127, 64);
+        synth_on(0, 60, 127);
+        tail_abs = 0; tail_n = 0;
+        run(SEC(0.3), 0);
+        early = tail_abs / (tail_n ? tail_n : 1);
+        tail_abs = 0; tail_n = 0;
+        run(SEC(1.0), SEC(0.7));
+        late = tail_abs / (tail_n ? tail_n : 1);
+        for (b = 0; b < SEC(20.0) && synth_active(); b++) run(1, 1u << 30);
+        CHECK(late * 3 < early, "35.1 PIANO decays: %lld then %lld", (long long)early, (long long)late);
+        CHECK(synth_active() == 0, "35.1 PIANO: a held note never ends");
+        printf("35.1 STRINGS / HORNS held 2 s, velocity 127: largest step at a loop point %d (elsewhere %d; click %d); "
+               "PIANO held: %lld -> %lld, ends after %.1f s\n", worst_loop, worst_own, QUARTER_FS, (long long)early,
+               (long long)late, 1.3 + b * CTL / 44100.0);
+    }
+}
+
+static void test_35_4_extremes_retriggers_and_no_stuck_voice(void)
+{
+    uint32_t k, r;
+    for (k = 0; k < 3u; k++) {
+        synth_init();
+        synth_sound(0, sampled_id(k));
+        synth_level(0, 127, 64);
+        synth_on(0, 0, 1); synth_on(0, 127, 127); synth_on(0, 0, 127); synth_on(0, 127, 1);
+        run_steps(SEC(0.3));
+        for (r = 0; r < 100u; r++) {                   /* (run: every sample within +-32767) */
+            synth_on(0, r % 3u == 0u ? 0u : r % 3u == 1u ? 127u : 60u, 1u + (r * 13u) % 127u);
+            run_steps(SEC(0.01));
+            run(1, 1u << 30);
+        }
+        synth_off(0, 0); synth_off(0, 127); synth_off(0, 60);
+        tail_abs = 0; tail_n = 0;
+        run(SEC(11.0), SEC(10.5));
+        CHECK(synth_active() == 0, "35.4 %s: a voice stuck", SAMPLED[k]);
+        CHECK(tail_abs / (tail_n ? tail_n : 1) < 200, "35.4 %s: still sounding", SAMPLED[k]);
+    }
+    printf("35.4 notes 0 / 127 at velocity 1 / 127, 100 retriggers: inside the recordings, every voice ends\n");
+}
+
+/* a low six-note chord held at velocity 127, then `what` happens: the largest step in the 50 ms after (without the
+ * declick, synth.c dk, a sound changed under it steps ~10700 on HORNS, ~5700 on PIANO) */
+static int32_t chord_then(uint32_t k, int what)
+{
+    synth_init();
+    synth_sound(0, sampled_id(k));
+    synth_level(0, 127, 64);
+    synth_on(0, 36, 127); synth_on(0, 40, 127); synth_on(0, 43, 127); synth_on(0, 48, 127); synth_on(0, 52, 127); synth_on(0, 55, 127);
+    step_prev = 0;
+    run_steps(SEC(0.3));
+    step_max = 0;
+    run_steps(SEC(0.02));
+    {
+        int32_t before = step_max;
+        step_max = 0;
+        if (what == 0) synth_sound(0, sampled_id((k + 1u) % 3u));   /* another sampled sound */
+        if (what == 1) synth_sound(0, find("ANALOG", "SAW LEAD"));  /* a synthesised one */
+        if (what == 2) synth_ch_off(0);                            /* mute */
+        if (what == 3) synth_hush();                               /* stop */
+        if (what == 4) synth_on(0, 43, 127);                       /* the same note again */
+        run_steps(SEC(0.05));
+        CHECK(before > 30 && before < QUARTER_FS * 3 / 4, "35.4 %s: the chord's own steps %d (heard, well under a click)",
+              SAMPLED[k], before);
+    }
+    return step_max;
+}
+
+static void test_35_4_sound_change_mute_stop_retrigger_no_click(void)
+{
+    static const char *const WHAT[5] = {"sound changed to another sampled", "sound changed to SAW LEAD", "mute", "stop",
+                                        "the same note again"};
+    uint32_t k;
+    int w;
+    int32_t worst = 0;
+    for (k = 0; k < 3u; k++)
+        for (w = 0; w < 5; w++) {
+            int32_t s = chord_then(k, w);
+            CHECK(s < QUARTER_FS, "35.4 %s, %s: a click (step %d)", SAMPLED[k], WHAT[w], s);
+            if (s > worst) worst = s;
+            if (w == 2 || w == 3) {
+                run(SEC(11.0), 1u << 30);
+                CHECK(synth_active() == 0, "35.4 %s, %s: a voice stuck", SAMPLED[k], WHAT[w]);
+            }
+        }
+    printf("35.4 a sound changed under a chord, mute, stop, a retrigger: largest step %d (click: %d)\n", worst, QUARTER_FS);
+}
+
+/* 16 sampled voices on three channels, then more notes: the oldest is stolen, faded, never a click */
+static void test_35_4_sixteen_sampled_voices_steal_cleanly(void)
+{
+    uint32_t n, ch;
+    synth_init();
+    for (ch = 0; ch < 3u; ch++) { synth_sound(ch, sampled_id(ch)); synth_level(ch, 127, 64); }
+    step_prev = 0; step_max = 0;
+    for (n = 0; n < 16u; n++) {                         /* 6 + 5 + 5 notes */
+        ch = n < 6u ? 0u : n < 11u ? 1u : 2u;
+        synth_on(ch, 40u + n * 2u, 70);
+        run_steps(SEC(0.02));
+    }
+    CHECK(synth_active() == 16u, "35.4 16 sampled voices sound: %u", synth_active());
+    run_steps(SEC(0.1));
+    printf("35.4 16 sampled voices: their own largest step %d\n", step_max);
+    step_max = 0;
+    for (n = 0; n < 8u; n++) {                          /* 8 more: each takes the oldest */
+        uint32_t oldest = 0xFFFFFFFFu, oc = n % 3u, ok = 0, k;
+        for (k = 0; k < NVOICE; k++)                    /* (synth.c steal_pick: none released, the channel's oldest) */
+            if (SOUNDING(trk[oc].v[k]) && trk[oc].v[k].age < oldest) { oldest = trk[oc].v[k].age; ok = k; }
+        synth_on(oc, 81u + n, 70);                      /* (a key not sounding yet) */
+        CHECK(synth_active() == 16u, "35.4 note %u over 16: %u sound", n, synth_active());
+        CHECK(!SOUNDING(trk[oc].v[ok]), "35.4 note %u over 16: the oldest (channel %u) not stolen", n, oc);
+        run_steps(SEC(0.03));
+    }
+    CHECK(step_max < QUARTER_FS, "35.4 stealing sampled voices clicks: step %d", step_max);
+    synth_all_off();
+    run(SEC(11.0), 1u << 30);
+    CHECK(synth_active() == 0, "35.4 16 voices: a voice stuck");
+    printf("35.4 16 sampled voices, 8 more notes: the oldest stolen each time, largest step %d\n", step_max);
+}
+
 int main(void)
 {
     test_4_4_render_before_init_is_silent();
     test_4_1_budget_and_stealing();
     test_4_1_mono_and_retrigger();
+    test_4_1_mono_off_leaves_a_poly_voice_from_before();
+    test_35_live_note_held_past_a_smaller_cap_is_retriggered();
     test_4_1_full_channel_takes_its_released_voice();
     test_4_2_sustain_level_held();
     test_4_2_drum_shapes();
@@ -1215,6 +1484,11 @@ int main(void)
     test_20_3_eight_channels_on_phys_from_the_pool();
     test_20_5_extreme_notes_and_retriggers();
     test_20_6_sixteen_voices_of_the_costliest_cost();
+    test_35_1_the_three_sets_and_their_zones();
+    test_35_1_loops_hold_and_piano_ends();
+    test_35_4_extremes_retriggers_and_no_stuck_voice();
+    test_35_4_sound_change_mute_stop_retrigger_no_click();
+    test_35_4_sixteen_sampled_voices_steal_cleanly();
     printf("%s (%u sounds)\n", fails ? "FAILED" : "ok", sound_count);
     return fails ? 1 : 0;
 }

@@ -121,7 +121,7 @@ pub fn fit_key(bytes: &[u8], name: &str, poly: usize, key: Option<(u8, u8)>) -> 
                 unknown.push(format!("'{}'", if p.name.is_empty() { p.role } else { p.name.as_str() }));
                 255
             }
-            Some(s) if s >= sounds::FM6_FIRST => {
+            Some(s) if (sounds::FM6_FIRST..sounds::FM6_FIRST + sounds::FM6_ALT.len() as u8).contains(&s) => {
                 fm6 += 1;
                 if fm6 > sounds::FM6_POOL {
                     let alt = sounds::FM6_ALT[(s - sounds::FM6_FIRST) as usize];

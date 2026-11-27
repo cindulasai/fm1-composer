@@ -204,3 +204,7 @@ app/tools/fm1c/cli.py | raise UsageError(f"COMPOSER Studio is not built in {web}
 app/firmware/src/composer.c | _Static_assert(sizeof fxprefs <= SECTOR_MAX, "the effects fit a blob"); | compile-time: the blob is far below SECTOR_MAX, < and <= both hold
 app/firmware/src/composer.c | int was = ch < pl_v.nch && ch < v.nch;  /* (a channel both pieces have) */ | a channel past the old piece's nch holds its role's default sound and effects (no screen reaches it), so counting it as shared carries nothing
 app/firmware/src/composer.c | for (ch = 0; ch < PIECE_MAX_CH; ch++) { player_mute(ch, (int)(mute >> ch & 1u)); player_solo(ch, (int)(solo >> ch & 1u)); } | player_mute / player_solo ignore ch >= PIECE_MAX_CH, so the extra pass is a no-op
+app/tools/gen_samples.py | reserved: never an input), SLOOP's other sets and its GM kit, SLICE's BREAK, the build cache. STRGS and HORNS loop | inside the module docstring: text, not code
+app/firmware/src/synth.c | static uint8_t ch_vm[NPART], ch_vg[NPART];      /* (US-30) each channel's voice mode (VM_*) and glide, as the piece asks */ | 'and' inside a comment: text, not code
+app/tools/gen_samples.py | One SAMPLE preset is written per set (SET_PRESETS: its name and sound). A file named ..._m<n>.wav has its root | inside the module docstring: text, not code
+app/firmware/src/synth.c | for (k = 0; k < NVOICE && !v; k++)          /* the same live note again: retriggered (on any voice: the cap may | k = NVOICE: vlive is 8 bits, so live_v is false before the voice is read (short-circuit): equivalent

@@ -158,13 +158,18 @@ their length and velocity, the channel's loop and swing. The steps are the piece
 (no separate patterns): what STEPS changes, EDIT shows, and the other way round.
 
 The player shows each channel's role (LEAD, BASS, DRUMS…), its sound and M / S, with the position as
-bar:beat. There are 135 sounds: 40 from six Felucca engines plus COMPOSER's own drum kits, then SLOOP's (copied
+bar:beat. There are 138 sounds: 40 from six Felucca engines plus COMPOSER's own drum kits, then SLOOP's (copied
 unchanged): 32 synthesized kits (ids 40–71), FM6's DX7 patches (72–79), PHYS physical models (plucked strings, bells,
-bars, drum heads, sitar: 80–105), DIGITAL 4-operator FM keys and mallets (106–127) and VOICE sung vowels (128–134).
-PHYS can play on all 8 channels at once, FM6 on 3. A piece starts each channel on its instrument's sound:
-text2midi's instrument (named in the track), else the part's General MIDI program (an electric piano plays TINE EP,
-an upright bass ROUND BASS, a GM drum kit one of the kits; the one table is `tools/fm1c/sounds.py`). A part with
-neither starts on its role's default sound, and fm1c lists it in its report.
+bars, drum heads, sitar: 80–105), DIGITAL 4-operator FM keys and mallets (106–127) and VOICE sung vowels (128–134),
+then three recorded instruments played by SLOOP's SAMPLE engine (`engines/eng_sample.c`, IMA ADPCM): **PIANO** (a
+Steinway B grand, from VCSL), **STRINGS** (violin and viola sections) and **HORNS** (trumpet and trombone, both from
+VSCO-2 CE), ids 135–137. They are SLOOP's CC0 sample sets (`assets/samples-cc0`, each file's source in its
+`ATTRIBUTION.txt`), 59.5 KB of flash in all; a held STRINGS or HORNS note loops, a held PIANO note fades out.
+PHYS can play on all 8 channels at once, FM6 on 3, the sampled sounds on all 8. A piece starts each channel on its
+instrument's sound: text2midi's instrument (named in the track), else the part's General MIDI program (the pianos,
+programs 0–7, play PIANO; the strings, 40–51, STRINGS; the brass, 56–63, HORNS; an upright bass ROUND BASS, a GM
+drum kit one of the kits; the one table is `tools/fm1c/sounds.py`). A part with neither starts on its role's default
+sound, and fm1c lists it in its report.
 
 Every channel has SLOOP's effects: sends to a shared reverb (SLOOP's feedback delay network), a delay that follows
 the tempo (1/8 note) and a chorus, plus a low-pass FILTER with RESO and DRIVE (SLOOP's DIST). After them, SLOOP's
@@ -235,7 +240,10 @@ The gate runs, in order:
 GPL-3.0-only, see `../LICENSING.md`. COMPOSER is built on these:
 - Dinghy (zvenson)
 - Felucca (Leo Kuroshita, Hügelton Instruments)
-- SLOOP (isod89)
+- SLOOP (isod89): its engines, effects and voice code, copied (GPL-3.0); the SAMPLE engine `engines/eng_sample.c`
+  and its generator `tools/gen_samples.py` with them
+- The PIANO, STRINGS and HORNS samples: SLOOP's CC0 sets from Versilian Studios' VCSL and VSCO-2 CE (CC0 1.0,
+  public domain), `assets/samples-cc0/ATTRIBUTION.txt`
 - Felucca-Engines (MIT)
 - fm1-emu (Joakim Eriksson, MIT): used for testing, and Studio's FM-1 on the page
 - text2midi (the composer crates in `studio/engine`, copied unchanged; see `studio/engine/PROVENANCE.md`)

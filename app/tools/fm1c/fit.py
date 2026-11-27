@@ -270,7 +270,7 @@ def fit(path: str, name: str | None = None, limits: Limits | None = None,
         if snd is None:
             unknown.append(f"'{p.name or p.role}'")
             snd = DEFAULT_SOUND
-        elif snd >= sounds.FM6_FIRST:
+        elif sounds.FM6_FIRST <= snd < sounds.FM6_FIRST + len(sounds.FM6_ALT):   # (only FM6 takes a pool block)
             fm6 += 1
             if fm6 > sounds.FM6_POOL:
                 alt = sounds.FM6_ALT[snd - sounds.FM6_FIRST]
