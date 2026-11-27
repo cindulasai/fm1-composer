@@ -36,9 +36,10 @@ BTN_PLAY, ENC_PRESETS, SAW_LEAD, KITS = 12, 6, 3, 32
 
 def test_20_4_presets_reach_phys_digital_voice_strip_names_wav_sounds(tmp_path):
     names = catalog(tmp_path)
-    firsts = {"PHYS": 80, "DIGITAL": 80 + 26, "VOICE": 80 + 26 + 22}           # (v5 ids: after FM6's 72..79)
-    assert len(names) == 80 + 26 + 22 + 7
-    assert [names[i] for i in firsts.values()] == ["BELL TREE", "RHODES", "CHOIR AAH"]
+    firsts = {"PHYS": 80, "DIGITAL": 80 + 26, "VOICE": 80 + 26 + 22,         # (v5 ids: after FM6's 72..79)
+              "SAMPLE": 80 + 26 + 22 + 7}                                     # (v11, US-35: PIANO STRINGS HORNS)
+    assert len(names) == 80 + 26 + 22 + 7 + 3
+    assert [names[i] for i in firsts.values()] == ["BELL TREE", "RHODES", "CHOIR AAH", "PIANO"]
     notes = [Note(t * 96, 60 + (t % 4) * 2, 90, 110) for t in range(64)]
     data = encode(Piece("eng", 1200, 64 * 96, [Channel("lead", notes)]))
     lines, t = push(100, data)
