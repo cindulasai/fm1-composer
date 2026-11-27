@@ -9,7 +9,8 @@
  * PLAYER: PLAY starts / stops; KNOB1 (or SELECT) picks a channel, PRESETS its sound (a drum channel: the 35 kits),
  * KNOB2 the tempo, KNOB3 / KNOB4 its voice (US-30: AUTO = the sound's SLOOP mode + glide, POLY, MONO, LEGATO) / glide,
  * saved in the piece (SAVE); white keys F3..F4 (1..8) mute a channel, holding SEL a key solos it; SAVE keeps the sounds, mutes,
- * tempo for this piece; HOME goes back to the library (and stops). A piece with sections: the keys above F4 (F#4..G5)
+ * tempo for this piece; HOME goes back to the library (and stops). Holding SEL: OCT+ adds a channel, OCT- removes the
+ * selected one once PLAY says yes (US-39). A piece with sections: the keys above F4 (F#4..G5)
  * launch section 1..14 (OCT+ 15..24), at the next bar line; SEQ loops the playing section.
  * KEYS (US-24, live.c): ARP turns it on / off: the 27 keys then play the selected channel's sound in the piece's key
  * (OCT- / OCT+ move them, ENV cycles the auto-chords, KNOB3 the scale, KNOB4 the root). MIDI IN (USB or the jack)
@@ -313,6 +314,7 @@ static void lv_take(void)
     edited = discard = 0;                       /* (no device edits on it yet: they alone hold a next switch) */
     lv_unsaved = 1;                             /* saved when playback stops (save_all); replaced before: not saved */
     edit_forget();
+    rm_ask = 0;                                 /* (a removal asked of the old piece: forgotten) */
     lk_keys_off();
     lk_open(&pl_v);
     if (sel >= pl_v.nch) sel = 0;
@@ -530,12 +532,8 @@ static void player_input(uint32_t pressed, uint32_t keys)
 {
     int32_t d;
     uint32_t k;
-    if (rm_ask) {                               /* a removal asked: PLAY says yes, anything else keeps it */
-        static char b[40];
-        k = rm_ask - 1u;
-        if (pressed & 1u << BTN_PLAY) { rm_ask = 0; chan_remove(k); return; }
-        if (pressed) { rm_ask = 0; ui_fmt(b, sizeof b, "KEPT CH %u", k + 1u); set_status(b); return; }
-    }
+    if (rm_ask && (pressed & 1u << BTN_PLAY)) { k = rm_ask - 1u; rm_ask = 0; chan_remove(k); return; }   /* yes (any
+                                                 * other button: the main loop keeps it) */
     if ((fm1_in.buttons & 1u << BTN_SEL) && (pressed & (1u << BTN_OCT_UP | 1u << BTN_OCT_DOWN))) {
         static char b[40];
         if (pressed & 1u << BTN_OCT_UP) chan_add();
@@ -998,6 +996,13 @@ static void app_main(void)
             rc_end(play_buf, ED_OK);            /* leaving the PLAYER ends a pass: what it kept shows on the next screen */
             rc_left = rc.msg;                   /* (HOME: that press only ends it, as REC would; the next asks about edits) */
             pressed &= ~(1u << BTN_HOME);
+        }
+        if (scr == 1u && rm_ask && (pressed & ~(1u << BTN_PLAY))) {   /* a removal asked: any button but PLAY keeps it */
+            static char kb[40];
+            ui_fmt(kb, sizeof kb, "KEPT CH %u", rm_ask);
+            set_status(kb);
+            rm_ask = 0;
+            pressed = 0;
         }
         rc_sync();
         if (scr == 0) {
