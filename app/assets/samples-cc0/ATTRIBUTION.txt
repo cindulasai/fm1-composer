@@ -1,0 +1,23 @@
+SLOOP SAMPLE engine - built-in sets: source material
+Licence: CC0 1.0 Universal (public domain dedication)
+  https://creativecommons.org/publicdomain/zero/1.0/
+Sources:
+  VSCO-2 Community Edition  https://github.com/sgossner/VSCO-2-CE  (Versilian Studios, CC0-1.0)
+  VCSL                      https://github.com/sgossner/VCSL       (Versilian Studios, CC0-1.0)
+Each file is retuned, cut and coloured (tools/gen_builtin_hiphop.py) from:
+
+HORNS/00_G3_m55.wav  <-  sgossner/VSCO-2-CE/master/Brass/Trumpet/stac/Sum_SHTrumpet_stac_F2_v3_rr1.wav + sgossner/VSCO-2-CE/master/Brass/Tenor Trombone/stac/tenortbn_stac_F1_v3_rr1.wav
+HORNS/01_D4_m62.wav  <-  sgossner/VSCO-2-CE/master/Brass/Trumpet/stac/Sum_SHTrumpet_stac_D#3_v3_rr1.wav + sgossner/VSCO-2-CE/master/Brass/Tenor Trombone/stac/tenortbn_stac_F2_v3_rr1.wav
+HORNS/02_A4_m69.wav  <-  sgossner/VSCO-2-CE/master/Brass/Trumpet/stac/Sum_SHTrumpet_stac_A#3_v3_rr1.wav + sgossner/VSCO-2-CE/master/Brass/Tenor Trombone/stac/tenortbn_stac_A#2_v3_rr1.wav
+HORNS/03_E5_m76.wav  <-  sgossner/VSCO-2-CE/master/Brass/Trumpet/stac/Sum_SHTrumpet_stac_F4_v3_rr1.wav + sgossner/VSCO-2-CE/master/Brass/Tenor Trombone/stac/tenortbn_stac_F3_v3_rr1.wav
+STRGS/00_G3_m55.wav  <-  sgossner/VSCO-2-CE/master/Strings/Violin Section/Spic/VlnEns_Spic_G2_v2_rr1.wav + sgossner/VSCO-2-CE/master/Strings/Viola Section/spic/Violas_spic_C2_v2_rr1.wav
+STRGS/01_E4_m64.wav  <-  sgossner/VSCO-2-CE/master/Strings/Violin Section/Spic/VlnEns_Spic_D3_v2_rr1.wav + sgossner/VSCO-2-CE/master/Strings/Viola Section/spic/Violas_spic_E2_v2_rr1.wav
+STRGS/02_Cs5_m73.wav  <-  sgossner/VSCO-2-CE/master/Strings/Violin Section/Spic/VlnEns_Spic_C4_v2_rr1.wav + sgossner/VSCO-2-CE/master/Strings/Viola Section/spic/Violas_spic_D3_v2_rr1.wav
+PIANO/00_C3_m48.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Steinway B/Sus/JHPiano_Sus_Close_C3_vl3_rr1.wav (mono, cut)
+PIANO/01_Gs3_m56.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Steinway B/Sus/JHPiano_Sus_Close_G#3_vl3_rr1.wav (mono, cut)
+PIANO/02_E4_m64.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Steinway B/Sus/JHPiano_Sus_Close_E4_vl3_rr1.wav (mono, cut)
+PIANO/03_C5_m72.wav  <-  sgossner/VCSL: Chordophones/Zithers/Grand Piano, Steinway B/Sus/JHPiano_Sus_Close_C5_vl3_rr1.wav (mono, cut)
+
+COMPOSER: SLOOP 2.8.5's assets/samples-cc0/ATTRIBUTION.txt (commit bac9c05, blob e31357650ce572c24dcdd3cbe3c3781d4244d9ab),
+the header and the lines of the three sets COMPOSER copies (PIANO, STRGS, HORNS), unchanged; SLOOP's other sets
+(BASS, VIBES, FLUTE, SCRCH, KIT) are not copied. The WAVs are SLOOP's files, byte for byte.
