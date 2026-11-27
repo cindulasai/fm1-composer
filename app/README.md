@@ -103,6 +103,7 @@ python3 -m http.server -d site 8000 # then open http://127.0.0.1:8000/
 | | ARP | KEYS on / off: the 27 note keys play the selected channel's sound over the piece (instead of muting and launching), in the piece's key: text2midi's (from the brief, carried in the piece), else guessed from its notes. The white keys walk the scale, C4 = the root; the black keys are silent. The footer says it: `KEYS D DOR` |
 | | OCT- / OCT+ (KEYS on) | the keys an octave down / up, 3 at most |
 | | ENV (KEYS on) | auto-chords: off, TRIAD, 7TH, 9TH, SUS4, POWER (SLOOP's): a white key plays its degree's chord, up to 4 notes, voiced nearest the last one; the black keys, held before the white key, change it (SLOOP's CHORD+): F# minor / major third, G# + 7th, A# sus4, C# + 9th, D# inverted |
+| | KNOB3 / KNOB4 (KEYS off) | the selected channel's voice mode, AUTO / POLY / MONO / LEGATO (AUTO: what its sound brings, SLOOP's; MONO retriggers one voice, LEGATO glides between overlapping notes without retriggering) / its glide, 0 to 127 (0: none; a SLIDE still glides). The footer says it: `VOICE 2 AUTO LEGATO GLIDE 36` (AUTO and the mode the sound plays), `VOICE 1 MONO GLIDE 40`. SAVE keeps them with the piece |
 | | KNOB3 / KNOB4 (KEYS on) | the scale (SLOOP's 16: CHR MAJ MIN DOR MIX PEN MPEN HARM PHRY LYD LOC MEL BLUES WHOLE DIMHW DIMWH, then CHROMATIC: every key as it is) / the root |
 | any but LIBRARY | MIDI IN (USB or the jack) | notes play as sent (no scale): MIDI channel 1 to 8 on channel 1 to 8 in its sound (a channel the piece does not have: the selected one), other MIDI channels on the selected one. Live notes (keys and MIDI) take at most 4 of the 16 voices; while one sounds the piece keeps to 12 and never cuts it. A note-off lost to a full MIDI buffer ends every MIDI note (as SLOOP 2.8.3); leaving the piece ends them too |
 | | SAVE | keeps the sounds, mutes and tempo for this piece (when stopped; while playing it saves at the stop) |
@@ -134,6 +135,7 @@ python3 -m http.server -d site 8000 # then open http://127.0.0.1:8000/
 | | KNOB2 / KNOB3 | length in steps (1 to 64: a longer note is a tie) / velocity of the step's notes (and of the next new one) |
 | | KNOB4 | the channel's loop length: OFF, 1 to 64 steps; shorter than the section, the channel plays its first steps over and over (polymeter: 12 against 16) |
 | | ALGORITHM | the channel's swing, 0 to 100: every 2nd 1/16 starts late, 100 = half a step (SLOOP's, MPC-style) |
+| | ENV | SLIDE on / off for the step's notes (shown under the grid: `LEN 1  VEL 100  SLIDE`): the note glides into the next step's note, on every voice mode (its voice goes on into the next note, no second voice; GLIDE 0: in about 50 ms, as an acid slide) |
 | | OCT- / OCT+ | the keys an octave down / up |
 | | FX | undo (the last 64 edits, shared with EDIT) |
 | | PLAY | plays / stops; edits go on while it plays; the playing step is blue, `PLAY 5` the selected channel's |

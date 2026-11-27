@@ -36,6 +36,8 @@ typedef struct track {
     uint8_t eng_req, pold, xf_on, xf;           /* SLOOP's engine of the part and its fade (eng_fm6.c reads them; sloop_glue.c) */
     uint8_t mono_stack[8], nmono, mono_note;    /* (US-30) SLOOP core.h: MONO / LEGATO's held keys, the note sounding */
     uint8_t slide_glide, slide_next;            /* the next note glides (SLOOP's); a SLIDE note sounds: the next one will */
+    uint8_t slide_vk, slide_note, slide_arm;    /* (v9, SPEC 54) POLY: the SLIDE note's voice (+1), its note; armed after a
+                                                 * block (a chord's other notes, due the same tick, do not take it) */
 } track_t;
 static track_t trk[NPART];
 #include "dsp.c"
@@ -469,8 +471,39 @@ static void glide_tick(const track_t *t, voice_t *v)
         }
 }
 
-/* a SLIDE note just started on channel ch (the player holds it into the next note): the next note glides into */
-static void synth_slide(uint32_t ch) { if (ch < NPART) trk[ch].slide_next = 1; }
+/* a SLIDE note just started on channel ch (the player holds it into the next note): the next note glides into;
+ * (v9, SPEC decision 54) on POLY too: the voice it started on (the channel's newest) is handed to the next note */
+static void synth_slide(uint32_t ch)
+{
+    track_t *t;
+    uint32_t k, n = NVOICE;
+    if (ch >= NPART) return;
+    t = &trk[ch];
+    t->slide_next = 1;
+    for (k = 0; k < NVOICE; k++)
+        if (t->v[k].active && t->v[k].gate && !(vlive[ch] >> k & 1u) && (n == NVOICE || t->v[k].age > t->v[n].age)) n = k;
+    t->slide_vk = (uint8_t)(n < NVOICE ? n + 1u : 0u);
+    t->slide_note = n < NVOICE ? t->v[n].note : 0u;
+    t->slide_arm = 0;
+}
+
+/* (v9, SPEC decision 54) POLY: a note after a SLIDE note takes its voice, legato, and glides from the slid pitch (as
+ * LEGATO does for that pair); 1 = done. Without SLIDE never: POLY as it was */
+static int slide_hand(uint32_t ch, track_t *t, uint32_t note, uint32_t vel)
+{
+    voice_t *v;
+    uint32_t k = t->slide_vk;
+    if (!k || !t->slide_arm) return 0;          /* (unarmed: a note of the SLIDE note's own tick, a chord) */
+    t->slide_vk = t->slide_arm = 0;
+    v = &t->v[k - 1u];
+    if (chs[ch].e->oneshot || !v->active || !v->gate || v->note != t->slide_note || live_v(ch, k - 1u)) return 0;
+    v->note = (uint8_t)note;                    /* (the slid note's late off finds no voice now) */
+    v->pitch16 = (int32_t)note * 16;
+    if (vel > v->vel) v->vel = (uint8_t)vel;
+    glide_set(t, v, 1);
+    t->slide_next = 0;
+    return 1;
+}
 
 static void synth_on(uint32_t ch, uint32_t note, uint32_t vel)
 {
@@ -483,10 +516,11 @@ static void synth_on(uint32_t ch, uint32_t note, uint32_t vel)
     cap = chs[ch].cap;
     if (t->p[P_VOICE] != V_POLY) {              /* MONO / LEGATO (SLOOP's); not while its voice plays a live note */
         t->slide_glide = (uint8_t)(t->slide_next && t->mono_note && t->v[0].gate);
-        t->slide_next = 0;
+        t->slide_next = t->slide_vk = 0;
         if (!live_v(ch, 0)) mono_on(t, note, vel);
         return;
     }
+    if (slide_hand(ch, t, note, vel)) return;
     if (cap == 1u) {                            /* MONO: one voice, retriggered; not while it plays a live note */
         if (live_v(ch, 0)) return;
         v = &t->v[0];
@@ -594,7 +628,7 @@ static void synth_ch_off(uint32_t ch)           /* release every held note of th
         if (v->active && v->stage != 4u && !(vlive[ch] >> k & 1u)) { v->gate = 0; v->stage = chs[ch].e->oneshot ? 4u : 3u; }
     }
     if (!(vlive[ch] & 1u)) trk[ch].nmono = trk[ch].mono_note = 0;   /* (SLOOP trk_all_off) */
-    trk[ch].slide_next = trk[ch].slide_glide = 0;
+    trk[ch].slide_next = trk[ch].slide_glide = trk[ch].slide_vk = 0;
 }
 
 static void synth_hush(void)                    /* every voice fades out within a few ms (stop) */
@@ -604,7 +638,7 @@ static void synth_hush(void)                    /* every voice fades out within 
     for (ch = 0; ch < NPART; ch++)
         for (k = 0; k < NVOICE; k++)
             if (trk[ch].v[VCHK(k)].active) { trk[ch].v[VCHK(k)].stage = 4u; trk[ch].v[VCHK(k)].gate = 0; }
-    for (ch = 0; ch < NPART; ch++) trk[ch].nmono = trk[ch].mono_note = trk[ch].slide_next = trk[ch].slide_glide = 0;
+    for (ch = 0; ch < NPART; ch++) trk[ch].nmono = trk[ch].mono_note = trk[ch].slide_next = trk[ch].slide_glide = trk[ch].slide_vk = 0;
 }
 
 static void synth_all_off(void)
@@ -659,6 +693,7 @@ static void synth_render(int32_t *out, uint32_t n)
         int any = 0;
         if (!e) continue;                       /* (the audio may start before synth_init: silence) */
         if (e->block) e->block(t);
+        if (t->slide_vk) t->slide_arm = 1;      /* (v9: a block after the SLIDE note: the next note may take its voice) */
         for (i = 0; i < n; i++) buf[i] = 0;
         for (k = 0; k < NVOICE; k++) {
             voice_t *v = &t->v[VCHK(k)];

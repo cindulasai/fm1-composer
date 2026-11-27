@@ -20,7 +20,14 @@ static void draw_text_box(uint32_t x, uint32_t y, uint32_t w, const felucca_font
     (void)x; (void)y; (void)w; (void)f; (void)c; (void)a;
     if (ndrawn < 64u) { strncpy(drawn[ndrawn], s, 31); drawn[ndrawn++][31] = 0; }
 }
-static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { (void)y; (void)h; (void)c; if (x + w > widest) widest = x + w; }
+static uint16_t fb[240 * 240];                  /* the screen the fills paint (clipped to 240 x 240) */
+static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
+{
+    uint32_t i, j;
+    if (x + w > widest) widest = x + w;
+    for (j = y; j < y + h && j < 240u; j++)
+        for (i = x; i < x + w && i < 240u; i++) fb[j * 240u + i] = c;
+}
 static uint32_t lib_count(void) { return 0; }
 static const lib_entry_t *lib_entry(uint32_t i) { (void)i; return 0; }
 static uint32_t lib_free(void) { return 0; }
@@ -67,10 +74,39 @@ static void strip_and_roll_edges(void)
     CHECK(widest <= 240u, "a note ending at the page's start is not drawn on it: %u", widest);
 }
 
+/* 30 (STEPS grid): the cursor moved off step 16 leaves no white edge behind: the grid's clear spans its right border */
+static void steps_cursor_leaves_no_trail(void)
+{
+    static uint8_t pc[PIECE_HDR + PIECE_CHREC + 6 + 4];
+    static const uint8_t role[PIECE_MAX_CH] = {ROLE_LEAD};
+    uint32_t at[PIECE_MAX_CH], x = ST_X + ST_PAGE * ST_W;   /* step 16's right edge: 232 */
+    ui_steps_t u;
+    memset(at, 0xFF, sizeof at);
+    memset(pc, 0, sizeof pc);
+    memcpy(pc, "F1P1", 4); pc[4] = 1; pc[5] = 1; pc[8] = 0xB0; pc[9] = 4; pc[10] = 96; pc[13] = 3;
+    pc[PIECE_HDR] = ROLE_LEAD; pc[PIECE_HDR + 2] = 100; pc[PIECE_HDR + 3] = 64; pc[PIECE_HDR + 8] = 1; pc[PIECE_HDR + 12] = PIECE_HDR + PIECE_CHREC;
+    pc[PIECE_HDR + PIECE_CHREC + 3] = 1; pc[PIECE_HDR + PIECE_CHREC + 4] = 60; pc[PIECE_HDR + PIECE_CHREC + 5] = 100;
+    pc[PIECE_HDR + PIECE_CHREC + 2] = 128;
+    pc[40] = sizeof pc;
+    memset(&u, 0, sizeof u);
+    u.status = ""; u.piece = pc; u.role = role; u.at = at; u.len = 24; u.vel = 100;
+    u.step = 15;
+    ui_steps(D_ALL, &u);
+    CHECK(fb[ST_Y * 240u + x] == C_WHITE, "the cursor on step 16 draws its right edge at x %u", x);
+    u.step = 14;
+    fb[(ST_Y + PIECE_MAX_CH * ST_H + 2u) * 240u + ST_X + 5u] = 0x1234u;   /* below the 8 rows: the footer's */
+    ui_steps(D_POS, &u);
+    CHECK(fb[(ST_Y + PIECE_MAX_CH * ST_H + 2u) * 240u + ST_X + 5u] == 0x1234u, "the grid redraws its 8 rows, nothing below");
+    CHECK(fb[ST_Y * 240u + x] == C_BLACK && fb[(ST_Y + ST_H / 2u) * 240u + x] == C_BLACK,
+          "the cursor moved to step 15: step 16's right edge (x %u) is cleared", x);
+    CHECK(fb[ST_Y * 240u + x - ST_W] == C_WHITE, "step 15's right edge is the cursor's now");
+}
+
 int main(void)
 {
     char b[24];
     strip_and_roll_edges();
+    steps_cursor_leaves_no_trail();
     memset(b, '#', sizeof b);
     ui_fmt(b, 8, "%s", "abcdefghijk");
     CHECK(!strcmp(b, "abcdefg") && b[8] == '#', "text cut at 7, nothing past the buffer");

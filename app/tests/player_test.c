@@ -646,33 +646,63 @@ static void test_30_3_the_sound_brings_its_voice_an_override_wins(void)
     printf("30.3 AUTO: FM BASS LEGATO 36, ROBOT 20, TALKBOX 60; POLY / MONO overrides win\n");
 }
 
+static voice_t *gated_newest(uint32_t ch, uint32_t *ngated)  /* the channel's newest held voice; how many are held */
+{
+    voice_t *v = 0;
+    uint32_t k;
+    *ngated = 0;
+    for (k = 0; k < NVOICE; k++)
+        if (trk[ch].v[k].active && trk[ch].v[k].gate) { (*ngated)++; if (!v || trk[ch].v[k].age > v->age) v = &trk[ch].v[k]; }
+    return v;
+}
+
+/* (v9, SPEC decision 54) SLIDE on every voice mode: the slid note's voice glides into the next note, no second voice */
 static void test_30_5_slide_glides_into_the_next_note(void)
 {
     static const tn_t ns[4] = {{0, 24, 60, 100 | PIECE_SLIDE}, {24, 24, 64, 100}, {96, 24, 60, 100}, {120, 24, 67, 100}};
+    static const uint32_t modes[3] = {VM_LEGATO, VM_MONO, VM_POLY};
     const tn_t *nl[1] = {ns};
-    uint32_t cnt[1] = {4}, n;
-    int32_t mid = 0;
-    reset();
-    build(1200, 384, 1, nl, cnt);
-    CHECK(piece_check(pb, pc_u32(pb + 40)) == PE_OK, "a SLIDE note: a valid piece");
-    player_load(pb);
-    synth_sound(0, sine_key());
-    synth_voice(0, VM_LEGATO, 0);
-    pl_loop = 0;
-    player_play();
-    for (n = 0; n < frame_of(30, 1200) / CTL; n++) {   /* tick 24 + a few blocks: 60 slid into 64 */
-        play_frames(CTL);
-        if (pl_tick == 25 && !mid) mid = trk[0].v[0].pitch_cur;
+    uint32_t cnt[1] = {4}, n, m, held = 0, held_mid = 9;
+    voice_t *v;
+    for (m = 0; m < 3u; m++) {
+        int32_t mid = 0;
+        reset();
+        build(1200, 384, 1, nl, cnt);
+        CHECK(piece_check(pb, pc_u32(pb + 40)) == PE_OK, "a SLIDE note: a valid piece");
+        player_load(pb);
+        synth_sound(0, sine_key());
+        synth_voice(0, modes[m], 0);
+        pl_loop = 0;
+        player_play();
+        for (n = 0; n < frame_of(30, 1200) / CTL; n++) {   /* tick 24 + a few blocks: 60 slid into 64 */
+            play_frames(CTL);
+            if (pl_tick == 25 && !mid) { v = gated_newest(0, &held_mid); mid = v ? v->pitch_cur : 0; }
+        }
+        v = gated_newest(0, &held);
+        CHECK(mid > 60 * 16 && mid < 64 * 16 && v && v->note == 64 && held_mid == 1 && held == 1,
+              "mode %u SLIDE: 60 glides into 64 on one voice (SLOOP's SLIDE_T, glide 0): %d, %u held", modes[m], mid, held_mid);
+        play_frames(frame_of(122, 1200) - frame_of(30, 1200));
+        v = gated_newest(0, &held);
+        CHECK(v && v->note == 67 && v->pitch_cur == 67 * 16 && held == 1, "mode %u no SLIDE: 60 to 67 at once", modes[m]);
+        play_frames(frame_of(180, 1200) - frame_of(122, 1200));
+        v = gated_newest(0, &held);
+        CHECK(pl_noff == 0 && trk[0].mono_note == 0 && !held, "every note let go before the end (the SLIDE's too)");
+        play_frames(3u * 44100u);               /* (the piece ends, 2 s, and stops) */
+        CHECK(synth_active() == 0 && pl_noff == 0 && trk[0].mono_note == 0, "nothing stuck: %u voices, %u held, note %u",
+              synth_active(), pl_noff, trk[0].mono_note);
     }
-    CHECK(mid > 60 * 16 && mid < 64 * 16 && trk[0].v[0].note == 64, "SLIDE: 60 glides into 64 (SLOOP's SLIDE_T, glide 0): %d", mid);
-    play_frames(frame_of(122, 1200) - frame_of(30, 1200));
-    CHECK(trk[0].v[0].note == 67 && trk[0].v[0].pitch_cur == 67 * 16, "no SLIDE: 60 to 67 at once");
-    play_frames(frame_of(180, 1200) - frame_of(122, 1200));
-    CHECK(pl_noff == 0 && trk[0].mono_note == 0 && !trk[0].v[0].gate, "every note let go before the end (the SLIDE's too)");
-    play_frames(3u * 44100u);                   /* (the piece ends, 2 s, and stops) */
-    CHECK(synth_active() == 0 && pl_noff == 0 && trk[0].mono_note == 0, "nothing stuck: %u voices, %u held, note %u",
-          synth_active(), pl_noff, trk[0].mono_note);
-    printf("30.5 SLIDE glides into the next note, then nothing held\n");
+    reset();                                    /* POLY: a chord's other note, due the SLIDE note's tick, keeps its own */
+    synth_sound(0, sine_key());
+    synth_voice(0, VM_POLY, 0);
+    synth_on(0, 60, 100); synth_slide(0); synth_on(0, 67, 100); blocks(5);
+    synth_on(0, 64, 100); blocks(8);
+    v = gated_newest(0, &held);
+    CHECK(held == 2 && synth_count(0) == 2 && v && v->note == 67, "POLY chord: 60 slid into 64, 67 held: %u held", held);
+    CHECK(trk[0].v[0].note == 64 && trk[0].v[0].pitch_cur > 60 * 16 && trk[0].v[0].pitch_cur < 64 * 16, "60's voice glides");
+    synth_off(0, 60);                           /* (the slid note's late off: 64 goes on) */
+    CHECK(trk[0].v[0].gate && trk[0].v[0].note == 64, "the slid note's off leaves 64 sounding");
+    synth_all_off(); blocks(3000);
+    printf("30.5 SLIDE glides into the next note on LEGATO, MONO and POLY (one voice), then nothing held\n");
 }
 
 static void test_30_6_hostile_voices(void)

@@ -220,36 +220,84 @@ def test_30_4_the_channel_screen_sets_the_voice_saved_in_the_piece_reboot_same(t
     assert [c.notes for c in back.channels] == [c.notes for c in decode(d).channels]
 
 
-# ---- 30.5: SLIDE in STEPS ----
-def test_30_5_slide_on_a_step_glides_into_the_next_steps_note(tmp_path, host_bin, render):
+# ---- 30.5: SLIDE in STEPS, on every voice mode ----
+@pytest.mark.parametrize("mode", [LEGATO, MONO, POLY, AUTO], ids=["legato", "mono", "poly", "auto"])
+def test_30_5_slide_on_a_step_glides_into_the_next_steps_note(tmp_path, host_bin, render, mode):
     """STEPS: C4 at step 1, ENV: SLIDE (shown on the step), E4 at step 2; C4 at 5 and E4 at 6 without; SAVE, PLAY: the
-    WAV glides from step 1 into 2 (SLOOP's SLIDE_T, ~46 ms, glide 0) and jumps from 5 to 6"""
+    WAV glides from step 1 into 2 (SLOOP's SLIDE_T, ~46 ms, glide 0) and jumps from 5 to 6, on every voice mode (SPEC
+    decision 54: SINE KEY is a POLY sound, so AUTO plays POLY); the slid note's voice goes on into E4: no second voice,
+    C4 is gone once the glide is over (on POLY / AUTO it overlapped E4 before: the v9 Adversary's probe). (POLY's step
+    5 -> 6 is its own: C4's release under E4, so its jump is E4's level at once, not the periods between)"""
     from test_steps import steps_run, keys
+    from test_live import goertzel, hz
+    sk = render.ids["SINE KEY"]
+    if mode == AUTO:                                               # (AUTO here is POLY: the same render)
+        notes = [Note(0, 60, 24, 100), Note(48, 64, 24, 100)]
+        assert render(encode(Piece("a", 1200, 192, [Channel("bass", notes, sound=sk, mode=AUTO)])), 1, "ap") == \
+            render(encode(Piece("a", 1200, 192, [Channel("bass", notes, sound=sk, mode=POLY)])), 1, "ap")
     flash = str(tmp_path / "flash.bin")
-    d = encode(Piece("slide", 1200, 384, [Channel("bass", [], sound=render.ids["SINE KEY"], mode=LEGATO)]))
+    d = encode(Piece("slide", 1200, 384, [Channel("bass", [], sound=sk, mode=mode)]))
     steps = [*keys(50, 7), (150, f"btn {BTN['ENV']}"), (250, f"enc {ENC['SELECT']} 1"), *keys(300, 11),
              (400, f"enc {ENC['SELECT']} 3"), *keys(450, 7), (550, f"enc {ENC['SELECT']} 1"), *keys(600, 11),
              (700, f"enc {ENC['SELECT']} -5"), (800, f"btn {BTN['SAVE']}"), (900, f"btn {BTN['PLAY']}")]
-    (log, wav), t0 = steps_run(tmp_path, d, steps, 3400, "slide", env={"HOST_FLASH": flash})
+    (log, wav), t0 = steps_run(tmp_path, d, steps, 3900, "slide", env={"HOST_FLASH": flash})
     assert (184, "LEN 1  VEL 100  SLIDE") in at(log, t0 + 150, t0 + 240), "SLIDE shown on the step"
     assert (184, "LEN 1  VEL 100") in at(log, t0 + 450, t0 + 540), "step 5: no SLIDE"
     assert (184, "LEN 1  VEL 100  SLIDE") in at(log, t0 + 700, t0 + 790), "back on step 1: SLIDE"
     assert (222, "SAVED") in at(log, t0 + 800)
     f = wav_frames(wav)
-    p0 = (t0 + 900) / 1000                                         # PLAY: step 1 at once, a step = 125 ms
+    p0 = (t0 + 900) / 1000                                         # PLAY: step 1 at once, a step = 125 ms (3 s)
     for bar in (0, 2):
         b = p0 + bar
         tr = pitches(f, b + 0.06, b + 0.8)
         slid = [t for t, p in tr if b + 0.1 < t < b + 0.25 and 60.6 < p < 63.4]
         jump = [t for t, p in tr if b + 0.6 < t < b + 0.75 and 60.6 < p < 63.4]
         assert len(slid) >= 4 and 0.02 <= slid[-1] - slid[0] <= 0.08, f"bar {bar + 1}: steps 1 -> 2 glide ({len(slid)} periods)"
-        assert len(jump) <= 2, f"bar {bar + 1}: steps 5 -> 6 jump ({len(jump)} periods between)"
+        assert mode in (POLY, AUTO) or len(jump) <= 2, f"bar {bar + 1}: steps 5 -> 6 jump ({len(jump)} periods between)"
+        e4_slid, e4_jump = goertzel(f, b + 0.13, b + 0.15, hz(64)), goertzel(f, b + 0.63, b + 0.65, hz(64))
+        assert e4_slid < 0.25 * e4_jump, f"bar {bar + 1}: E4 at once at step 6, still gliding at 2 ({e4_slid:.0f}, {e4_jump:.0f})"
+        c4, e4 = goertzel(f, b + 0.18, b + 0.3, hz(60)), goertzel(f, b + 0.18, b + 0.3, hz(64))
+        assert c4 < 0.01 * e4, f"bar {bar + 1}: one voice, C4 gone after the glide (C4 {c4:.0f}, E4 {e4:.0f})"
+        assert all(abs(p - 64) < 0.3 for t, p in tr if b + 0.19 < t < b + 0.24), f"bar {bar + 1}: E4 alone after the glide"
     port = f"exec:{host_bin} {flash}"
     pid = fm1c("list", "--port", port).stdout.split()[0].lstrip("#")
     assert fm1c("pull", pid, "-o", tmp_path / "s.f1p", "--port", port).returncode == 0
     back = decode((tmp_path / "s.f1p").read_bytes())
     assert [(n.tick, n.pitch, n.slide) for n in back.channels[0].notes] == [(0, 60, True), (24, 64, False), (96, 60, False),
                                                                             (120, 64, False)]
+
+
+# ---- 30.8: the README ----
+def test_30_8_readme_documents_voice_modes_and_slide_as_the_screen_says():
+    """PLAYER (KEYS off): KNOB3 the voice mode AUTO / POLY / MONO / LEGATO, KNOB4 glide 0 to 127, SAVE keeps them; STEPS:
+    ENV toggles SLIDE, gliding on every voice mode; every footer string the README quotes is one the firmware writes
+    (composer.c's VOICE formats, ui.c's step line; the strings on screen: 30.4 and 30.5 above)"""
+    readme = (APP / "README.md").read_text().splitlines()
+    comp = (APP / "firmware/src/composer.c").read_text()
+    ui = (APP / "firmware/src/ui.c").read_text()
+    voice = [ln for ln in readme if ln.startswith("| | KNOB3 / KNOB4 (KEYS off)")]
+    assert len(voice) == 1, "README's PLAYER table: one row for the voice"
+    row = voice[0]
+    assert "AUTO / POLY / MONO / LEGATO" in row and "0 to 127" in row and "SAVE keeps them" in row
+    names = re.search(r"VM_NAME\[VM_N\] = \{([^}]*)\}", comp)[1]
+    sounds = re.search(r"V_NAME\[3\] = \{([^}]*)\}", comp)[1]
+    alt = lambda c: "(" + "|".join(re.findall(r'"([^"]+)"', c)) + ")"
+    assert set(re.findall(r'"([^"]+)"', names)) == {"AUTO", "POLY", "MONO", "LEGATO"}
+    fmts = re.findall(r'ui_fmt\(b, sizeof b, "(VOICE [^"]*)"', comp)
+    assert len(fmts) == 2, fmts
+    pats = [re.escape(f).replace("%u", r"\d+").replace("%s", alt(sounds if " AUTO %s" in f else names), 1) for f in fmts]
+    shown = re.findall(r"`([^`]+)`", row)
+    assert any(" AUTO " in x for x in shown) and any(" AUTO " not in x for x in shown), shown
+    for x in shown:
+        assert any(re.fullmatch(p, x) for p in pats), f"{x!r}: not a footer composer.c writes ({fmts})"
+    slide = [ln for ln in readme if ln.startswith("| | ENV |") and "SLIDE" in ln]
+    assert len(slide) == 1, "README's STEPS table: one row for SLIDE"
+    assert "every voice mode" in slide[0] and "next step" in slide[0]
+    step_fmt = re.search(r'"(LEN %u  VEL %u%s)", [^;]*\? "(  SLIDE)"', ui)
+    assert step_fmt, "ui.c's step line"
+    pat = re.escape(step_fmt[1]).replace("%u", r"\d+").replace("%s", re.escape(step_fmt[2]))
+    quoted = re.findall(r"`([^`]+)`", slide[0])
+    assert quoted and all(re.fullmatch(pat, q) for q in quoted), quoted
 
 
 # ---- 30.6: hostile ----
