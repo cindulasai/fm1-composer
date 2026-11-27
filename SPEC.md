@@ -157,10 +157,9 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
   - B8 Beautify COMPOSER's home screen (LIBRARY) on the FM-1: a better way to browse and pick songs
   - B9 Performance + reliability first (user, 2026-11-24): faster than today everywhere (Studio, Send, emulator), no flaky paths
 - Choir (decision 57): a CC0 choir sample set, or SLOOP's VOICE engine as an 'aah' pad; more sample sets (vibes, bass) in the flash v11 leaves
-- From the SLOOP reconciliation (research/sloop-reconcile.md §4): MONO / LEGATO voices with glide and SLIDE; transpose, shift and ×2 / ½ for a channel; the other gaps it ranks
 - Recording: leaving PLAYER mid-pass keeps the notes but shows no "REC OFF: N NOTES" (v6 Adversary, minor; composer.c)
-- After v6 (decision 37): send from Studio while playing (swap at the next bar), energy + swing macros, setlists chaining pieces, takes switched live
-- Sampled instruments (CC0 piano, strings, horns from SLOOP) + GRAIN: after v5's flash measurement (decision 27)
+- Energy + swing macros, setlists chaining pieces, takes switched live (decision 50: next after v11; live send shipped in v10)
+- From the SLOOP reconciliation (research/sloop-reconcile.md §4): the remaining ranked gaps (MONO/LEGATO, part tools shipped in v9); GRAIN engine
 - Second core for more voices: after a real-device test (decision 28)
 - Versus SLOOP (isod89/sloop-fm1, a mature live groovebox): COMPOSER wins on AI arrangements from plain English, an 8-part arrangement player, and Studio in the browser. To close the gaps, most valuable first: one-click install from the browser; more sounds and engines (FM6 / DX7 patches, physical models); a setlist that chains pieces; piano-roll editing in Studio before pushing; per-channel filter and effects; MIDI out of the playing piece
 - Public Studio page: live at https://cindulasai.github.io/fm1-composer/ (decision 45); later, free / demo AI keys or an in-browser model (no key)
