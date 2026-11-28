@@ -42,6 +42,7 @@
 | US-39 | Add / remove channels in any piece on the FM-1 | 1 | todo | 0 |
 | US-40 | Studio looks like one app: blended panels, modern scrollbars | 1 | todo | 0 |
 | US-41 | Studio mixer: per-channel volume, effects, master | 1 | todo | 0 |
+| US-50 | Newer FM-1 units (UC25HQ80 flash) proven supported | 11 | todo | 0 |
 
 ## Impediments
 - US-14, US-15: done-self: v3 Adversary FAILs were on criteria replaced by v4 (US-16, US-17, done); their remaining criteria (14.4 key file, 14.5 server, 15.5 emulator pin) were not re-reviewed fresh
