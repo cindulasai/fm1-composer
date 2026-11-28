@@ -53,7 +53,7 @@ def test_19_2_copies_are_sloops_files_unchanged():
     assert {c for c, *_ in rows} >= {"app/engines/fm6_core.c", "app/engines/eng_fm6.c", "app/engines/fm6_bank.c"}
     src = sloop_src()
     for comp, up, b, changed in rows:
-        if comp.startswith("app/engines/"):
+        if comp.startswith("app/engines/") and comp != "app/engines/eng_sample.c":   # (US-35: its user slots cut)
             assert changed.startswith("no"), comp                          # FM6's files: byte for byte
         if changed.startswith("no"):
             assert blob(APP.parent / comp) == b, f"{comp} is not SLOOP's {up} @ bac9c05"

@@ -148,6 +148,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 | 60 | v12 = full flexibility on the device: NEW SONG from a blank grid with a choice of channels, and add / remove channels in any piece (wishlist B7's on-device half); before energy / swing + setlists (decision 50 moves to v13) | user |
 | 61 | After v12: v13 = Studio DAW (wishlist B2 mixer: per-channel volume / mute / solo / pan / EQ / FX + master; B3 transport: click-to-play timeline, loop region, position; B1 modern look with it; B4 regenerate a bar range of one channel built into the timeline; soundcraft DSP reused, B6). Energy / swing + setlists + longer songs move to v14 | user |
 | 62 | Priority first (user, 2026-11-27): v12 = Studio look (left panel blends with the right, modern scrollbars, simplicity kept) + mixer (per-channel volume, master, effects copied from SoundCraft — licence MIT OR Apache-2.0 allows it; craft-anything used to study / copy). NEW SONG + channels → v13; timeline + regenerate a bar range → v14; energy / swing, setlists, longer songs → v15. Effects are Studio-side (Play); volume / pan / mute reach the FM-1 piece on Send (its channel vol / pan / mute); the FM-1 keeps its own FX | user |
+| 63 | The mixer (US-41) as one t2m-audio engine per channel in Studio's own mixer.rs (t2m-audio stays text2midi's, unchanged, 13.5); SoundCraft's whole DSP crate vendored unchanged (Channel Strip = EQ + compressor, Room Reverb send, pan law); Send carries volume and pan (US-42, matched by track name), mute / solo / effects stay Studio's | council |
 
 ## Claims
 "better than SLOOP" → goal, not yet a claim: README states measured facts only (channels, engines, sounds, effects vs SLOOP 2.8.5's published numbers). README: "inspired by SLOOP".
@@ -191,7 +192,7 @@ ui (`app/firmware/src/composer.c`, `ui.c`) — app_main/app_audio; screens LIBRA
 - v9 — MONO / LEGATO voices with glide + SLIDE; part tools in EDIT: shift, ×2 / ½, transpose ; Studio up front in the README + a guide on COMPOSER's tile ; Send never loses a frame (US-30–US-33)
 - v10 — live send: a piece sent while playing takes over at the next bar (US-34) — verified
 - v11 — sampled instruments: piano, strings, horns (SLOOP's CC0 sets + SAMPLE engine) on the FM-1 and in Studio's Play (US-35–US-37)
-- v12 — Studio look + mixer: one blended app, modern scrollbars; per-channel volume / mute / solo / pan / EQ / reverb / compressor + master (SoundCraft DSP) (US-40–US-41)
+- v12 — Studio look + mixer: one blended app, modern scrollbars; per-channel volume / mute / solo / pan / EQ / reverb / compressor + master (SoundCraft DSP) (US-40–US-42)
 - v13 — full flexibility on the FM-1: NEW SONG from a blank grid with your choice of channels; add / remove channels in any piece (US-38–US-39)
 - v14 — (planned) Studio timeline: click-to-play, loop a region, regenerate a bar range of one channel
 - v15 — (planned) energy / swing, setlists, longer songs

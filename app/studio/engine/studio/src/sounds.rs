@@ -1,7 +1,7 @@
 //! Which FM-1 sound a part plays, and its role when its track name does not say: a copy of
 //! app/tools/fm1c/sounds.py (the one table; the tests compare the bytes both make). Sound ids are the firmware's.
 
-pub const NAMES: [&str; 80] = ["STD KIT", "TIGHT KIT", "BOOM KIT", "SAW LEAD", "SOFT PAD", "SQR BASS", "PWM STR", "ACID",
+pub const NAMES: [&str; 138] = ["STD KIT", "TIGHT KIT", "BOOM KIT", "SAW LEAD", "SOFT PAD", "SQR BASS", "PWM STR", "ACID",
     "SINE KEY", "RAVE", "SUB BASS", "PLUCK", "BRASS", "WIND", "STRINGS", "BRASS",
     "ORGAN", "STRING", "RESO", "BELL", "WIRE", "FAT BASS", "ARP LEAD", "SYNC LEAD",
     "RING BELL", "CHIP CHOIR", "FULL ORGAN", "JAZZ PERC", "GOSPEL", "SOFT FLUTE", "ROCK DRIVE", "PULSE LD",
@@ -10,19 +10,26 @@ pub const NAMES: [&str; 80] = ["STD KIT", "TIGHT KIT", "BOOM KIT", "SAW LEAD", "
     "LO-FI", "PHONK", "HOUSE", "D.HOUSE", "TECHNO", "MINIMAL", "ELECTRO", "DISCO",
     "GARAGE", "JUNGLE", "DUBSTEP", "DEMBOW", "AMAPIANO", "AFRO", "LATIN", "TRIBAL",
     "SYNTHWV", "CHIP", "ARCADE", "GLITCH", "INDUSTR", "HYPER", "AMBIENT", "JAZZ",
-    "TINE EP", "GLASS BELL", "ROUND BASS", "BRASS SECT", "SOFT PAD", "WOOD BARS", "DRAWBARS", "NYLON PICK"];
+    "TINE EP", "GLASS BELL", "ROUND BASS", "BRASS SECT", "SOFT PAD", "WOOD BARS", "DRAWBARS", "NYLON PICK",
+    "BELL TREE", "MODAL BAR", "STR PLUCK", "BOWED MTL", "THUMB PNO", "HAND DRUM", "MEMB TOMS", "SITAR",
+    "PHYS HARP", "NYLON GTR", "STEEL GTR", "MUTED GTR", "PLUCK BASS", "KOTO", "BANJO", "CELLO BOW", "TANPURA",
+    "CHIMES", "BIG BELL", "VIBRA BAR", "GLASS BOWL", "STEEL PAN", "WOOD BLOCK", "TABLA", "CONGA", "TIMPANI",
+    "RHODES", "DX RHODES", "WURLI", "CLAV", "M1 PIANO", "AFRO KEYS", "TRAP BELL", "MUSIC BOX", "MARIMBA",
+    "KALIMBA", "PLUGG BELL", "GLASS PAD", "FM BASS", "STEEL DRUM", "GLOCKEN", "CELESTA", "XYLOPHONE", "HARP",
+    "BASS GTR", "TUBE BELL", "FM PLUCK", "FM GRAND", "CHOIR AAH", "SOUL OOH", "TALKBOX", "WOW BASS",
+    "HARMONICA", "ROBOT", "VOX PAD", "PIANO", "STRINGS", "HORNS"];
 pub const FM6_FIRST: u8 = 72;
 pub const FM6_POOL: usize = 3;
 pub const FM6_ALT: [u8; 8] = [8, 19, 21, 12, 4, 24, 16, 11];
 
-const GM: [u8; 128] = [8, 8, 8, 8, 72, 72, 11, 11,
+const GM: [u8; 128] = [135, 135, 135, 135, 135, 135, 135, 135,
     73, 73, 24, 77, 77, 77, 19, 11,
     78, 78, 26, 16, 28, 28, 13, 28,
     79, 79, 11, 11, 11, 30, 30, 24,
     74, 21, 21, 74, 5, 5, 10, 32,
-    17, 17, 17, 17, 6, 11, 11, 74,
-    14, 14, 6, 6, 25, 25, 25, 15,
-    75, 75, 75, 12, 75, 75, 12, 15,
+    136, 136, 136, 136, 136, 136, 136, 136,
+    136, 136, 136, 136, 25, 25, 25, 15,
+    137, 137, 137, 137, 137, 137, 137, 137,
     13, 13, 13, 13, 13, 13, 13, 29,
     29, 29, 29, 29, 29, 29, 29, 29,
     31, 3, 29, 34, 30, 25, 23, 7,

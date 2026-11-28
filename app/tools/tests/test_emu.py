@@ -270,6 +270,24 @@ def test_20_6_strict_timing_densest_piece_all_on_phys(tmp_path):
     assert host > 20 and level > 0.5 * host, (level, host)
 
 
+
+SAMPLED_FIRST = 135                                           # (v11: PIANO, STRINGS, HORNS, SLOOP's SAMPLE engine; US-35)
+
+
+@emu_only
+def test_35_3_strict_timing_densest_piece_all_on_the_sampled_sounds(tmp_path):
+    """the densest piece with PIANO, STRINGS and HORNS on the 8 channels (16 sampled voices, IMA ADPCM decoded from
+    flash): no starved half under on-chip timing, heard as loud as the firmware's own code renders it here (a firmware
+    without the samples plays the roles' defaults)"""
+    d = dense([SAMPLED_FIRST + c % 3 for c in range(8)])
+    assert len(d) > 30000
+    host = host_render(tmp_path, d, "sampled")
+    assert " at once 16 " in host, host                         # 16 sampled voices at once on the host
+    empty, under, level = strict_densest(tmp_path, d)
+    assert (empty, under) == ("0", "0")
+    ref = float(re.search(r"rms (\d+)", host)[1])
+    assert ref > 300 and 0.5 * ref < level < 2 * ref, (level, ref)
+
 def test_9_5_missing_emulator_or_firmware_is_a_visible_skip(tmp_path):
     sh = APP / "tests/emu_e2e.sh"
     r = subprocess.run(["sh", str(sh)], env={**os.environ, "FM1_LIVE": str(tmp_path / "none")}, capture_output=True, text=True)

@@ -29,16 +29,16 @@ def kb_instruments():
 
 # ---- 22.1 ----
 # (the mapping, by sound name: what each text2midi instrument plays)
-WANT = {"keys.piano": "SINE KEY", "keys.rhodes": "TINE EP", "bass.electric": "FAT BASS", "bass.synth": "SUB BASS",
+WANT = {"keys.piano": "PIANO", "keys.rhodes": "PIANO", "bass.electric": "FAT BASS", "bass.synth": "SUB BASS",
         "bass.upright": "ROUND BASS", "kit.standard": "STD KIT", "pad.warm": "SOFT PAD", "synth.lead": "PULSE LD",
         "guitar.clean": "PLUCK", "guitar.overdrive": "ROCK DRIVE", "guitar.nylon": "NYLON PICK",
-        "strings.ensemble": "STRINGS", "harp.orchestral": "PLUCK", "vibes.vibraphone": "WOOD BARS", "fx.riser": "WIND"}
+        "strings.ensemble": "STRINGS", "harp.orchestral": "STRINGS", "vibes.vibraphone": "WOOD BARS", "fx.riser": "WIND"}
 
 
 def test_22_1_every_text2midi_instrument_maps_to_a_catalog_sound(tmp_path):
     from test_ui import catalog
     names = catalog(tmp_path)
-    assert list(N) == names[:80]                          # ids 0-79 as the firmware has them
+    assert list(N) == names                               # every id as the firmware has it (US-35: 138)
     kb = kb_instruments()
     assert len(kb) == 15 and {i[0] for i in kb} == set(sounds.INSTRUMENTS) == set(WANT)
     aliases = {}
@@ -46,7 +46,7 @@ def test_22_1_every_text2midi_instrument_maps_to_a_catalog_sound(tmp_path):
         assert sounds.INSTRUMENTS[iid] == (prog, sounds.INSTRUMENTS[iid][1]) and sounds.INSTRUMENTS[iid][1] in roles
         role = sounds.INSTRUMENTS[iid][1]
         s = sounds.sound(f"{role} – {iid}", None, role)
-        assert 0 <= s < 80 and N[s] == WANT[iid], iid
+        assert 0 <= s < len(N) and N[s] == WANT[iid], iid
         assert (s in DRUM_KITS) == kit
         assert sounds.sound(iid, None, role) == s                      # the id alone names it too
         for a in [name] + als:
@@ -55,14 +55,14 @@ def test_22_1_every_text2midi_instrument_maps_to_a_catalog_sound(tmp_path):
     assert sounds.ALIASES == aliases
 
 
-GM_WANT = ["SINE KEY"] * 4 + ["TINE EP"] * 2 + ["PLUCK"] * 2 + \
+GM_WANT = ["PIANO"] * 8 + \
     ["GLASS BELL", "GLASS BELL", "RING BELL", "WOOD BARS", "WOOD BARS", "WOOD BARS", "BELL", "PLUCK"] + \
     ["DRAWBARS", "DRAWBARS", "FULL ORGAN", "ORGAN", "GOSPEL", "GOSPEL", "WIND", "GOSPEL"] + \
     ["NYLON PICK", "NYLON PICK", "PLUCK", "PLUCK", "PLUCK", "ROCK DRIVE", "ROCK DRIVE", "RING BELL"] + \
     ["ROUND BASS", "FAT BASS", "FAT BASS", "ROUND BASS", "SQR BASS", "SQR BASS", "SUB BASS", "WAVE BASS"] + \
-    ["STRING"] * 4 + ["PWM STR", "PLUCK", "PLUCK", "ROUND BASS"] + \
-    ["STRINGS", "STRINGS", "PWM STR", "PWM STR", "CHIP CHOIR", "CHIP CHOIR", "CHIP CHOIR", 15] + \
-    ["BRASS SECT"] * 3 + [12, "BRASS SECT", "BRASS SECT", 12, 15] + \
+    [136] * 8 + \
+    [136] * 4 + ["CHIP CHOIR", "CHIP CHOIR", "CHIP CHOIR", 15] + \
+    ["HORNS"] * 8 + \
     ["WIND"] * 7 + ["SOFT FLUTE"] + ["SOFT FLUTE"] * 8 + \
     ["PULSE LD", "SAW LEAD", "SOFT FLUTE", "WAVE LEAD", "ROCK DRIVE", "CHIP CHOIR", "SYNC LEAD", "ACID"] + \
     [76, "SOFT PAD", "PWM STR", "CHIP CHOIR", "STRING", "WIRE", 76, "RESO"] + \
@@ -118,8 +118,8 @@ def test_22_2_a_file_keeps_its_roles_and_sounds(tmp_path):
                                        ("keys – keys.piano", 3, notes)])
     piece, rep = fit(str(f))
     got = [(c.role, N[c.sound], c.src) for c in piece.channels]
-    assert got == [("drums", "808", 9), ("bass", "FAT BASS", 2), ("chords", "TINE EP", 0), ("chords", "SINE KEY", 3),
-                   ("pad", "STRING", 1)]
+    assert got == [("drums", "808", 9), ("bass", "FAT BASS", 2), ("chords", "PIANO", 0), ("chords", "PIANO", 3),
+                   ("pad", "STRINGS", 1)]
     assert rep.reductions == 0
 
 
@@ -139,8 +139,8 @@ def test_22_3_volume_and_pan_bytes_from_cc7_and_cc10(tmp_path):
     data = encode(piece)
     table = [data[48 + 16 * i:48 + 16 * i + 5] for i in range(len(piece.channels))]
     # role, sound, vol, pan, source: bass first, then lead, chords, pad, arp (fit.py's order)
-    assert table == [bytes([4, 10, 127, 0, 1]), bytes([0, 31, 0, 127, 0]), bytes([2, 8, 100, 64, 3]),
-                     bytes([3, 4, 30, 1, 2]), bytes([7, 11, 126, 64, 5])]
+    assert table == [bytes([4, 10, 127, 0, 1]), bytes([0, 31, 0, 127, 0]), bytes([2, 135, 100, 64, 3]),
+                     bytes([3, 4, 30, 1, 2]), bytes([7, 136, 126, 64, 5])]
     assert [(c.vol, c.pan) for c in decode(data).channels] == [(127, 0), (0, 127), (100, 64), (30, 1), (126, 64)]
 
 
@@ -197,11 +197,11 @@ def test_22_6_unknown_instrument_or_program_is_the_role_default(name, program):
 
 def test_22_6_kit_and_melodic_instruments_stay_on_their_side():
     assert sounds.sound("lead – kit.standard", None, "lead") is None         # a kit never plays a melody
-    assert N[sounds.sound("lead – kit.standard", 4, "lead")] == "TINE EP"    # (its program does)
+    assert N[sounds.sound("lead – kit.standard", 4, "lead")] == "PIANO"      # (its program does)
     assert sounds.sound("drums – keys.piano", None, "drums") is None          # nor a piano the drums
     assert N[sounds.sound("drums – keys.piano", 25, "drums")] == "808"
     assert N[sounds.sound("drums – kit.standard", 25, "drums")] == "STD KIT"  # (the instrument first)
-    assert N[sounds.sound("lead – keys.piano", 25, "lead")] == "SINE KEY"
+    assert N[sounds.sound("lead – keys.piano", 25, "lead")] == "PIANO"
 
 
 def test_22_6_role_defaults_listed_once_in_the_report(tmp_path):
@@ -222,14 +222,14 @@ def test_22_6_more_fm6_sounds_than_the_pool_take_their_nearest_sound(tmp_path):
     parts = [("bass – bass.upright", 0, notes), ("lead – vibes.vibraphone", 1, notes),
              ("chords – guitar.nylon", 2, notes), ("pad 3", 3, notes, [mido.Message("program_change", channel=3,
                                                                                          program=8)]),
-             ("counter – keys.rhodes", 4, notes)]
+             ("counter 5", 4, notes, [mido.Message("program_change", channel=4, program=16)])]   # (drawbar: FM6)
     piece, rep = fit(str(make_midi(tmp_path / "f.mid", parts)))
-    assert [N[c.sound] for c in piece.channels] == ["ROUND BASS", "WOOD BARS", "NYLON PICK", "BELL", "SINE KEY"]
-    assert [c.sound for c in piece.channels] == [74, 77, 79, 19, 8]
+    assert [N[c.sound] for c in piece.channels] == ["ROUND BASS", "WOOD BARS", "NYLON PICK", "BELL", "ORGAN"]
+    assert [c.sound for c in piece.channels] == [74, 77, 79, 19, 16]
     assert rep.lines == ["pad: GLASS BELL plays as BELL (the FM-1 plays at most 3 FM6 sounds at once)",
-                         "counter: TINE EP plays as SINE KEY (the FM-1 plays at most 3 FM6 sounds at once)"]
+                         "counter: DRAWBARS plays as ORGAN (the FM-1 plays at most 3 FM6 sounds at once)"]
     piece, rep = fit(str(make_midi(tmp_path / "g.mid", parts[:3] + parts[4:])))
-    assert [c.sound for c in piece.channels] == [74, 77, 79, 8] and len(rep.lines) == 1
+    assert [c.sound for c in piece.channels] == [74, 77, 79, 16] and len(rep.lines) == 1
 
 
 def test_22_6_a_program_byte_past_127_is_clipped_like_every_data_byte(tmp_path):

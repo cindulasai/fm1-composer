@@ -4,7 +4,8 @@ app/studio/engine/studio/src/sounds.rs is a copy of it (the Studio engine makes 
 A part's sound comes from its text2midi instrument (named after "<role> – " in the track name, else by the whole
 name, e.g. "Piano"; by id, name, alias), else from its General MIDI program, else none: the firmware plays the
 role's default (sound 255), fit.py reports it. Sound ids are the firmware's catalog (synth.c, fixed): v4's 0-39,
-SLOOP's synthesized kits 40-71, SLOOP's FM6 patches 72-79."""
+SLOOP's synthesized kits 40-71, SLOOP's FM6 patches 72-79, PHYS / DIGITAL / VOICE 80-134, the sampled PIANO, STRINGS,
+HORNS 135-137 (US-35: SLOOP's SAMPLE engine; GM's pianos 0-7, strings 40-51 and brass 56-63 play them)."""
 from __future__ import annotations
 
 # the catalog's names, by id (firmware/src/synth.c order; test 22.1 compares them with the firmware's own list)
@@ -17,20 +18,28 @@ NAMES = ("STD KIT", "TIGHT KIT", "BOOM KIT", "SAW LEAD", "SOFT PAD", "SQR BASS",
          "LO-FI", "PHONK", "HOUSE", "D.HOUSE", "TECHNO", "MINIMAL", "ELECTRO", "DISCO",
          "GARAGE", "JUNGLE", "DUBSTEP", "DEMBOW", "AMAPIANO", "AFRO", "LATIN", "TRIBAL",
          "SYNTHWV", "CHIP", "ARCADE", "GLITCH", "INDUSTR", "HYPER", "AMBIENT", "JAZZ",
-         "TINE EP", "GLASS BELL", "ROUND BASS", "BRASS SECT", "SOFT PAD", "WOOD BARS", "DRAWBARS", "NYLON PICK")
+         "TINE EP", "GLASS BELL", "ROUND BASS", "BRASS SECT", "SOFT PAD", "WOOD BARS", "DRAWBARS", "NYLON PICK",
+         "BELL TREE", "MODAL BAR", "STR PLUCK", "BOWED MTL", "THUMB PNO", "HAND DRUM", "MEMB TOMS", "SITAR",
+         "PHYS HARP", "NYLON GTR", "STEEL GTR", "MUTED GTR", "PLUCK BASS", "KOTO", "BANJO", "CELLO BOW", "TANPURA",
+         "CHIMES", "BIG BELL", "VIBRA BAR", "GLASS BOWL", "STEEL PAN", "WOOD BLOCK", "TABLA", "CONGA", "TIMPANI",
+         "RHODES", "DX RHODES", "WURLI", "CLAV", "M1 PIANO", "AFRO KEYS", "TRAP BELL", "MUSIC BOX", "MARIMBA",
+         "KALIMBA", "PLUGG BELL", "GLASS PAD", "FM BASS", "STEEL DRUM", "GLOCKEN", "CELESTA", "XYLOPHONE", "HARP",
+         "BASS GTR", "TUBE BELL", "FM PLUCK", "FM GRAND", "CHOIR AAH", "SOUL OOH", "TALKBOX", "WOW BASS",
+         "HARMONICA", "ROBOT", "VOX PAD", "PIANO", "STRINGS", "HORNS")
+PIANO, STRINGS, HORNS = 135, 136, 137           # the sampled sounds (US-35)
 FM6_FIRST = 72
 FM6_POOL = 3                                     # sloop_glue.c ENG_POOL_N: FM6 channels at once; more play FM6_ALT
 FM6_ALT = (8, 19, 21, 12, 4, 24, 16, 11)         # FM6 72-79 -> the nearest sound of an engine without a pool
 
 # General MIDI program (0-127) -> sound; one family of eight per line
-GM = (8, 8, 8, 8, 72, 72, 11, 11,              # piano; e.pianos 4, 5; harpsichord, clavinet
+GM = (135, 135, 135, 135, 135, 135, 135, 135,  # pianos, e.pianos, harpsichord, clavinet: PIANO
       73, 73, 24, 77, 77, 77, 19, 11,          # celesta, glockenspiel, music box, vibes, marimba, xylo, bells, dulcimer
       78, 78, 26, 16, 28, 28, 13, 28,          # organs: drawbar, percussive, rock, church, reed; accordion, harmonica
       79, 79, 11, 11, 11, 30, 30, 24,          # guitars: nylon, steel, jazz, clean, muted, overdriven, distortion, harmonics
       74, 21, 21, 74, 5, 5, 10, 32,            # basses: acoustic, finger, pick, fretless, slap 1/2, synth 1/2
-      17, 17, 17, 17, 6, 11, 11, 74,           # violin, viola, cello, contrabass, tremolo, pizzicato, harp, timpani
-      14, 14, 6, 6, 25, 25, 25, 15,            # string ensembles, synth strings, choir, voice, synth voice, orchestra hit
-      75, 75, 75, 12, 75, 75, 12, 15,          # trumpet, trombone, tuba, muted trumpet, horn, section, synth brass 1/2
+      136, 136, 136, 136, 136, 136, 136, 136,  # violin, viola, cello, contrabass, tremolo, pizzicato, harp, timpani: STRINGS
+      136, 136, 136, 136, 25, 25, 25, 15,      # string ensembles, synth strings: STRINGS; choir, voice, synth voice, orch hit
+      137, 137, 137, 137, 137, 137, 137, 137,  # trumpet, trombone, tuba, muted trumpet, horn, section, synth brass: HORNS
       13, 13, 13, 13, 13, 13, 13, 29,          # saxes, oboe, english horn, bassoon; clarinet
       29, 29, 29, 29, 29, 29, 29, 29,          # piccolo, flute, recorder, pan flute, bottle, shakuhachi, whistle, ocarina
       31, 3, 29, 34, 30, 25, 23, 7,            # leads: square, saw, calliope, chiff, charang, voice, fifths, bass lead

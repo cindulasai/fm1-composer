@@ -279,6 +279,26 @@ static void test_18_9_cost_with_every_effect(void)
     CHECK(us_worst < 3000, "%.0f us", us_worst);
 }
 
+/* stop with the reverb return up: it fades out over the first block, no click (the largest sample-to-sample step
+ * in the 4 blocks after stop stays under a tenth of the level before; cutting it gives ~1400 against ~4300) */
+static void test_35_stop_fades_the_reverb_return(void)
+{
+    uint32_t h, j, worst = 0;
+    int before;
+    fresh();
+    synth_sound(0, find("ANALOG", "SOFT PAD"));
+    synth_fx(0, FX_REV, 127);
+    synth_on(0, 48, 100); synth_on(0, 55, 100); synth_on(0, 60, 100);
+    render_to(FR(1.0));
+    h = nf;
+    before = peak(h - CTL, h);
+    synth_hush();
+    render_to(h + 8 * CTL);
+    for (j = h; j < h + 4 * CTL; j++) { uint32_t d = (uint32_t)abs(L[j] - L[j - 1]); if (d > worst) worst = d; }
+    CHECK(before > 1000 && worst * 10u < (uint32_t)before, "stop: the reverb fades (step %u, level %d)", worst, before);
+    CHECK(peak(h + 6 * CTL, h + 8 * CTL) < 30, "and is silent soon after (%d)", peak(h + 6 * CTL, h + 8 * CTL));
+}
+
 int main(void)
 {
     test_18_1_reverb_tail_and_dry_path();
@@ -290,6 +310,7 @@ int main(void)
     test_18_5_no_click_at_release();
     test_18_8_out_of_range_is_clamped();
     test_18_10_stop_ends_the_tails();
+    test_35_stop_fades_the_reverb_return();
     test_18_9_cost_with_every_effect();
     printf(fails ? "FAILED\n" : "ok\n");
     return fails != 0;

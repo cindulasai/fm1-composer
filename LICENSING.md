@@ -21,6 +21,8 @@ complete source under the same licence too.
 | What | Licence | Where |
 | --- | --- | --- |
 | Felucca-Engines: the sound engines in `engines/` (`eng_*.c`, `dsp.c`, `felucca_engine.h`, `fe_tables.h`) | MIT | `engines/LICENSE` |
+| SLOOP's SAMPLE engine `engines/eng_sample.c`, its generator `tools/gen_samples.py` and `tools/sampleio.py` (COMPOSER v11; SLOOP's user sample slots cut) | GPL-3.0-only, Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments, as [SLOOP](https://github.com/isod89/sloop-fm1) ships them | `firmware/SLOOP-PROVENANCE.md` |
+| The PIANO, STRINGS and HORNS samples: `assets/samples-cc0/` (SLOOP's CC0 sets PIANO, STRGS, HORNS, byte for byte), IMA ADPCM in `engines/felucca_samples.h`: the grand piano from VCSL, the violin + viola sections and trumpet + trombone from VSCO-2 CE (Versilian Studios, Sam Gossner) | CC0 1.0 (public domain) | `assets/samples-cc0/ATTRIBUTION.txt` (every file and its source); none of the Hügelton Sample Pack (all rights reserved) is in this tree |
 | Terminus font 8x16 (ter-u16n), rendered into `firmware/gen/felucca_font.h` | SIL OFL 1.1 | `assets/fonts/Terminus-LICENSE.txt` |
 | JieLi AC79 SDK: `uboot.boot`, `cfg_tool.bin`, `eq_cfg_hw.bin` are read from your SDK checkout at build time and placed in the package; no SDK files are in this tree | Apache-2.0 | <https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK> |
 

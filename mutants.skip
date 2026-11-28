@@ -201,3 +201,23 @@ app/firmware/src/composer.c | uint32_t ps = playing ? player_local(sel) / ST_TIC
 app/firmware/src/edit.c | } else if (d > 0) {                         /* x2: the part, its copy (before the end), what lies past twice it */ | equivalent: ET_LEN is only called from composer.c's loop that runs |d| times with the same non-zero d; d == 0 never reaches this branch
 app/firmware/src/composer.c | static int32_t clampi(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; } | equivalent: at v == lo both forms return lo
 app/tools/fm1c/cli.py | raise UsageError(f"COMPOSER Studio is not built in {web}: run sh app/studio/build.sh (needs Rust and npm)") | equivalent in effect: the mutant only changes the hint text "Rust and npm" to "Rust or npm"; test_export checks the error and its build.sh pointer
+app/firmware/src/composer.c | _Static_assert(sizeof fxprefs <= SECTOR_MAX, "the effects fit a blob"); | compile-time: the blob is far below SECTOR_MAX, < and <= both hold
+app/firmware/src/composer.c | int was = ch < pl_v.nch && ch < v.nch;  /* (a channel both pieces have) */ | a channel past the old piece's nch holds its role's default sound and effects (no screen reaches it), so counting it as shared carries nothing
+app/firmware/src/composer.c | for (ch = 0; ch < PIECE_MAX_CH; ch++) { player_mute(ch, (int)(mute >> ch & 1u)); player_solo(ch, (int)(solo >> ch & 1u)); } | player_mute / player_solo ignore ch >= PIECE_MAX_CH, so the extra pass is a no-op
+app/tools/gen_samples.py | reserved: never an input), SLOOP's other sets and its GM kit, SLICE's BREAK, the build cache. STRGS and HORNS loop | inside the module docstring: text, not code
+app/firmware/src/synth.c | static uint8_t ch_vm[NPART], ch_vg[NPART];      /* (US-30) each channel's voice mode (VM_*) and glide, as the piece asks */ | 'and' inside a comment: text, not code
+app/tools/gen_samples.py | One SAMPLE preset is written per set (SET_PRESETS: its name and sound). A file named ..._m<n>.wav has its root | inside the module docstring: text, not code
+app/firmware/src/synth.c | for (k = 0; k < NVOICE && !v; k++)          /* the same live note again: retriggered (on any voice: the cap may | k = NVOICE: vlive is 8 bits, so live_v is false before the voice is read (short-circuit): equivalent
+app/tools/gen_samples.py | """Build the SAMPLE engine's sample sets from WAV files into a C header. | inside the module docstring: text, not code
+app/tools/gen_samples.py | Samples are stored as IMA ADPCM (4 bit). Roots come from the file names, loops | inside the module docstring: text, not code
+app/tools/gen_samples.py | from the WAV 'smpl' chunk; the ADPCM state at the loop start is stored so loops | inside the module docstring: text, not code
+app/tools/gen_samples.py | restart exactly. | inside the module docstring: text, not code
+app/tools/gen_samples.py | COMPOSER: SLOOP 2.8.5's tools/gen_samples.py (bac9c05, blob a2affba762a497b7929400475ff134ce40fd6b34), cut down | inside the module docstring: text, not code
+app/tools/gen_samples.py | (firmware/SLOOP-PROVENANCE.md). Its only inputs are the CC0 sets in assets/samples-cc0 (ATTRIBUTION.txt there): | inside the module docstring: text, not code
+app/tools/gen_samples.py | PIANO (VCSL, a grand), STRGS and HORNS (VSCO-2 CE). Not here: gen_waves.py (the Hügelton Sample Pack, all rights | inside the module docstring: text, not code
+app/tools/gen_samples.py | their steady body (kind "body", COMPOSER's) so a held note sustains; SLOOP plays them as one-shot stabs. | inside the module docstring: text, not code
+app/tools/gen_samples.py | given (MIDI note n). Pure Python (sampleio.py), no numpy: the same bytes on Python >= 3.12 (its sum()). | inside the module docstring: text, not code
+app/tools/gen_samples.py | python3 tools/gen_samples.py engines/felucca_samples.h | inside the module docstring: text, not code
+app/tools/gen_samples.py | """ | inside the module docstring: text, not code
+app/firmware/src/synth.c | q += d > 0 ? (d < st ? d : st) : (-d < st ? d : -st); | < vs <=: at d == st (or -d == st) both branches give the same step: equivalent
+app/firmware/src/synth.c | if (live_v(c, k) && (!o || trk[c].v[VCHK(k)].age < o->age)) { o = &trk[c].v[VCHK(k)]; oc = c; ok = k; } | < vs <=: ages are unique (age = ++vage per note-on), so no tie ever picks another voice: equivalent

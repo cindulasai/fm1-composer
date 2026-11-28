@@ -99,3 +99,59 @@ def test_26_3_play_rec_a_phrase_stop_save_reboot_it_plays_back(tmp_path, host_bi
         on = goertzel(f2, s + 0.02, s + 0.15, hz(note))
         assert on > 20 * goertzel(f2, 0.2, 0.6, hz(note)), ("silent before the phrase", note)
         assert on > 5 * goertzel(f2, s - 0.12, s - 0.01, hz(note)), ("it starts at its tick", note, tick)
+
+
+# ---- US-37: leaving the PLAYER mid-pass says what it kept ----
+LEAVE = {"EDIT": 6, "LFO": 5, "FX": 2, "HOME": 8}                  # EDIT, STEPS, the effects, LIBRARY (HOME)
+
+
+def rec_leave(tmp_path, name, steps, end, flash):
+    lines, t = push(100, rec_piece())
+    p0 = t + 50
+    lines += [f"{p0 + ms} {what}" for ms, what in steps]
+    log, _ = run_host(script(tmp_path, name, lines, p0 + end), env={"HOST_FLASH": flash})
+    return p0, [(ms, txt) for ms, y, txt in screen(log) if y == 222 and ms >= p0]
+
+
+@pytest.mark.parametrize("leave", list(LEAVE))
+def test_37_1_leaving_the_player_mid_pass_shows_rec_off_n_notes(tmp_path, host_bin, leave):
+    """REC, the phrase, then (still recording) EDIT / STEPS / FX / HOME: `REC OFF: 4 NOTES`, as stopping REC says;
+    the 4 notes are in the piece once saved (HOME: that press only ends the pass, the PLAYER stays)"""
+    flash = str(tmp_path / "flash.bin")
+    steps = [(0, f"btn {BTN['PLAY']}"), (100, f"btn {BTN['ARP']}"), (1000, f"btn {BTN['REC']}")]
+    for ms, key, hold, _, _ in PHRASE:
+        steps += [(ms, f"keys {1 << key}"), (ms + hold, "keys 0")]
+    steps += [(5800, f"btn {LEAVE[leave]}")]
+    if leave != "HOME":
+        steps += [(6100, f"btn {LEAVE['HOME']}")]                  # back to the PLAYER
+    steps += [(6400, f"btn {BTN['PLAY']}"), (6700, f"btn {BTN['SAVE']}")]
+    p0, foot = rec_leave(tmp_path, f"leave{leave}", steps, 7200, flash)
+    assert "RECORDING 1/16 OVERDUB" in [txt for _, txt in foot], foot
+    after = [txt for ms, txt in foot if p0 + 5800 <= ms < p0 + 6100]
+    assert after and after[-1] == "REC OFF: 4 NOTES", (leave, after)
+    fl = tmp_path / "xflash.bin"
+    shutil.copy(flash, fl)
+    port = f"exec:{host_bin} {fl}"
+    pid = fm1c("list", "--port", port).stdout.split()[0].lstrip("#")
+    assert fm1c("pull", pid, "-o", tmp_path / "back.f1p", "--port", port).returncode == 0
+    back = decode((tmp_path / "back.f1p").read_bytes())
+    assert sorted(n.pitch for n in back.channels[0].notes) == [60, 62, 64, 65], back.channels[0].notes
+
+
+def test_37_2_leave_with_no_notes_says_0_then_rec_again_counts_from_0(tmp_path, host_bin):
+    """no notes played, leave (EDIT) mid-pass: `REC OFF: 0 NOTES`; back, REC again, one note, PLAY stops it:
+    `REC OFF: 1 NOTES` (the count restarted); leaving in the count-in: `REC OFF`, as REC there says"""
+    flash = str(tmp_path / "flash.bin")
+    steps = [(0, f"btn {BTN['PLAY']}"), (100, f"btn {BTN['ARP']}"), (1000, f"btn {BTN['REC']}"),
+             (5800, f"btn {LEAVE['EDIT']}"), (6100, f"btn {LEAVE['HOME']}"),
+             (6200, f"btn {BTN['REC']}"),                          # counts in 8-10 s, records from 10 s
+             (10250, "keys 128"), (10450, "keys 0"),
+             (11000, f"btn {BTN['PLAY']}"),                         # stop: ends the pass, as today
+             (11500, f"btn {BTN['PLAY']}"), (11600, f"btn {BTN['REC']}"),
+             (12000, f"btn {LEAVE['LFO']}")]                        # in the count-in
+    p0, foot = rec_leave(tmp_path, "leave0", steps, 12400, flash)
+    last = lambda a, b: [txt for ms, txt in foot if p0 + a <= ms < p0 + b][-1:]
+    assert last(5800, 6100) == ["REC OFF: 0 NOTES"], foot
+    assert "RECORDING 1/16 OVERDUB" in [txt for ms, txt in foot if p0 + 9900 <= ms < p0 + 10300], foot
+    assert "REC OFF: 1 NOTES" in [txt for ms, txt in foot if p0 + 11000 <= ms < p0 + 11500], foot
+    assert last(12000, 12400) == ["REC OFF"], foot
