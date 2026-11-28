@@ -221,3 +221,4 @@ app/tools/gen_samples.py | python3 tools/gen_samples.py engines/felucca_samples.
 app/tools/gen_samples.py | """ | inside the module docstring: text, not code
 app/firmware/src/synth.c | q += d > 0 ? (d < st ? d : st) : (-d < st ? d : -st); | < vs <=: at d == st (or -d == st) both branches give the same step: equivalent
 app/firmware/src/synth.c | if (live_v(c, k) && (!o || trk[c].v[VCHK(k)].age < o->age)) { o = &trk[c].v[VCHK(k)]; oc = c; ok = k; } | < vs <=: ages are unique (age = ++vage per note-on), so no tie ever picks another voice: equivalent
+app/studio/t2m-ui/vite.studio.config.js | build: { outDir: here("../web/t2m"), emptyOutDir: true }, | emptyOutDir only clears files left by an earlier build first; what this build writes is the same: equivalent

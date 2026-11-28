@@ -40,7 +40,7 @@
 | US-37 | Leaving PLAYER mid-recording says what it kept | 1 | proven | 0 |
 | US-38 | NEW SONG from a blank grid, choice of channels | 1 | todo | 0 |
 | US-39 | Add / remove channels in any piece on the FM-1 | 1 | todo | 0 |
-| US-40 | Studio looks like one app: blended panels, modern scrollbars | 1 | todo | 0 |
+| US-40 | Studio looks like one app: blended panels, modern scrollbars | 1 | proven | 0 |
 | US-41 | Studio mixer: per-channel volume, effects, master | 1 | todo | 0 |
 | US-50 | Newer FM-1 units (UC25HQ80 flash) proven supported | 11 | proven | 0 |
 

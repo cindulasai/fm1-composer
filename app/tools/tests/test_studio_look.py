@@ -208,6 +208,8 @@ def test_40_3_the_page_says_the_firmware_is_in_the_emulator_and_where_hardware_i
     note = page.locator("footer #install")
     assert note.is_visible()
     text = note.inner_text()
-    assert "already loaded in this emulator" in text and "not been run on hardware yet" in text
+    assert "already loaded in this emulator" in text
+    assert "not been run on hardware yet" in text
+    assert "(Chrome or Edge)" in text                                                  # the Hub installs over Web MIDI
     assert note.locator("a").get_attribute("href") == "https://thefirmwarehub.com/"
     assert note.locator("a").get_attribute("rel") == "noopener"

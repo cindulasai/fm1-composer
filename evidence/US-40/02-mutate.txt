@@ -1,0 +1,7 @@
+COMMAND: sh prove mutants US-40
+awk: towc: multibyte conversion failure on: '‰PNG'
+
+ input record number 1, file app/docs/studio.png
+ source line number 12
+MUTANTS: 2 tried, 2 killed, 0 survived (of 2 candidates in US-40)
+EXIT_CODE: 0
