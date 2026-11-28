@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* US-50: the flash chips the app (platform.c, recovery.c) and the update loader (loader.c) accept: FL_JEDEC_OK,
- * the FM-1's two parts and nothing else. (The build checks both ids are compared in the app's and the loader's code.) */
+/* US-50: the flash chips the app (platform.c, recovery.c), its update loader too (loader.c), accept: FL_JEDEC_OK,
+ * the FM-1's two parts, nothing else. (The build checks both ids are compared in the app's code, the loader's too.) */
 #include <stdio.h>
 #include <stdint.h>
 #include "fm1_flash_map.h"
