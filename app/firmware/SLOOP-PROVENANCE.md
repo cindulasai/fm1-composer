@@ -24,6 +24,21 @@ eng_digital.c and eng_formant.c, `ENG_FM6`, `ENG_PHYS`, `ENG_DIGITAL`, `ENG_FORM
 | app/tools/gen_drumkits.py | tools/gen_drumkits.py | bac9c05 | 7d08bc87f100e5fbc88a8dc3b131d9cc5103bdcb | GPL-3.0-only | no |
 | app/tools/gen_fm6_patches.py | tools/gen_fm6_patches.py | bac9c05 | 1a5f55e39ffb3c0758dfadfe5a530d439b5fb259 | GPL-3.0-only | no |
 | app/tools/sloop_gen_tables.py | tools/gen_tables.py | bac9c05 | c232b2bc7590eff4bca4b8cb4319684788c4e6b4 | GPL-3.0-only | no (renamed) |
+| app/assets/samples-cc0/ATTRIBUTION.txt | assets/samples-cc0/ATTRIBUTION.txt | bac9c05 | e31357650ce572c24dcdd3cbe3c3781d4244d9ab | CC0-1.0 (SLOOP's record of the sources) | yes: only its header and the lines of PIANO, STRGS, HORNS (the sets copied), a `COMPOSER:` note at its end |
+| app/engines/eng_sample.c | firmware/src/eng_sample.c | bac9c05 | f9aadb4082cdcc5aaa2644e793235f130b6da09d | GPL-3.0-only | yes (US-35): SLOOP's user sample slots cut (the web editor's uploads into flash: SMP_USER_*, the slot header, usr_zone, smp_user_scan, smp_zone_ok, SLICE's slc_user_scan, the fm1_xip.h include; COMPOSER has no slots nor that flash): SET picks a built-in set only (SMP_NALL = SMP_NSETS), smp_zone reads SMP_ZONES only, sample_note_on's slot branch gone; marked `COMPOSER:`. The decoder, the zones, the loops and the render are SLOOP's lines |
+| app/tools/gen_samples.py | tools/gen_samples.py | bac9c05 | a2affba762a497b7929400475ff134ce40fd6b34 | GPL-3.0-only | yes (US-35): only the CC0 sets PIANO, STRGS, HORNS are read; gen_waves.py (the Hügelton Sample Pack), SLOOP's other sets, the GM kit, SLICE's BREAK, user-slot names and the build cache are cut; STRGS / HORNS loop their steady body (kind `body`, so a held note sustains); the presets are named PIANO, STRINGS, HORNS; marked `COMPOSER:` |
+| app/tools/sampleio.py | tools/sampleio.py | bac9c05 | 29eb0b775ebca5f9309404e5b88b4abe6dc6acea | GPL-3.0-only | no |
+| app/assets/samples-cc0/PIANO/00_C3_m48.wav | assets/samples-cc0/PIANO/00_C3_m48.wav | bac9c05 | bf1d6b3e8a9094701b8ab1cc4e0e194dcd7116b3 | CC0-1.0 | no |
+| app/assets/samples-cc0/PIANO/01_Gs3_m56.wav | assets/samples-cc0/PIANO/01_Gs3_m56.wav | bac9c05 | b5f4ac00706aa3360ec72ab7387d95f326f55d77 | CC0-1.0 | no |
+| app/assets/samples-cc0/PIANO/02_E4_m64.wav | assets/samples-cc0/PIANO/02_E4_m64.wav | bac9c05 | e1e9193f60673a154d6df5b7b85d238e45080b84 | CC0-1.0 | no |
+| app/assets/samples-cc0/PIANO/03_C5_m72.wav | assets/samples-cc0/PIANO/03_C5_m72.wav | bac9c05 | f9a2469abb7c727dd8d979dcbdae33ca7dc9a11a | CC0-1.0 | no |
+| app/assets/samples-cc0/STRGS/00_G3_m55.wav | assets/samples-cc0/STRGS/00_G3_m55.wav | bac9c05 | 676de33e9e89fded5f379a212838cef910f2aa4a | CC0-1.0 | no |
+| app/assets/samples-cc0/STRGS/01_E4_m64.wav | assets/samples-cc0/STRGS/01_E4_m64.wav | bac9c05 | 76ac5dff741a37f36a648cdc1acdd06d6e0050d2 | CC0-1.0 | no |
+| app/assets/samples-cc0/STRGS/02_Cs5_m73.wav | assets/samples-cc0/STRGS/02_Cs5_m73.wav | bac9c05 | 98d31ec70dff3a00193cbd1273f9d995832032a6 | CC0-1.0 | no |
+| app/assets/samples-cc0/HORNS/00_G3_m55.wav | assets/samples-cc0/HORNS/00_G3_m55.wav | bac9c05 | 077e52516340dc7e46c47152d78f28eb436bbeb9 | CC0-1.0 | no |
+| app/assets/samples-cc0/HORNS/01_D4_m62.wav | assets/samples-cc0/HORNS/01_D4_m62.wav | bac9c05 | 45c3528ca422fe166ad7cc5937a6daa8c2df1990 | CC0-1.0 | no |
+| app/assets/samples-cc0/HORNS/02_A4_m69.wav | assets/samples-cc0/HORNS/02_A4_m69.wav | bac9c05 | 7f5373d6ff10aecd967b424a213401b5dc1be6dd | CC0-1.0 | no |
+| app/assets/samples-cc0/HORNS/03_E5_m76.wav | assets/samples-cc0/HORNS/03_E5_m76.wav | bac9c05 | c5fd61cd2779e3486f7351917542fbf31d17cdbe | CC0-1.0 | no |
 
 Functions copied into a COMPOSER file (US-18; the file is COMPOSER's, so no one blob for it):
 
@@ -52,6 +67,16 @@ Rings, Copyright (c) 2015 Emilie Gillet; the fixed-point ports 2026 Leo Kuroshit
 2026 Leo Kuroshita; Apache License 2.0 (`app/engines/LICENSE-Apache-2.0-msfa.txt`). The GPL-3.0-only files are
 Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments. SLOOP's assets (logo, Hügelton art) are not
 copied.
+
+US-35 (SLOOP's SAMPLE engine, v11): `engines/eng_sample.c` is compiled by synth.c with SLOOP's engine_t layout under
+another name, as sloop_glue.c does for PHYS (COMPOSER's ENG_SAMPLE, the glue in synth.c: the same functions and presets,
+an `amp` hook that ends a held note of a set at sustain 0 once its decay has faded, `sampled` set so a retrigger starts the
+recording again); it takes no engine-pool block. Generated from the copied files (committed, `tools/tests/test_samples.py`
+regenerates and compares): `app/engines/felucca_samples.h` (`tools/gen_samples.py` from the eleven CC0 WAVs above:
+59546 B of IMA ADPCM). The WAVs are SLOOP's CC0 files byte for byte (VCSL's Steinway B grand; VSCO-2 CE's violin + viola
+sections spiccato, trumpet + tenor trombone staccato, retuned and cut by SLOOP's tools/gen_builtin_hiphop.py, not
+copied); SLOOP's other sets, its CREDITS.txt and anything gen_waves.py makes (the Hügelton Sample Pack, all rights
+reserved) are not copied.
 
 ## Through Dinghy (found by the reconciliation, 2026-11-23)
 

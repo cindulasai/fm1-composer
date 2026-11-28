@@ -49,13 +49,39 @@ static track_t trk[NPART];
 #include "eng_noise.c"
 #include "drums.c"
 #include "sloop_glue.c"                        /* SLOOP's FM6, PHYS, DIGITAL, VOICE and the engine pool */
+
+/* (US-35) SLOOP's SAMPLE engine (engines/eng_sample.c: IMA ADPCM sets in felucca_samples.h, which tools/gen_samples.py
+ * makes from the CC0 WAVs in assets/samples-cc0): compiled as it is with SLOOP's engine_t layout under another name;
+ * COMPOSER's ENG_SAMPLE points at the same functions and presets (written in COMPOSER's preset_t). No pool block: a
+ * voice keeps its state in voice_t, the sets are constants in flash. */
+#define engine_t sloop_engine_t
+#define ENG_SAMPLE ENG_SAMPLE_SLOOP
+#include "eng_sample.c"
+#undef ENG_SAMPLE
+#undef engine_t
+
+/* a held note of a set at sustain 0 (PIANO) ends once its decay has faded out, as a release does (env_tick) */
+static int32_t sample_amp(struct track *t, voice_t *v, int32_t adsr)
+{
+    (void)t;
+    if (v->stage == 2u && adsr < 16) { v->active = 0; v->gate = 0; v->stage = 0; v->env = 0; return 0; }
+    return adsr;
+}
+
+static const engine_t ENG_SAMPLE = {
+    .name = "SAMPLE", .page_title = {"SET", "TONE"},
+    .presets = SMP_PRESET_TABLE, .npresets = NELEM(SMP_PRESET_TABLE),
+    .knob = {P_E0, P_E4, P_ATK, P_REL}, .sampled = 1,
+    .note_on = sample_note_on, .render = sample_render, .amp = sample_amp,
+};
 #include "synth_tables.h"
 #include "piece.h"
 
 /* ---------------------------------------------------------------- the sounds --- */
 static const engine_t *const ENGINES[] = {&ENG_KIT, &ENG_ANALOG, &ENG_PHASE, &ENG_TRIO, &ENG_WHEEL, &ENG_LOFI, &ENG_NOISE,
-                                          &ENG_DSYN, &ENG_FM6, &ENG_PHYS, &ENG_DIGITAL, &ENG_FORMANT};   /* (new engines go last:
-                                                 * saved sound ids keep their meaning) */
+                                          &ENG_DSYN, &ENG_FM6, &ENG_PHYS, &ENG_DIGITAL, &ENG_FORMANT,
+                                          &ENG_SAMPLE};   /* (new engines go last: saved sound ids keep their meaning;
+                                                 * US-35: PIANO, STRINGS, HORNS are 135-137) */
 #define SOUND_MAX 192u                          /* (a piece stores a sound in a byte, 255 = the role's default) */
 typedef struct { const engine_t *e; const preset_t *pr; } sound_t;
 static sound_t sounds[SOUND_MAX];
@@ -120,6 +146,9 @@ static chan_t chs[NPART];
 static uint8_t ch_role[NPART];                  /* each channel's role (piece.h ROLE_*): its sound when the pool is full */
 static uint8_t ch_vm[NPART], ch_vg[NPART];      /* (US-30) each channel's voice mode (VM_*) and glide, as the piece asks */
 static int32_t vlast[NPART][NVOICE];            /* each voice's amplitude at the end of its last block (Q15) */
+static int32_t chlast[NPART], dk[NPART];        /* (US-35) each channel's last sample (before its effects) and its
+                                                 * declick: what a cut voice last gave, fading out over ~1.5 ms (a sound
+                                                 * changed while it sounds; a sampled voice restarted) */
 #include "fx.c"                                 /* SLOOP's effects: per channel, the buses, the limiter */
 static uint32_t vage;
 
@@ -161,6 +190,7 @@ static void synth_sound(uint32_t ch, uint32_t id)
     c->sound = id;
     c->e = sounds[id].e;
     c->pr = sounds[id].pr;
+    dk[ch] = chlast[ch];                        /* (US-35) the notes it cuts fade out (0 when it was silent) */
     for (k = 0; k < NVOICE; k++) vlast[ch][k] = 0;
     __builtin_memset(t, 0, sizeof *t);
     for (k = 0; k < 8u; k++) t->p[P_E0 + k] = c->pr->e[k];
@@ -207,6 +237,7 @@ static void synth_init(void)
     fm6_init();
     vage = 0;
     for (ch = 0; ch < NPART; ch++) {
+        chlast[ch] = dk[ch] = 0;
         ch_role[ch] = ROLE_OTHER;
         ch_vm[ch] = VM_POLY;
         ch_vg[ch] = 0;
@@ -219,6 +250,9 @@ static void synth_init(void)
 /* voices that count against the budget: starting or held or releasing (a stolen voice, stage 4, does not) */
 #ifndef VCHK
 #define VCHK(k) (k)                            /* (host tests check every voice index) */
+#endif
+#ifndef CHCHK
+#define CHCHK(c) (c)                           /* (host tests check every channel index) */
 #endif
 #define SOUNDING(v) ((v).active && (v).stage >= 1u && (v).stage <= 3u)
 static int sounding(const voice_t *v) { return SOUNDING(*v); }
@@ -307,6 +341,10 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1], ph2 = v->ph[2], k;
     int32_t s[8];
     for (k = 0; k < 8u; k++) s[k] = v->s[k];
+    if (e->sampled && v->active)                /* (US-35) a sampled voice restarts its recording from the start: what
+                                                 * it last gave (eng_sample.c's output, s[7] at its last amplitude) fades
+                                                 * out as the channel's declick, no click */
+        dk[ch] += mulq15(mulq15(v->s[7], vlast[ch][v - t->v]), VOICE_FS) << 1;
     if (!v->active) {                           /* a fresh voice: its engine state from zero */
         for (k = 0; k < 8u; k++) v->s[k] = 0;
         v->ph[0] = v->ph[1] = v->ph[2] = 0;
@@ -324,7 +362,8 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     v->fine = 0;
     if (!live) v->env = 0;
     e->note_on(t, v);
-    if (live && !e->oneshot) {                  /* a retrigger keeps the phases, the engine's keep slots */
+    if (live && !e->oneshot && !e->sampled) {   /* a retrigger keeps the phases, the engine's keep slots (a sampled
+                                                 * sound: none, its position and decoder start again) */
         v->ph[0] = ph0; v->ph[1] = ph1; v->ph[2] = ph2;
         for (k = 0; k < 8u; k++)
             if (k != 2u && k != 3u && (e->keep >> k & 1u)) v->s[k] = s[k];
@@ -478,7 +517,7 @@ static void synth_slide(uint32_t ch)
     track_t *t;
     uint32_t k, n = NVOICE;
     if (ch >= NPART) return;
-    t = &trk[ch];
+    t = &trk[CHCHK(ch)];
     t->slide_next = 1;
     for (k = 0; k < NVOICE; k++)
         if (t->v[k].active && t->v[k].gate && !(vlive[ch] >> k & 1u) && (n == NVOICE || t->v[k].age > t->v[n].age)) n = k;
@@ -583,7 +622,8 @@ static void synth_live_on(uint32_t ch, uint32_t note, uint32_t vel)
     if (vel == 0u) { synth_live_off(ch, note); return; }
     t = &trk[ch];
     cap = chs[ch].cap;
-    for (k = 0; k < cap && !v; k++)             /* the same live note again: retriggered */
+    for (k = 0; k < NVOICE && !v; k++)          /* the same live note again: retriggered (on any voice: the cap may
+                                                 * have shrunk since it started) */
         if (live_v(ch, k) && t->v[VCHK(k)].note == note) v = &t->v[VCHK(k)];
     if (!v && synth_live() >= LIVE_VOICES) {    /* a 5th: the oldest live note fades out */
         voice_t *o = 0;
@@ -733,6 +773,11 @@ static void synth_render(int32_t *out, uint32_t n)
             e->render(t, v, buf, n, &m);
             any = 1;
         }
+        if (dk[ch]) {                           /* (US-35) a cut voice's last sample fading out */
+            for (i = 0; i < n; i++) { buf[i] += dk[ch]; dk[ch] = dk[ch] * 63 / 64; }
+            any = 1;
+        }
+        chlast[ch] = any ? buf[n - 1] : 0;
         if (!any) continue;
         anyv = 1;
         fx_channel(ch, buf, n);                 /* DRIVE, FILTER */
