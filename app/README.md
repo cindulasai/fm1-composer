@@ -18,6 +18,8 @@ rather than a live groovebox, and is built on the same community platform (Dingh
 > **Status:** developed and tested in the emulator [fm1-emu](https://github.com/joakimeriksson/fm1-emu)
 > (including its on-chip timing mode). It has **not yet been run on a real FM-1**. Installing a community
 > firmware on hardware is at your own risk.
+> Both FM-1 flash chips are supported: the original Puya P25Q80 and the UC25HQ80 in newer units
+> (JEDEC 0xB36014), by the app and by its update loader; the build refuses firmware that does not check for both.
 
 ## Quick start (in the emulator)
 

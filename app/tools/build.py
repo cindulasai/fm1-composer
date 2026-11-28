@@ -133,6 +133,19 @@ def ldr_wrap(image):
     return ldr_head(crc16(body), 0x20, len(body), 0x41, LOADER_NAME) + body
 
 
+# The FM-1's flash chips (hal/fm1_flash_map.h FL_JEDEC_OK): the Puya P25Q80 and the UC25HQ80 newer units carry.
+# Both the app and the update loader must know both, or a newer unit saves to RAM only / refuses an update.
+FLASH_IDS = {"fm1": ("856014", "b36014"), "smk37": ("eb6014", "856014")}
+
+
+def need_flash_ids(dis, what):
+    """the build fails unless every flash chip id of the board is compared against in `dis` (an objdump -d)"""
+    missing = [i for i in FLASH_IDS[BOARD] if not re.search(r"\b(0x)?" + i + r"\b", dis, re.I)]
+    if missing:
+        raise SystemExit(f"{what}: no check for flash chip id {', '.join('0x' + m.upper() for m in missing)} (FL_JEDEC_OK)")
+    return True
+
+
 def build_loader():
     LDR.mkdir(parents=True, exist_ok=True)
     src = FW / "loader"
@@ -148,6 +161,7 @@ def build_loader():
                                ("common/bin/objdump", "-h", elf),
                                ("common/bin/objdump", "-t", elf))
     (LDR / "loader.dis").write_text(dis)
+    need_flash_ids(dis, "loader")
     for ln in hdr.splitlines():     # the loader rewrites the flash: nothing may run from XIP
         p = ln.split()
         if len(p) > 4 and p[1].startswith(".") and int(p[3], 16) >= 0x02000000 and int(p[2], 16):
@@ -197,6 +211,7 @@ def build_app():
                                ("common/bin/objdump", "-d", elf),
                                ("common/bin/objdump", "-d", "-j", ".ram_text", elf))
     (OUT / "composer.dis").write_text(dis)
+    need_flash_ids(dis, "app")
 
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
