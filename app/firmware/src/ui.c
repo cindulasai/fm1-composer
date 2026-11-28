@@ -85,7 +85,7 @@ static void ui_newsong(uint32_t dirty, const ns_t *s)
     if (dirty & (D_ALL | D_FOOT)) ui_text(0, 222, 240, &FONT_S, s->status, C_GREY, 1);
 }
 
-static void ui_library(uint32_t dirty, uint32_t cur, uint32_t *top)
+static void ui_library(uint32_t dirty, uint32_t cur, uint32_t *top, const char *msg)   /* msg: the footer (US-46), else the space free */
 {
     char b[40];
     uint32_t i, n = lib_count();
@@ -117,7 +117,7 @@ static void ui_library(uint32_t dirty, uint32_t cur, uint32_t *top)
     }
     if (dirty & (D_ALL | D_LIST | D_FOOT)) {
         ui_fmt(b, sizeof b, "%u KB FREE", lib_free() / 1024u);
-        ui_text(0, 220, 240, &FONT_S, b, C_GREY, 1);
+        ui_text(0, 220, 240, &FONT_S, msg && msg[0] ? msg : b, msg && msg[0] ? C_WHITE : C_GREY, 1);
     }
 }
 

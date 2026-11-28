@@ -98,6 +98,9 @@ python3 -m http.server -d site 8000 # then open http://127.0.0.1:8000/
 | LIBRARY | SELECT | moves through the pieces, newest first |
 | | PLAY | opens the piece and plays it |
 | | SAVE | NEW SONG: a set-up screen for an empty piece. KNOB1 the channels (1 to 8, default 4: DRUMS, BASS, CHORDS, LEAD), SELECT picks one, PRESETS its role (its sound: the role's own, changed in PLAYER as in any piece), KNOB2 the tempo (40 to 240 BPM, default 120), KNOB3 the length (1 to 64 bars, default 8). PLAY makes it, saved at once as `NEW 1` (`NEW 2`… when the name is taken), and opens it in PLAYER: fill it with STEPS, REC or EDIT. HOME cancels: nothing is made. A full library says `LIBRARY FULL` and makes nothing |
+| | ARP | adds the selected piece to the **setlist** (up to 16; the same piece may come more than once): `SET 3: name` |
+| | SEQ | plays the setlist: each piece takes over at the end of the one before, with no gap (`SET 2/3 name`); the last plays once, then `SET DONE`. STOP, HOME or a piece pushed meanwhile ends it; SEQ again starts from the top. Kept across power-off; a piece deleted from the library leaves the set |
+| | GLO | clears the setlist (`SET CLEARED`) |
 | PLAYER | PLAY | stops / plays (from the start) |
 | | hold SEL + OCT+ | adds a channel after the last (up to 8), selected: its role the first of DRUMS, BASS, CHORDS, LEAD, PAD, ARP, COUNTER, PERC the piece lacks, PRESETS picks its sound; fill it with STEPS, REC or EDIT. Full: `8 CHANNELS MAX`; no room in the piece: `PIECE FULL` |
 | | hold SEL + OCT- | removes the selected channel and its notes once you say yes (`REMOVE CH 3? PLAY = YES`; any other button keeps it). The channels after it move down one, their sounds, effects, mutes and solos with them; while playing, its notes let go at once. A song keeps at least 1 channel. Both are edits: SAVE keeps them, and the undo history starts again |

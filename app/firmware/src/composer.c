@@ -119,7 +119,9 @@ static void app_idle(void)
     if (idle_ok) midi_in(0);
 }
 
-static void set_status(const char *s) { status = s; dirty |= D_FOOT; }
+static uint32_t status_n;                       /* (each set_status: LIBRARY shows what its own buttons said) */
+static const char *lib_msg;
+static void set_status(const char *s) { status = s; status_n++; dirty |= D_FOOT; }
 static int32_t clampi(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 static void post(uint32_t op, uint32_t ch, uint32_t a, uint32_t b)
@@ -208,6 +210,41 @@ static void sound_next(int32_t d)               /* PRESETS: the selected channel
     snd[sel] = (uint8_t)sound_turn(sel, d);
     post(SC_SOUND, sel, snd[sel], 0);           /* (0: the role kept) */
 }
+
+/* ---- setlists (US-46) ----
+ * Up to SET_MAX library pieces (by id) in an order, kept in blob 2. LIBRARY: ARP adds the selected piece, GLO clears
+ * the set, SEQ plays it: the first piece opens and plays; in its last bar the next is read into xf_buf and armed as a
+ * live send (lv_prepare: no new playback path), so it takes over at the end with no gap; lv_take then treats it as
+ * the library piece it is (loaded_id, not unsaved). The last piece plays once and stops (SET DONE). Any stop, a piece
+ * pushed meanwhile or HOME ends the set. Pieces gone from the library drop out when the set starts. */
+#define SET_MAX 16u
+#define SET_MAGIC 0x31544553u                   /* "SET1" */
+#define SET_NONE 0xFFFFFFFFu
+static struct { uint32_t magic, n, id[SET_MAX]; } setl;
+static uint32_t set_on, set_at, set_take = SET_NONE;   /* a set playing; its piece playing; the next one armed */
+static char set_msg[48];
+
+static void set_load(void)
+{
+    if (blob_load(2, &setl, sizeof setl) || setl.magic != SET_MAGIC || setl.n > SET_MAX) {
+        __builtin_memset(&setl, 0, sizeof setl);
+        setl.magic = SET_MAGIC;
+    }
+}
+static int set_save(void) { setl.magic = SET_MAGIC; return blob_save(2, &setl, sizeof setl); }
+
+static void set_say(const char *what, uint32_t k, const char *name)   /* "SET 2/3 NAME", "SET 3: NAME", "SKIPPED NAME" */
+{
+    char n[PIECE_NAME + 1];
+    uint32_t i;
+    for (i = 0; i < PIECE_NAME && name[i]; i++) n[i] = name[i] >= 32 && name[i] <= 126 ? name[i] : '?';
+    n[i] = 0;
+    if (what[0] == 'P') ui_fmt(set_msg, sizeof set_msg, "SET %u/%u %s", (unsigned)(k + 1u), (unsigned)setl.n, n);
+    else if (what[0] == 'A') ui_fmt(set_msg, sizeof set_msg, "SET %u: %s", (unsigned)k, n);
+    else ui_fmt(set_msg, sizeof set_msg, "SKIPPED %s", n);
+    set_status(set_msg);
+}
+
 
 /* ---- live send (US-34) ----
  * A piece staged while playing (xfer.c) is armed in the player, which switches to it at the next bar line in the
@@ -324,6 +361,16 @@ static void lv_take(void)
     sloop = spage = 0;
     ed_tick = st_base = st_step = 0;
     lv_status("LIVE", pl_v.name);
+    if (set_take != SET_NONE) {                 /* (US-46) a set's next piece: the library piece it is */
+        int i = lib_find(set_take);
+        loaded_id = set_take;
+        lv_unsaved = 0;
+        set_take = SET_NONE;
+        set_at++;
+        if (i >= 0) cur = (uint32_t)i;
+        if (set_at + 1u >= setl.n) pl_loop = 0; /* (the last: plays once) */
+        set_say("P", set_at, pl_v.name);
+    }
     dirty = D_ALL;
 }
 
@@ -331,6 +378,7 @@ static void lv_take(void)
 static void lv_put_begins(void)
 {
     lv_take();
+    if (set_take != SET_NONE) { set_take = SET_NONE; set_on = 0; pl_loop = 1; }   /* (US-46) a push ends the set */
     if (pl_nx) { player_next(0, 0, 0, 0); set_status(""); }
 }
 
@@ -403,6 +451,73 @@ static int open_piece(uint32_t i)
     for (ch = 0; ch < PIECE_NAME + 1u; ch++) title[ch] = pl_v.name[ch];
     sel = 0;
     return 0;
+}
+
+/* LIBRARY: ARP adds the selected piece, GLO clears the set */
+static void set_add(uint32_t i)
+{
+    const lib_entry_t *e = lib_entry(i);
+    if (!e) return;
+    if (setl.n >= SET_MAX) { set_status("SET FULL (16)"); return; }
+    setl.id[setl.n++] = e->id;
+    if (set_save()) { setl.n--; set_status("SAVE FAILED"); return; }
+    set_say("A", setl.n, e->name);
+}
+
+/* drop the set's pieces the library no longer has; how many went */
+static uint32_t set_prune(void)
+{
+    uint32_t k, m = 0, gone;
+    for (k = 0; k < setl.n; k++) if (lib_find(setl.id[k]) >= 0) setl.id[m++] = setl.id[k];
+    gone = setl.n - m;
+    setl.n = m;
+    if (gone) set_save();
+    return gone;
+}
+
+/* play the set from its k-th piece: one that cannot be read is skipped */
+static void set_start(uint32_t k)
+{
+    static char gone_msg[32];
+    uint32_t gone = set_prune();
+    int i;
+    if (!setl.n) { set_status(gone ? "THE SET'S PIECES LEFT THE LIBRARY" : "SET IS EMPTY"); return; }
+    for (; k < setl.n; k++) {
+        i = lib_find(setl.id[k]);
+        if (i >= 0 && !open_piece((uint32_t)i)) break;
+        if (i >= 0) set_say("S", 0, lib_entry((uint32_t)i)->name);
+    }
+    if (k >= setl.n) { set_status("SET DONE"); return; }
+    cur = (uint32_t)i;
+    set_on = 1;
+    set_at = k;
+    set_take = SET_NONE;
+    pl_loop = setl.n == 1u ? 0u : 1u;           /* (the last piece plays once) */
+    scr = 1;
+    player_play();
+    dirty = D_ALL;
+    set_say("P", k, pl_v.name);
+    if (gone) { ui_fmt(gone_msg, sizeof gone_msg, "%u PIECE%s LEFT THE SET", (unsigned)gone, gone > 1u ? "S" : ""); set_status(gone_msg); }
+}
+
+/* (main loop, a set playing) in the last bar: the next piece armed as a live send, or (unreadable) skipped */
+static void set_poll(void)
+{
+    uint32_t pos = player_pos(), end = pl_v.len_ticks;
+    if (!set_on || set_take != SET_NONE || pl_nx || set_at + 1u >= setl.n || edited || save_pending) return;
+    if (xf_state != XS_IDLE || pos + 4u * PIECE_PPQ < end) return;
+    while (set_at + 1u < setl.n) {
+        int i = lib_find(setl.id[set_at + 1u]), n = i < 0 ? -1 : lib_read((uint32_t)i, xf_buf, sizeof xf_buf);
+        if (n >= 0 && !piece_check(xf_buf, (uint32_t)n)) {
+            set_take = setl.id[set_at + 1u];
+            lv_prepare(1);
+            set_say("P", set_at, pl_v.name);    /* (lv_prepare says NEXT: the footer keeps what plays) */
+            return;
+        }
+        if (i >= 0) set_say("S", 0, lib_entry((uint32_t)i)->name);
+        set_at++;                               /* (unreadable: the one after it) */
+    }
+    pl_loop = 0;                                /* (none left to follow: this one plays out) */
 }
 
 static void save_prefs(void)
@@ -958,11 +1073,22 @@ static void newsong_input(uint32_t pressed)
     }
 }
 
+/* (US-46) LIBRARY: ARP adds the selected piece to the set, GLO clears the set, SEQ plays it */
+static void library_buttons(uint32_t pressed, uint32_t n)
+{
+    if ((pressed & 1u << BTN_ARP) && n) set_add(cur);
+    if (pressed & 1u << BTN_GLO) { set_status(setl.n ? "SET CLEARED" : "SET IS EMPTY"); setl.n = 0; set_save(); }
+    if (pressed & 1u << BTN_SEQ) set_start(0);
+}
+
 static void library_input(uint32_t pressed)
 {
     int32_t d = fm1_enc_take(ENC_SELECT);
-    uint32_t n = lib_count();
+    uint32_t n = lib_count(), said = status_n;
+    library_buttons(pressed, n);
+    if (status_n != said && scr == 0) { lib_msg = status; dirty |= D_FOOT; }
     if (d && n) {
+        lib_msg = 0;
         int32_t c = (int32_t)cur + d;
         cur = (uint32_t)(c < 0 ? 0 : c >= (int32_t)n ? (int32_t)n - 1 : c);
         dirty |= D_LIST;
@@ -983,6 +1109,7 @@ static void app_main(void)
     lib_mount();
     if (blob_load(0, &prefs, sizeof prefs) || prefs.magic != PREF_MAGIC) prefs_reset();
     if (blob_load(1, &fxprefs, sizeof fxprefs) || fxprefs.magic != FXP_MAGIC) fxprefs_reset();
+    set_load();
     for (;;) {
         uint32_t rel, pressed, keys, playing;
         const char *rc_left;
@@ -997,6 +1124,7 @@ static void app_main(void)
         }
 #endif
         lv_poll(playing);
+        if (playing) set_poll();
         pressed = fm1_input_edges(&rel);
         keys = fm1_input_note_edges() | (fm1_in.notes & ~held);   /* (also a press shorter than a pass) */
         held = fm1_in.notes;
@@ -1037,6 +1165,7 @@ static void app_main(void)
                     while (player_playing()) platform_poll();
                     lk_midi_off();
                     scr = 0;
+                    lib_msg = 0;
                     dirty = D_ALL;
                 }
             } else {
@@ -1046,6 +1175,11 @@ static void app_main(void)
         if (rc_left) set_status(rc_left);       /* (over what the screen it went to says) */
         rc_poll(play_buf);
         rc_sync();
+        if (was_playing && !playing && set_on) {   /* (US-46) a stop ends the set: played out, or stopped */
+            uint32_t done = set_at + 1u >= setl.n && set_take == SET_NONE;
+            set_on = 0; set_take = SET_NONE; pl_loop = 1;
+            if (done && !save_pending && !lv_unsaved) { set_status("SET DONE"); was_playing = 0; }
+        }
         if (was_playing && !playing) {
             if (save_pending || lv_unsaved) { save_pending = 0; save_all(); }
             else if (scr) set_status("STOPPED");
@@ -1073,7 +1207,7 @@ static void app_main(void)
         }
         if (dirty) {
             idle_ok = 1;
-            if (scr == 0) ui_library(dirty, cur, &top);
+            if (scr == 0) ui_library(dirty, cur, &top, lib_msg);
             else if (scr == 5u) { ns.status = status; ui_newsong(dirty, &ns); }
             else if (scr == 2) {
                 piece_note_t cn[16];
