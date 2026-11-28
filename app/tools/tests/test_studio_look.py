@@ -150,7 +150,7 @@ EXAMPLES = [f"button:{s} suite {i} {s}"[:47] for s in
              "hiphop.lofi", "hiphop.trap", "jazz.swing", "latin.bossa", "pop.generic", "reggae.roots", "rock.classic")
             for i in (1, 2, 3)]
 # captured from main before US-40 (the same served Studio, 1440 x 900)
-TOP = ["button:Send to FM-1 →", "a:text2midi", "a:fm1-emu"]
+TOP = ["button:Send to FM-1 →", "a:text2midi", "a:fm1-emu", "a:The Firmware Hub"]   # (+ where hardware installs come from)
 GALLERY = ["button:AI settings", "textarea:Describe the music", "button:Make it", "button:Change", "input:Filter examples"] + EXAMPLES
 PIECE = GALLERY + ["button:Play", "button:Undo", "button:Redo", "button:New take", "select:How quarter-tones are written",
                    "button:Save", "button:Export MIDI", "button:Mute lead", "button:Solo lead", "button:Mute chords",
@@ -199,3 +199,15 @@ def test_40_4_readme_screenshot_retaken_in_the_new_look(png):
     assert data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) < 400_000
     im = Image.open(io.BytesIO(data)).convert("RGB")
     assert all(abs(a - b) <= 2 for a, b in zip(im.getpixel((2, 2)), LIGHT_BG))           # Studio's desk, light
+
+
+
+def test_40_3_the_page_says_the_firmware_is_in_the_emulator_and_where_hardware_installs_come_from(studio):
+    page, _, _ = studio()
+    look(page, "light")
+    note = page.locator("footer #install")
+    assert note.is_visible()
+    text = note.inner_text()
+    assert "already loaded in this emulator" in text and "not been run on hardware yet" in text
+    assert note.locator("a").get_attribute("href") == "https://thefirmwarehub.com/"
+    assert note.locator("a").get_attribute("rel") == "noopener"
