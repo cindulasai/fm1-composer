@@ -1,0 +1,25 @@
+/* text2midi's window in COMPOSER Studio wears Studio's palette (US-40). Its files stay text2midi's: this file is added
+   after its tokens.css in Studio's build only (vite.studio.config.js), and maps text2midi's tokens onto Studio's. */
+@import "../../web/theme.css";
+
+:root {
+  --bg: var(--c-surface);
+  --panel: var(--c-surface);
+  --panel-2: var(--c-surface-2);
+  --line: var(--c-line);
+  --text: var(--c-text);
+  --muted: var(--c-muted);
+  --accent: var(--c-accent);
+  --accent-ink: var(--c-accent-ink);
+  --bad: var(--c-bad);
+  --lane-a: var(--c-lane-a);
+  --lane-b: var(--c-lane-b);
+  --ribbon: var(--c-ribbon);
+  --radius: var(--c-radius-sm);
+  --gap: var(--c-gap);
+  --font: var(--c-font);
+}
+/* the accent as text (the "Change" link) needs the darker shade to stay readable on a light panel */
+:root button.link.link { color: var(--c-accent-text); }
+/* the arrangement's frame is 100 % wide plus its border: inside the box, so the notes panel needs no sideways scrollbar */
+#app .host { box-sizing: border-box; }
